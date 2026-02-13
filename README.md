@@ -137,6 +137,21 @@ IDLE -> WAIT_POWER (battery > 11V) -> CALIBRATING -> CONDENSATION (2V, 5s)
 
 The CJ125 SPI register constants and PID tuning values are derived from the [Lambda Shield](https://github.com/Bylund/Lambda-Shield-Example) project by Bylund.
 
+## Screenshots
+
+| | |
+|---|---|
+| ![Home](screenshots/index.png) | ![Dashboard](screenshots/dashboard.png) |
+| Home | Dashboard |
+| ![Tune](screenshots/tune.png) | ![Config](screenshots/config.png) |
+| Tune Tables | Configuration |
+| ![Pins](screenshots/pins.png) | ![Update](screenshots/update.png) |
+| Pin Map | OTA Update |
+| ![Log](screenshots/log-view.png) | ![Heap](screenshots/heap-view.png) |
+| Log Viewer | System / Heap |
+| ![WiFi](screenshots/wifi-view.png) | |
+| WiFi Setup | |
+
 ## Web Pages
 
 All pages served from SD card `/www/` directory.
