@@ -576,7 +576,7 @@ void WebHandler::setupRoutes() {
                 char nm[8]; snprintf(nm, sizeof(nm), "INJ_%d", i+1);
                 o["name"] = nm; o["type"] = "digital"; o["mode"] = "OUTPUT";
                 if (injPins[i] >= PCF_PIN_OFFSET) {
-                    o["desc"] = "High-Z injector via PCF8575. HIGH=open, LOW=closed";
+                    o["desc"] = "High-Z injector via MCP23017. HIGH=open, LOW=closed";
                     o["value"] = xDigitalRead(injPins[i]) ? "ON" : "OFF";
                     o["bus"] = "I2C";
                 } else {
@@ -599,7 +599,7 @@ void WebHandler::setupRoutes() {
             {
                 JsonObject o = outputs.add<JsonObject>();
                 o["pin"] = 100; o["name"] = "FUEL_PUMP"; o["type"] = "digital"; o["mode"] = "OUTPUT";
-                o["desc"] = "Fuel pump relay via PCF8575 P0. HIGH=pump on. Always on when ECU running";
+                o["desc"] = "Fuel pump relay via MCP23017 P0. HIGH=pump on. Always on when ECU running";
                 o["value"] = xDigitalRead(100) ? "ON" : "OFF";
                 o["bus"] = "I2C";
             }
@@ -608,7 +608,7 @@ void WebHandler::setupRoutes() {
             {
                 JsonObject o = outputs.add<JsonObject>();
                 o["pin"] = 101; o["name"] = "TACH_OUT"; o["type"] = "digital"; o["mode"] = "OUTPUT";
-                o["desc"] = "Tachometer square wave output via PCF8575 P1";
+                o["desc"] = "Tachometer square wave output via MCP23017 P1";
                 o["value"] = xDigitalRead(101) ? "ON" : "OFF";
                 o["bus"] = "I2C";
             }
@@ -617,7 +617,7 @@ void WebHandler::setupRoutes() {
             {
                 JsonObject o = outputs.add<JsonObject>();
                 o["pin"] = 102; o["name"] = "CEL"; o["type"] = "digital"; o["mode"] = "OUTPUT";
-                o["desc"] = "Check engine light via PCF8575 P2. HIGH=fault active";
+                o["desc"] = "Check engine light via MCP23017 P2. HIGH=fault active";
                 o["value"] = xDigitalRead(102) ? "ON" : "OFF";
                 o["bus"] = "I2C";
             }
@@ -636,16 +636,16 @@ void WebHandler::setupRoutes() {
             PinExpander& pcf = PinExpander::instance();
             {
                 JsonObject o = bus.add<JsonObject>();
-                o["pin"] = pcf.getSDA(); o["name"] = "I2C_SDA"; o["type"] = "I2C"; o["mode"] = "PCF8575 @ 0x20";
+                o["pin"] = pcf.getSDA(); o["name"] = "I2C_SDA"; o["type"] = "I2C"; o["mode"] = "MCP23017 @ 0x20";
             }
             {
                 JsonObject o = bus.add<JsonObject>();
-                o["pin"] = pcf.getSCL(); o["name"] = "I2C_SCL"; o["type"] = "I2C"; o["mode"] = "PCF8575 @ 0x20";
+                o["pin"] = pcf.getSCL(); o["name"] = "I2C_SCL"; o["type"] = "I2C"; o["mode"] = "MCP23017 @ 0x20";
             }
 
             // PCF8575 expander info
             JsonObject expander = doc["expander"].to<JsonObject>();
-            expander["type"] = "PCF8575";
+            expander["type"] = "MCP23017";
             expander["address"] = "0x20";
             expander["ready"] = pcf.isReady();
             expander["sda"] = pcf.getSDA();

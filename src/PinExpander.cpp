@@ -1,9 +1,9 @@
 #include "PinExpander.h"
 #include "Logger.h"
 #include <Wire.h>
-#include <PCF8575.h>
+#include <Adafruit_MCP23X17.h>
 
-static PCF8575* _pcf = nullptr;
+static Adafruit_MCP23X17* _mcp = nullptr;
 
 PinExpander& PinExpander::instance() {
     static PinExpander inst;
@@ -16,43 +16,44 @@ bool PinExpander::begin(uint8_t sda, uint8_t scl, uint8_t addr) {
     _addr = addr;
 
     Wire.begin(sda, scl);
-    _pcf = new PCF8575(addr, &Wire);
+    _mcp = new Adafruit_MCP23X17();
 
-    if (!_pcf->begin()) {
-        Log.error("PCF", "PCF8575 not found at 0x%02X (SDA=%d, SCL=%d)", addr, sda, scl);
-        delete _pcf;
-        _pcf = nullptr;
+    if (!_mcp->begin_I2C(addr, &Wire)) {
+        Log.error("MCP", "MCP23017 not found at 0x%02X (SDA=%d, SCL=%d)", addr, sda, scl);
+        delete _mcp;
+        _mcp = nullptr;
         _ready = false;
         return false;
     }
 
-    // Set all pins HIGH (default input/off state for PCF8575)
-    _outputState = 0xFFFF;
-    _pcf->write16(_outputState);
+    // Default all pins to INPUT (high-impedance)
+    for (uint8_t i = 0; i < 16; i++) {
+        _mcp->pinMode(i, INPUT);
+    }
 
     _ready = true;
-    Log.info("PCF", "PCF8575 initialized at 0x%02X (SDA=%d, SCL=%d)", addr, sda, scl);
+    Log.info("MCP", "MCP23017 initialized at 0x%02X (SDA=%d, SCL=%d)", addr, sda, scl);
     return true;
 }
 
-void PinExpander::writePin(uint8_t pcfPin, uint8_t val) {
-    if (!_pcf || pcfPin >= PCF_PIN_COUNT) return;
-    if (val) {
-        _outputState |= (1 << pcfPin);
-    } else {
-        _outputState &= ~(1 << pcfPin);
-    }
-    _pcf->write16(_outputState);
+void PinExpander::pinModeExp(uint8_t expPin, uint8_t mode) {
+    if (!_mcp || expPin >= PCF_PIN_COUNT) return;
+    _mcp->pinMode(expPin, mode);
 }
 
-uint8_t PinExpander::readPin(uint8_t pcfPin) {
-    if (!_pcf || pcfPin >= PCF_PIN_COUNT) return LOW;
-    return _pcf->read(pcfPin);
+void PinExpander::writePin(uint8_t expPin, uint8_t val) {
+    if (!_mcp || expPin >= PCF_PIN_COUNT) return;
+    _mcp->digitalWrite(expPin, val);
+}
+
+uint8_t PinExpander::readPin(uint8_t expPin) {
+    if (!_mcp || expPin >= PCF_PIN_COUNT) return LOW;
+    return _mcp->digitalRead(expPin);
 }
 
 uint16_t PinExpander::readAll() {
-    if (!_pcf) return 0xFFFF;
-    return _pcf->read16();
+    if (!_mcp) return 0x0000;
+    return _mcp->readGPIOAB();
 }
 
 // --- Global helpers ---
@@ -74,7 +75,7 @@ uint8_t xDigitalRead(uint8_t pin) {
 
 void xPinMode(uint8_t pin, uint8_t mode) {
     if (pin >= PCF_PIN_OFFSET) {
-        // PCF8575 has no pin mode register — write HIGH for input, LOW for output-low
+        PinExpander::instance().pinModeExp(pin - PCF_PIN_OFFSET, mode);
         return;
     }
     pinMode(pin, mode);
