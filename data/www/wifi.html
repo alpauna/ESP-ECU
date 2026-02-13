@@ -1,0 +1,85 @@
+<html><head><title>WiFi Setup - ESP-ECU</title>
+<meta name='viewport' content='width=device-width,initial-scale=1'>
+<link rel='stylesheet' href='/theme.css'>
+<script>document.documentElement.dataset.theme=localStorage.getItem('hp-theme')||'dark'</script>
+<style>
+body{font-family:Arial,sans-serif;margin:0;padding:0;background:var(--bg);}
+nav{background:var(--nav-bg);padding:10px 20px;display:flex;align-items:center;gap:18px;}
+nav a{color:#fff;text-decoration:none;font-size:14px;padding:6px 12px;border-radius:4px;}
+nav a:hover,nav a.active{background:#4CAF50;}
+nav .brand{font-weight:bold;font-size:16px;margin-right:auto;color:#fff;}
+.content{max-width:600px;margin:20px auto;padding:0 20px;}
+h1{color:var(--text);}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:15px;margin-bottom:15px;}
+.card h3{margin-top:0;color:#4CAF50;}
+button{background:#4CAF50;color:#fff;padding:8px 20px;border:none;border-radius:4px;cursor:pointer;font-size:14px;}
+button:hover{background:#45a049;}
+button:disabled{background:#ccc;cursor:not-allowed;}
+.btn-scan{background:#2196F3;}.btn-scan:hover{background:#1976D2;}
+.net-list{max-height:300px;overflow-y:auto;}
+.net-item{display:flex;align-items:center;gap:10px;padding:10px 12px;border-bottom:1px solid var(--border-light);cursor:pointer;transition:background 0.15s;}
+.net-item:hover{background:var(--hover-bg);}
+.net-item.selected{background:var(--selected-bg);}
+.net-item:last-child{border-bottom:none;}
+.net-ssid{font-weight:bold;color:var(--text);flex:1;}
+.net-rssi{font-size:12px;color:var(--text-muted);width:50px;text-align:right;}
+.net-lock{font-size:14px;color:var(--text-muted);width:18px;text-align:center;}
+.wifi-bars{display:inline-flex;align-items:flex-end;gap:1px;height:14px;}
+.wifi-bars span{width:3px;background:#ccc;border-radius:1px;}
+.wifi-bars span.active{background:#4CAF50;}
+.wifi-bars span:nth-child(1){height:3px;}.wifi-bars span:nth-child(2){height:6px;}.wifi-bars span:nth-child(3){height:10px;}.wifi-bars span:nth-child(4){height:14px;}
+label{display:block;margin:10px 0 4px;color:var(--text-secondary);font-size:14px;}
+input[type=text],input[type=password]{width:100%;padding:8px;border:1px solid var(--input-border);border-radius:4px;box-sizing:border-box;background:var(--input-bg);color:var(--text);}
+#status{margin-top:15px;padding:10px;border-radius:4px;display:none;font-size:14px;}
+.ok{background:#d4edda;color:#155724;display:block!important;}
+.err{background:#f8d7da;color:#721c24;display:block!important;}
+.info{background:#d1ecf1;color:#0c5460;display:block!important;}
+.spinner{display:inline-block;width:16px;height:16px;border:3px solid #ccc;border-top:3px solid #4CAF50;border-radius:50%;animation:spin 1s linear infinite;vertical-align:middle;margin-right:8px;}
+@keyframes spin{0%{transform:rotate(0deg);}100%{transform:rotate(360deg);}}
+</style></head><body>
+<nav><span class='brand'>ESP-ECU</span>
+<a href='/'>Home</a>
+<a href='/dashboard'>Dashboard</a>
+<a href='/tune'>Tune</a>
+<a href='/config'>Config</a>
+<a href='/update'>Update</a>
+<a href='/log/view'>Log</a>
+<a href='/heap/view'>Heap</a>
+<a href='#' onclick="if(confirm('Reboot device?')){fetch('/reboot',{method:'POST',headers:{'Authorization':'Basic '+btoa(prompt('user:pass','admin:'))}}).then(r=>r.ok?alert('Rebooting...'):alert('Failed'))};return false" style='margin-left:auto;background:#d32f2f;'>Reboot</a>
+</nav>
+<div class='content'>
+<h1>WiFi Setup</h1>
+<div class='card'>
+<h3>Available Networks</h3>
+<button class='btn-scan' id='btnScan' onclick='scan()'>Scan</button>
+<div class='net-list' id='netList' style='margin-top:10px;'><em style='color:var(--text-muted);'>Click Scan to find networks</em></div>
+</div>
+<div class='card'>
+<h3>Connect</h3>
+<label>Network (SSID)</label>
+<input type='text' id='ssid' placeholder='Select from scan or type manually'>
+<label>New WiFi Password</label>
+<input type='password' id='password'>
+<label>Current WiFi Password</label>
+<input type='password' id='curPassword' placeholder='Required for verification'>
+<div style='margin-top:12px;'><button id='btnConnect' onclick='testConnect()'>Connect</button></div>
+</div>
+<div id='status'></div>
+</div>
+<script>
+var selectedSSID='';var pollTimer=null;
+function signalBars(rssi){var bars=rssi>=-50?4:rssi>=-60?3:rssi>=-70?2:rssi>=-80?1:0;var html="<div class='wifi-bars'>";for(var i=0;i<4;i++) html+="<span class='"+(i<bars?"active":"")+"'></span>";return html+"</div>";}
+function scan(){var btn=document.getElementById('btnScan');btn.disabled=true;btn.textContent='Scanning...';document.getElementById('netList').innerHTML='<em style="color:var(--text-muted);">Scanning...</em>';
+  fetch('/scan').then(function(){setTimeout(function(){fetch('/scan').then(function(r){return r.json();}).then(function(nets){btn.disabled=false;btn.textContent='Scan';if(!nets||nets.length===0){document.getElementById('netList').innerHTML='<em style="color:var(--text-muted);">No networks found. Try again.</em>';return;}
+  nets.sort(function(a,b){return b.rssi-a.rssi;});var seen={};var unique=[];for(var i=0;i<nets.length;i++){if(nets[i].ssid&&!seen[nets[i].ssid]){seen[nets[i].ssid]=1;unique.push(nets[i]);}}
+  var html='';for(var i=0;i<unique.length;i++){var n=unique[i];var lock=n.secure>0?'&#128274;':'';html+="<div class='net-item' onclick=\"selectNet('"+n.ssid.replace(/'/g,"\\'")+"',this)\">"+signalBars(n.rssi)+"<span class='net-ssid'>"+n.ssid.replace(/</g,'&lt;')+"</span><span class='net-lock'>"+lock+"</span><span class='net-rssi'>"+n.rssi+"dBm</span></div>";}
+  document.getElementById('netList').innerHTML=html;}).catch(function(){btn.disabled=false;btn.textContent='Scan';});},3000);}).catch(function(){btn.disabled=false;btn.textContent='Scan';});}
+function selectNet(ssid,el){selectedSSID=ssid;document.getElementById('ssid').value=ssid;var items=document.querySelectorAll('.net-item');for(var i=0;i<items.length;i++) items[i].className='net-item';el.className='net-item selected';}
+function testConnect(){var ssid=document.getElementById('ssid').value;var password=document.getElementById('password').value;var curPassword=document.getElementById('curPassword').value;var status=document.getElementById('status');if(!ssid){status.className='err';status.textContent='Please enter or select an SSID';return;}
+  var btn=document.getElementById('btnConnect');btn.disabled=true;status.className='info';status.innerHTML='<span class="spinner"></span>Testing connection to '+ssid.replace(/</g,'&lt;')+'...';
+  fetch('/wifi/test',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ssid:ssid,password:password,curPassword:curPassword})}).then(function(r){return r.json();}).then(function(d){if(d.error){status.className='err';status.textContent=d.error;btn.disabled=false;return;}
+  pollTimer=setInterval(function(){fetch('/wifi/status').then(function(r){return r.json();}).then(function(s){if(s.status==='success'){clearInterval(pollTimer);pollTimer=null;status.className='ok';status.textContent='Connected! New IP: '+s.message+'. Rebooting in 3s...';btn.disabled=false;}else if(s.status==='failed'){clearInterval(pollTimer);pollTimer=null;status.className='err';status.textContent='Failed: '+(s.message||'Could not connect');btn.disabled=false;}else{status.innerHTML='<span class="spinner"></span>Testing connection to '+ssid.replace(/</g,'&lt;')+'...';}}).catch(function(){status.innerHTML='<span class="spinner"></span>Device reconnecting...';});},2000);
+  setTimeout(function(){if(pollTimer){clearInterval(pollTimer);pollTimer=null;status.className='info';status.textContent='Test timed out. Check device serial log or try again.';btn.disabled=false;}},30000);}).catch(function(e){status.className='err';status.textContent='Error: '+e;btn.disabled=false;});}
+scan();
+fetch('/theme').then(function(r){return r.json()}).then(function(d){var t=d.theme||'light';document.documentElement.dataset.theme=t;localStorage.setItem('hp-theme',t);}).catch(function(){});
+</script></body></html>

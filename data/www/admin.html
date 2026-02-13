@@ -1,0 +1,45 @@
+<html><head><title>Admin Setup - ESP-ECU</title>
+<meta name='viewport' content='width=device-width,initial-scale=1'>
+<link rel='stylesheet' href='/theme.css'>
+<script>document.documentElement.dataset.theme=localStorage.getItem('hp-theme')||'dark'</script>
+<style>
+body{font-family:Arial,sans-serif;margin:0;padding:0;background:var(--bg);}
+nav{background:var(--nav-bg);padding:10px 20px;display:flex;align-items:center;gap:18px;}
+nav a{color:#fff;text-decoration:none;font-size:14px;padding:6px 12px;border-radius:4px;}
+nav a:hover{background:#4CAF50;}
+nav .brand{font-weight:bold;font-size:16px;margin-right:auto;color:#fff;}
+.container{max-width:480px;margin:40px auto;padding:0 20px;}
+h1{color:var(--text);}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:20px;margin-bottom:15px;}
+.notice{background:#fff3cd;color:#856404;padding:12px;border-radius:4px;margin-bottom:15px;font-size:14px;}
+label{display:block;margin:12px 0 3px;color:var(--text-secondary);font-size:14px;}
+input[type=password]{width:100%;padding:8px;border:1px solid var(--input-border);border-radius:4px;box-sizing:border-box;background:var(--input-bg);color:var(--text);}
+button{background:#4CAF50;color:#fff;padding:10px 24px;border:none;border-radius:4px;cursor:pointer;font-size:16px;margin-top:10px;width:100%;}
+button:hover{background:#45a049;}
+#status{margin-top:15px;padding:10px;border-radius:4px;display:none;}
+.ok{background:#d4edda;color:#155724;display:block!important;}
+.err{background:#f8d7da;color:#721c24;display:block!important;}
+</style></head><body>
+<nav><span class='brand'>ESP-ECU</span>
+<a href='/'>Home</a>
+<a href='/dashboard'>Dashboard</a>
+</nav>
+<div class='container'>
+<h1>Admin Setup</h1>
+<div class='notice'>An admin password is required before accessing configuration. This password protects the config, update, and FTP endpoints.</div>
+<div class='card'>
+<form id='af' onsubmit='return setup(event)'>
+<label>New Password (min 4 characters)</label><input type='password' id='password' required minlength='4'>
+<label>Confirm Password</label><input type='password' id='confirm' required minlength='4'>
+<button type='submit'>Set Admin Password</button>
+</form>
+</div>
+<div id='status'></div>
+</div>
+<script>
+function setup(e){e.preventDefault();var pw=document.getElementById('password').value;var cf=document.getElementById('confirm').value;var s=document.getElementById('status');
+if(pw.length<4){s.className='err';s.textContent='Password must be at least 4 characters.';return false;}
+if(pw!==cf){s.className='err';s.textContent='Passwords do not match.';return false;}
+fetch('/admin/setup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:pw,confirm:cf})}).then(r=>r.json()).then(r=>{if(r.error){s.className='err';s.textContent=r.error;}else{s.className='ok';s.textContent=r.message||'Password set.';setTimeout(()=>location.href='/config',1500);}}).catch(err=>{s.className='err';s.textContent='Error: '+err;});return false;}
+fetch('/theme').then(function(r){return r.json()}).then(function(d){var t=d.theme||'light';document.documentElement.dataset.theme=t;localStorage.setItem('hp-theme',t);}).catch(function(){});
+</script></body></html>

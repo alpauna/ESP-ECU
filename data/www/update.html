@@ -1,0 +1,119 @@
+<html><head><title>OTA Update - ESP-ECU</title>
+<meta name='viewport' content='width=device-width,initial-scale=1'>
+<link rel='stylesheet' href='/theme.css'>
+<script>document.documentElement.dataset.theme=localStorage.getItem('hp-theme')||'dark'</script>
+<style>
+body{font-family:Arial,sans-serif;margin:0;padding:0;background:var(--bg);}
+nav{background:var(--nav-bg);padding:10px 20px;display:flex;align-items:center;gap:18px;}
+nav a{color:#fff;text-decoration:none;font-size:14px;padding:6px 12px;border-radius:4px;}
+nav a:hover,nav a.active{background:#4CAF50;}
+nav .brand{font-weight:bold;font-size:16px;margin-right:auto;color:#fff;}
+.content{max-width:600px;margin:20px auto;padding:0 20px;}
+h1{color:var(--text);} h2{color:var(--text);margin-top:30px;}
+.file-info{margin:10px 0;color:var(--text-secondary);font-size:14px;}
+progress{width:100%;height:24px;display:none;margin:10px 0;border-radius:4px;overflow:hidden;}
+progress::-webkit-progress-bar{background:var(--border);border-radius:4px;}
+progress::-webkit-progress-value{background:#4CAF50;border-radius:4px;}
+#status,#applyStatus,#revertStatus{margin:10px 0;font-size:14px;color:var(--text);white-space:pre-line;}
+.btn{padding:8px 20px;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:14px;}
+.btn:disabled{background:#999!important;cursor:not-allowed;}
+#uploadBtn{background:#4CAF50;}
+#uploadBtn:hover:not(:disabled){background:#45a049;}
+#applyBtn{background:#2196F3;}
+#applyBtn:hover:not(:disabled){background:#1976D2;}
+#revertBtn{background:#f57c00;}
+#revertBtn:hover:not(:disabled){background:#e65100;}
+.error{color:#d32f2f;}
+.success{color:#2e7d32;}
+.info-text{color:var(--text-secondary);font-size:14px;margin:8px 0;}
+hr{border:none;border-top:1px solid var(--border);margin:30px 0;}
+input[type=file]{color:var(--text);}
+</style></head><body>
+<nav><span class='brand'>ESP-ECU</span>
+<a href='/'>Home</a>
+<a href='/dashboard'>Dashboard</a>
+<a href='/tune'>Tune</a>
+<a href='/config'>Config</a>
+<a href='/update' class='active'>Update</a>
+<a href='/log/view'>Log</a>
+<a href='/heap/view'>Heap</a>
+<a href='#' onclick="if(confirm('Reboot device?')){fetch('/reboot',{method:'POST',headers:{'Authorization':'Basic '+btoa(prompt('user:pass','admin:'))}}).then(r=>r.ok?alert('Rebooting...'):alert('Failed'))};return false" style='margin-left:auto;background:#d32f2f;'>Reboot</a>
+</nav>
+<div class='content'>
+<h1>OTA Update</h1>
+
+<h2>1. Upload Firmware</h2>
+<p class='info-text'>Select a .bin file to upload to the device SD card.</p>
+<input type='file' id='fileInput' accept='.bin'>
+<div class='file-info' id='fileInfo'></div>
+<button id='uploadBtn' class='btn' disabled>Upload to SD</button>
+<progress id='progress' max='100' value='0'></progress>
+<div id='status'></div>
+
+<hr>
+<h2>2. Apply Update</h2>
+<div id='applyInfo' class='info-text'>Checking for uploaded firmware...</div>
+<button id='applyBtn' class='btn' disabled style='display:none'>Apply Update &amp; Reboot</button>
+<div id='applyStatus'></div>
+
+<hr>
+<h2>3. Revert to Previous</h2>
+<div id='revertInfo' class='info-text'>Checking for backup...</div>
+<button id='revertBtn' class='btn' disabled style='display:none'>Revert to Previous</button>
+<div id='revertStatus'></div>
+</div>
+<script>
+var fileInput=document.getElementById('fileInput');
+var uploadBtn=document.getElementById('uploadBtn');
+var progress=document.getElementById('progress');
+var status=document.getElementById('status');
+var fileInfo=document.getElementById('fileInfo');
+var applyBtn=document.getElementById('applyBtn');
+var applyStatus=document.getElementById('applyStatus');
+var applyInfo=document.getElementById('applyInfo');
+var revertBtn=document.getElementById('revertBtn');
+var revertStatus=document.getElementById('revertStatus');
+var revertInfo=document.getElementById('revertInfo');
+
+function disableAll(){uploadBtn.disabled=true;fileInput.disabled=true;applyBtn.disabled=true;revertBtn.disabled=true;}
+
+function checkApply(){
+  var xhr=new XMLHttpRequest();xhr.open('GET','/apply',true);
+  xhr.onload=function(){if(xhr.status===200){var data=JSON.parse(xhr.responseText);if(data.exists){applyInfo.textContent='Uploaded firmware ready ('+Math.round(data.size/1024)+' KB)';applyBtn.style.display='';applyBtn.disabled=false;}else{applyInfo.textContent='No firmware uploaded. Use step 1 to upload.';applyBtn.style.display='none';}}};
+  xhr.onerror=function(){applyInfo.textContent='Could not check firmware status.';};xhr.send();
+}
+function checkRevert(){
+  var xhr=new XMLHttpRequest();xhr.open('GET','/revert',true);
+  xhr.onload=function(){if(xhr.status===200){var data=JSON.parse(xhr.responseText);if(data.exists){revertInfo.textContent='Previous firmware backup available ('+Math.round(data.size/1024)+' KB)';revertBtn.style.display='';revertBtn.disabled=false;}else{revertInfo.textContent='No previous firmware backup available.';revertBtn.style.display='none';}}};
+  xhr.onerror=function(){revertInfo.textContent='Could not check backup status.';};xhr.send();
+}
+checkApply();checkRevert();
+
+fileInput.addEventListener('change',function(){var f=fileInput.files[0];if(f){fileInfo.textContent=f.name+' ('+Math.round(f.size/1024)+' KB)';uploadBtn.disabled=false;status.textContent='';status.className='';}else{fileInfo.textContent='';uploadBtn.disabled=true;}});
+
+function waitForReboot(el){
+  el.className='success';el.textContent='Update applied. Waiting for device to reboot...';
+  var elapsed=0;var poll=setInterval(function(){elapsed+=2;el.textContent='Waiting for device to come back online... ('+elapsed+'s)';
+  var chk=new XMLHttpRequest();chk.open('GET','/heap',true);chk.timeout=2000;chk.onload=function(){clearInterval(poll);el.textContent='Device back online! Reloading page...';setTimeout(function(){location.reload();},1000);};chk.onerror=function(){};chk.ontimeout=function(){};chk.send();
+  if(elapsed>60){clearInterval(poll);el.textContent='Device not responding after 60s. Please reload manually.';}},2000);
+}
+
+uploadBtn.addEventListener('click',function(){var f=fileInput.files[0];if(!f)return;uploadBtn.disabled=true;fileInput.disabled=true;progress.style.display='block';progress.value=0;status.textContent='Uploading to SD card...';status.className='';
+  var xhr=new XMLHttpRequest();xhr.open('POST','/update',true);xhr.setRequestHeader('Content-Type','application/octet-stream');
+  xhr.upload.onprogress=function(e){if(e.lengthComputable){var pct=Math.round(e.loaded/e.total*100);progress.value=pct;status.textContent='Uploading to SD card... '+pct+'%';}};
+  xhr.onload=function(){if(xhr.status===200&&xhr.responseText==='OK'){progress.value=100;status.className='success';status.textContent='Firmware uploaded to SD card successfully.';fileInput.disabled=false;checkApply();}else{status.className='error';status.textContent='Upload failed: '+(xhr.responseText||'Unknown error');uploadBtn.disabled=false;fileInput.disabled=false;}};
+  xhr.onerror=function(){status.className='error';status.textContent='Upload failed: connection error';uploadBtn.disabled=false;fileInput.disabled=false;};
+  xhr.send(f);});
+
+applyBtn.addEventListener('click',function(){if(!confirm('Apply uploaded firmware? The device will backup the current firmware and reboot.'))return;disableAll();applyStatus.textContent='Applying firmware update...';applyStatus.className='';
+  var xhr=new XMLHttpRequest();var waiting=false;xhr.open('POST','/apply',true);
+  xhr.onload=function(){if(xhr.status===200&&xhr.responseText==='OK'){if(!waiting){waiting=true;waitForReboot(applyStatus);}}else{applyStatus.className='error';applyStatus.textContent='Apply failed: '+(xhr.responseText||'Unknown error');checkApply();checkRevert();}};
+  xhr.onerror=function(){if(!waiting){waiting=true;waitForReboot(applyStatus);}};xhr.ontimeout=function(){if(!waiting){waiting=true;waitForReboot(applyStatus);}};xhr.send();});
+
+revertBtn.addEventListener('click',function(){if(!confirm('Revert to previous firmware version? The device will reboot.'))return;disableAll();revertStatus.textContent='Reverting firmware...';revertStatus.className='';
+  var xhr=new XMLHttpRequest();var waiting=false;xhr.open('POST','/revert',true);
+  xhr.onload=function(){if(xhr.status===200&&xhr.responseText==='OK'){if(!waiting){waiting=true;waitForReboot(revertStatus);}}else{revertStatus.className='error';revertStatus.textContent='Revert failed: '+(xhr.responseText||'Unknown error');checkRevert();}};
+  xhr.onerror=function(){if(!waiting){waiting=true;waitForReboot(revertStatus);}};xhr.ontimeout=function(){if(!waiting){waiting=true;waitForReboot(revertStatus);}};xhr.send();});
+fetch('/theme').then(function(r){return r.json()}).then(function(d){var t=d.theme||'light';document.documentElement.dataset.theme=t;localStorage.setItem('hp-theme',t);}).catch(function(){});
+</script>
+</body></html>

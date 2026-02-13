@@ -1,0 +1,87 @@
+<html><head><title>ESP-ECU</title>
+<meta name='viewport' content='width=device-width,initial-scale=1'>
+<link rel='stylesheet' href='/theme.css'>
+<script>document.documentElement.dataset.theme=localStorage.getItem('hp-theme')||'dark'</script>
+<style>
+body{font-family:Arial,sans-serif;margin:0;padding:0;background:var(--bg);}
+nav{background:var(--nav-bg);padding:10px 20px;display:flex;align-items:center;gap:18px;}
+nav a{color:#fff;text-decoration:none;font-size:14px;padding:6px 12px;border-radius:4px;}
+nav a:hover,nav a.active{background:#4CAF50;}
+nav .brand{font-weight:bold;font-size:16px;margin-right:auto;color:#fff;}
+.content{max-width:800px;margin:20px auto;padding:0 20px;}
+h1{color:var(--text);margin-bottom:5px;}
+.subtitle{color:var(--text-secondary);margin-bottom:25px;font-size:14px;}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:15px;}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:20px;text-decoration:none;color:var(--text);transition:box-shadow 0.15s,transform 0.15s;}
+.card:hover{box-shadow:0 4px 12px rgba(0,0,0,0.15);transform:translateY(-2px);}
+.card h3{margin:0 0 8px;color:#4CAF50;}
+.card p{margin:0;font-size:14px;color:var(--text-secondary);}
+.status-bar{margin-top:25px;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:12px 15px;display:flex;flex-wrap:wrap;gap:15px;font-size:13px;color:var(--text-secondary);}
+.status-bar .item{display:flex;align-items:center;gap:5px;}
+.status-bar .dot{width:8px;height:8px;border-radius:50%;display:inline-block;}
+.dot.green{background:#4CAF50;}.dot.red{background:#f44336;}.dot.grey{background:#999;}
+</style></head><body>
+<nav><span class='brand'>ESP-ECU</span>
+<a href='/' class='active'>Home</a>
+<a href='/dashboard'>Dashboard</a>
+<a href='/tune'>Tune</a>
+<a href='/config'>Config</a>
+<a href='/update'>Update</a>
+<a href='/log/view'>Log</a>
+<a href='/heap/view'>Heap</a>
+<a href='#' onclick="if(confirm('Reboot device?')){fetch('/reboot',{method:'POST',headers:{'Authorization':'Basic '+btoa(prompt('user:pass','admin:'))}}).then(r=>r.ok?alert('Rebooting...'):alert('Failed'))};return false" style='margin-left:auto;background:#d32f2f;'>Reboot</a>
+</nav>
+<div class='content'>
+<h1>ESP-ECU</h1>
+<p class='subtitle'>ESP32-S3 Engine Control Unit</p>
+
+<div class='grid'>
+<a href='/dashboard' class='card'>
+<h3>Dashboard</h3>
+<p>Live engine gauges: RPM, MAP, TPS, AFR, temps, ignition, fuel, alternator</p>
+</a>
+<a href='/tune' class='card'>
+<h3>Tune Tables</h3>
+<p>Edit spark advance, VE, and AFR target tables with live cursor</p>
+</a>
+<a href='/config' class='card'>
+<h3>Configuration</h3>
+<p>Engine, sensor, WiFi, MQTT, and system settings</p>
+</a>
+<a href='/update' class='card'>
+<h3>OTA Update</h3>
+<p>Upload and apply firmware updates via SD card</p>
+</a>
+<a href='/log/view' class='card'>
+<h3>Log Viewer</h3>
+<p>View system and engine log messages</p>
+</a>
+<a href='/heap/view' class='card'>
+<h3>System Info</h3>
+<p>Memory usage, CPU load, and diagnostics</p>
+</a>
+</div>
+
+<div class='status-bar' id='statusBar'>
+<div class='item'><span class='dot grey' id='dotEngine'></span><span id='engineState'>--</span></div>
+<div class='item'>RPM: <strong id='rpm'>--</strong></div>
+<div class='item'>WiFi: <span id='wifiStatus'>--</span></div>
+<div class='item'>IP: <span id='ipAddr'>--</span></div>
+</div>
+</div>
+<script>
+function poll(){
+  fetch('/state').then(function(r){return r.json();}).then(function(d){
+    var dot=document.getElementById('dotEngine');
+    var st=d.state||'OFF';
+    document.getElementById('engineState').textContent=st;
+    document.getElementById('rpm').textContent=d.rpm||0;
+    dot.className='dot '+(st==='RUNNING'?'green':st==='CRANKING'?'green':'grey');
+    document.getElementById('wifiStatus').textContent=d.apMode?'AP Mode':'Connected';
+    document.getElementById('ipAddr').textContent=d.ip||'--';
+  }).catch(function(){});
+}
+poll();setInterval(poll,2000);
+fetch('/theme').then(function(r){return r.json()}).then(function(d){var t=d.theme||'light';document.documentElement.dataset.theme=t;localStorage.setItem('hp-theme',t);}).catch(function(){});
+</script>
+</body></html>

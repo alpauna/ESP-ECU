@@ -1,0 +1,194 @@
+<html><head><title>Tune - ESP-ECU</title>
+<meta name='viewport' content='width=device-width,initial-scale=1'>
+<link rel='stylesheet' href='/theme.css'>
+<script>document.documentElement.dataset.theme=localStorage.getItem('hp-theme')||'dark'</script>
+<style>
+body{font-family:Arial,sans-serif;margin:0;padding:0;background:var(--bg);}
+nav{background:var(--nav-bg);padding:10px 20px;display:flex;align-items:center;gap:18px;}
+nav a{color:#fff;text-decoration:none;font-size:14px;padding:6px 12px;border-radius:4px;}
+nav a:hover,nav a.active{background:#4CAF50;}
+nav .brand{font-weight:bold;font-size:16px;margin-right:auto;color:#fff;}
+.content{max-width:1100px;margin:10px auto;padding:0 15px;}
+h1{color:var(--text);display:flex;align-items:center;gap:12px;margin-bottom:10px;}
+h1 select{font-size:14px;padding:4px 8px;border:1px solid var(--input-border);border-radius:4px;background:var(--input-bg);color:var(--text);}
+.toolbar{display:flex;gap:8px;margin-bottom:10px;align-items:center;flex-wrap:wrap;}
+.btn{padding:6px 16px;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:13px;}
+.btn-save{background:#4CAF50;}.btn-save:hover{background:#45a049;}
+.btn-export{background:#2196F3;}.btn-export:hover{background:#1976D2;}
+.btn-import{background:#ff9800;}.btn-import:hover{background:#f57c00;}
+.status{font-size:13px;color:var(--text-secondary);margin-left:auto;}
+.table-wrap{overflow-x:auto;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:8px;}
+table{border-collapse:collapse;font-size:12px;}
+table th{background:var(--code-bg);color:var(--text-secondary);padding:4px 2px;font-weight:normal;position:sticky;top:0;z-index:1;min-width:40px;}
+table th.y-header{position:sticky;left:0;z-index:2;background:var(--code-bg);}
+table th.corner{position:sticky;left:0;top:0;z-index:3;background:var(--code-bg);}
+table td{padding:0;text-align:center;border:1px solid var(--border-light);}
+table td input{width:44px;border:none;text-align:center;padding:3px 1px;font-size:12px;background:transparent;color:var(--text);}
+table td input:focus{outline:2px solid #4CAF50;background:var(--input-bg);}
+table td.cursor{outline:3px solid #ff5722!important;z-index:1;position:relative;}
+.live-info{display:flex;gap:15px;margin-bottom:8px;font-size:13px;color:var(--text-secondary);}
+.live-info strong{color:var(--text);}
+input[type=file]{display:none;}
+</style></head><body>
+<nav><span class='brand'>ESP-ECU</span>
+<a href='/'>Home</a>
+<a href='/dashboard'>Dashboard</a>
+<a href='/tune' class='active'>Tune</a>
+<a href='/config'>Config</a>
+<a href='/update'>Update</a>
+<a href='/log/view'>Log</a>
+<a href='/heap/view'>Heap</a>
+<a href='#' onclick="if(confirm('Reboot device?')){fetch('/reboot',{method:'POST',headers:{'Authorization':'Basic '+btoa(prompt('user:pass','admin:'))}}).then(r=>r.ok?alert('Rebooting...'):alert('Failed'))};return false" style='margin-left:auto;background:#d32f2f;'>Reboot</a>
+</nav>
+<div class='content'>
+<h1>Tune <select id='tableSelect' onchange='loadTable()'>
+<option value='spark'>Spark Advance</option>
+<option value='ve'>VE Table</option>
+<option value='afr'>AFR Target</option>
+</select></h1>
+
+<div class='live-info'>
+<span>RPM: <strong id='curRpm'>--</strong></span>
+<span>MAP: <strong id='curMap'>--</strong> kPa</span>
+<span>Value: <strong id='curVal'>--</strong></span>
+</div>
+
+<div class='toolbar'>
+<button class='btn btn-save' onclick='saveTable()'>Save</button>
+<button class='btn btn-export' onclick='exportTable()'>Export JSON</button>
+<button class='btn btn-import' onclick='document.getElementById("importFile").click()'>Import JSON</button>
+<input type='file' id='importFile' accept='.json' onchange='importTable(event)'>
+<span class='status' id='status'></span>
+</div>
+
+<div class='table-wrap'>
+<table id='tuneTable'></table>
+</div>
+</div>
+<script>
+var tableData={spark:null,ve:null,afr:null};
+var rpmAxis=[], mapAxis=[];
+var cursorX=-1, cursorY=-1;
+
+function loadTable(){
+  var name=document.getElementById('tableSelect').value;
+  document.getElementById('status').textContent='Loading...';
+  fetch('/tune?table='+name).then(function(r){return r.json();}).then(function(d){
+    rpmAxis=d.rpmAxis||[];
+    mapAxis=d.mapAxis||[];
+    tableData[name]=d.values||[];
+    renderTable(name);
+    document.getElementById('status').textContent='';
+  }).catch(function(e){document.getElementById('status').textContent='Error: '+e;});
+}
+
+function renderTable(name){
+  var data=tableData[name];
+  if(!data||!rpmAxis.length||!mapAxis.length) return;
+  var rows=mapAxis.length, cols=rpmAxis.length;
+  var html='<tr><th class="corner">MAP\\RPM</th>';
+  for(var x=0;x<cols;x++) html+='<th>'+rpmAxis[x]+'</th>';
+  html+='</tr>';
+  for(var y=rows-1;y>=0;y--){
+    html+='<tr><th class="y-header">'+mapAxis[y]+'</th>';
+    for(var x=0;x<cols;x++){
+      var val=(data[y]&&data[y][x]!==undefined)?data[y][x]:0;
+      var bg=cellColor(name,val);
+      var id='c_'+x+'_'+y;
+      html+='<td id="td_'+x+'_'+y+'" style="background:'+bg+'"><input id="'+id+'" value="'+val.toFixed(1)+'" onchange="onCellChange('+x+','+y+',this)" onfocus="onCellFocus('+x+','+y+')"></td>';
+    }
+    html+='</tr>';
+  }
+  document.getElementById('tuneTable').innerHTML=html;
+}
+
+function cellColor(name,val){
+  var frac;
+  if(name==='spark'){frac=Math.max(0,Math.min(1,(val+10)/60));}
+  else if(name==='ve'){frac=Math.max(0,Math.min(1,val/120));}
+  else{frac=Math.max(0,Math.min(1,(val-10)/10));}
+  var r=Math.round(255*(1-frac)*0.5);
+  var g=Math.round(255*frac*0.5);
+  var b=Math.round(80*(1-Math.abs(frac-0.5)*2));
+  return 'rgba('+r+','+g+','+b+',0.25)';
+}
+
+function onCellChange(x,y,el){
+  var name=document.getElementById('tableSelect').value;
+  var val=parseFloat(el.value);
+  if(isNaN(val)) return;
+  if(!tableData[name][y]) tableData[name][y]=[];
+  tableData[name][y][x]=val;
+  el.parentElement.style.background=cellColor(name,val);
+}
+
+function onCellFocus(x,y){
+  var name=document.getElementById('tableSelect').value;
+  var val=tableData[name]&&tableData[name][y]?tableData[name][y][x]:0;
+  document.getElementById('curVal').textContent=(val||0).toFixed(1);
+}
+
+function saveTable(){
+  var name=document.getElementById('tableSelect').value;
+  var data=tableData[name];
+  if(!data){document.getElementById('status').textContent='No data';return;}
+  document.getElementById('status').textContent='Saving...';
+  fetch('/tune',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({table:name,rpmAxis:rpmAxis,mapAxis:mapAxis,values:data})
+  }).then(function(r){return r.json();}).then(function(d){
+    document.getElementById('status').textContent=d.error||'Saved!';
+    if(!d.error) setTimeout(function(){document.getElementById('status').textContent='';},2000);
+  }).catch(function(e){document.getElementById('status').textContent='Error: '+e;});
+}
+
+function exportTable(){
+  var name=document.getElementById('tableSelect').value;
+  var data={table:name,rpmAxis:rpmAxis,mapAxis:mapAxis,values:tableData[name]};
+  var blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+  var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name+'_table.json';a.click();
+}
+
+function importTable(e){
+  var f=e.target.files[0];if(!f) return;
+  var reader=new FileReader();
+  reader.onload=function(ev){
+    try{
+      var d=JSON.parse(ev.target.result);
+      var name=d.table||document.getElementById('tableSelect').value;
+      if(d.rpmAxis) rpmAxis=d.rpmAxis;
+      if(d.mapAxis) mapAxis=d.mapAxis;
+      if(d.values) tableData[name]=d.values;
+      document.getElementById('tableSelect').value=name;
+      renderTable(name);
+      document.getElementById('status').textContent='Imported (not saved yet)';
+    }catch(err){document.getElementById('status').textContent='Invalid JSON';}
+  };
+  reader.readAsText(f);
+  e.target.value='';
+}
+
+// Live cursor update
+function pollState(){
+  fetch('/state').then(function(r){return r.json();}).then(function(d){
+    var rpm=d.rpm||0, map=d.mapKpa||0;
+    document.getElementById('curRpm').textContent=rpm;
+    document.getElementById('curMap').textContent=map.toFixed(1);
+    // Find closest cell
+    var xi=0,yi=0;
+    for(var i=1;i<rpmAxis.length;i++){if(Math.abs(rpmAxis[i]-rpm)<Math.abs(rpmAxis[xi]-rpm))xi=i;}
+    for(var i=1;i<mapAxis.length;i++){if(Math.abs(mapAxis[i]-map)<Math.abs(mapAxis[yi]-map))yi=i;}
+    // Clear old cursor
+    if(cursorX>=0&&cursorY>=0){var old=document.getElementById('td_'+cursorX+'_'+cursorY);if(old)old.classList.remove('cursor');}
+    cursorX=xi;cursorY=yi;
+    var el=document.getElementById('td_'+xi+'_'+yi);if(el)el.classList.add('cursor');
+    var name=document.getElementById('tableSelect').value;
+    var val=tableData[name]&&tableData[name][yi]?tableData[name][yi][xi]:0;
+    document.getElementById('curVal').textContent=(val||0).toFixed(1);
+  }).catch(function(){});
+}
+
+loadTable();
+setInterval(pollState,1000);
+fetch('/theme').then(function(r){return r.json()}).then(function(d){var t=d.theme||'light';document.documentElement.dataset.theme=t;localStorage.setItem('hp-theme',t);}).catch(function(){});
+</script>
+</body></html>

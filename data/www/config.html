@@ -1,0 +1,232 @@
+<html><head><title>Config - ESP-ECU</title>
+<meta name='viewport' content='width=device-width,initial-scale=1'>
+<link rel='stylesheet' href='/theme.css'>
+<script>document.documentElement.dataset.theme=localStorage.getItem('hp-theme')||'dark'</script>
+<style>
+body{font-family:Arial,sans-serif;margin:0;padding:0;background:var(--bg);}
+nav{background:var(--nav-bg);padding:10px 20px;display:flex;align-items:center;gap:18px;}
+nav a{color:#fff;text-decoration:none;font-size:14px;padding:6px 12px;border-radius:4px;}
+nav a:hover,nav a.active{background:#4CAF50;}
+nav .brand{font-weight:bold;font-size:16px;margin-right:auto;color:#fff;}
+.content{max-width:700px;margin:20px auto;padding:0 20px;}
+h1{color:var(--text);}
+fieldset{border:1px solid var(--border);border-radius:6px;padding:15px;margin-bottom:15px;background:var(--surface);}
+legend{color:#4CAF50;font-weight:bold;padding:0 8px;font-size:14px;}
+label{display:block;margin:8px 0 3px;color:var(--text-secondary);font-size:13px;}
+input[type=text],input[type=number],input[type=password],select{width:100%;padding:7px;border:1px solid var(--input-border);border-radius:4px;box-sizing:border-box;background:var(--input-bg);color:var(--text);font-size:13px;}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+button{background:#4CAF50;color:#fff;padding:8px 24px;border:none;border-radius:4px;cursor:pointer;font-size:14px;margin-top:10px;}
+button:hover{background:#45a049;}
+.btn-ftp{background:#2196F3;}.btn-ftp:hover{background:#1976D2;}
+.btn-ftp-off{background:#f44336;}.btn-ftp-off:hover{background:#d32f2f;}
+#status{margin-top:15px;padding:10px;border-radius:4px;display:none;font-size:14px;}
+.ok{background:#d4edda;color:#155724;display:block!important;}
+.err{background:#f8d7da;color:#721c24;display:block!important;}
+.ftp-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px;}
+.ftp-status{font-size:13px;color:var(--text-secondary);}
+</style></head><body>
+<nav><span class='brand'>ESP-ECU</span>
+<a href='/'>Home</a>
+<a href='/dashboard'>Dashboard</a>
+<a href='/tune'>Tune</a>
+<a href='/config' class='active'>Config</a>
+<a href='/update'>Update</a>
+<a href='/log/view'>Log</a>
+<a href='/heap/view'>Heap</a>
+<a href='#' onclick="if(confirm('Reboot device?')){fetch('/reboot',{method:'POST',headers:{'Authorization':'Basic '+btoa(prompt('user:pass','admin:'))}}).then(r=>r.ok?alert('Rebooting...'):alert('Failed'))};return false" style='margin-left:auto;background:#d32f2f;'>Reboot</a>
+</nav>
+<div class='content'>
+<h1>Configuration</h1>
+<form id='configForm' onsubmit='return save(event)'>
+
+<fieldset><legend>Engine</legend>
+<div class='row2'>
+<div><label>Cylinders</label><input type='number' id='cylinders' min='1' max='12'></div>
+<div><label>Displacement (cc)</label><input type='number' id='displacement'></div>
+</div>
+<label>Firing Order (comma separated)</label>
+<input type='text' id='firingOrder' placeholder='1,8,4,3,6,5,7,2'>
+<div class='row2'>
+<div><label>Crank Teeth</label><input type='number' id='crankTeeth'></div>
+<div><label>Missing Teeth</label><input type='number' id='crankMissing'></div>
+</div>
+<label>Cam Sensor</label>
+<select id='hasCamSensor'><option value='true'>Present</option><option value='false'>Not Present</option></select>
+<div class='row2'>
+<div><label>Rev Limit (RPM)</label><input type='number' id='revLimitRpm'></div>
+<div><label>Max Dwell (ms)</label><input type='number' id='maxDwellMs' step='0.1'></div>
+</div>
+<div class='row2'>
+<div><label>Injector Flow (cc/min)</label><input type='number' id='injectorFlowCcMin' step='1'></div>
+<div><label>Injector Dead Time (ms)</label><input type='number' id='injectorDeadTimeMs' step='0.1'></div>
+</div>
+</fieldset>
+
+<fieldset><legend>Alternator</legend>
+<div class='row2'>
+<div><label>Target Voltage (V)</label><input type='number' id='altTargetVoltage' step='0.1'></div>
+<div><label>PID P</label><input type='number' id='altPidP' step='0.1'></div>
+</div>
+<div class='row2'>
+<div><label>PID I</label><input type='number' id='altPidI' step='0.1'></div>
+<div><label>PID D</label><input type='number' id='altPidD' step='0.1'></div>
+</div>
+</fieldset>
+
+<fieldset><legend>MAP Sensor</legend>
+<div class='row2'>
+<div><label>Voltage Min (V)</label><input type='number' id='mapVoltageMin' step='0.01'></div>
+<div><label>Voltage Max (V)</label><input type='number' id='mapVoltageMax' step='0.01'></div>
+</div>
+<div class='row2'>
+<div><label>Pressure Min (kPa)</label><input type='number' id='mapPressureMinKpa' step='1'></div>
+<div><label>Pressure Max (kPa)</label><input type='number' id='mapPressureMaxKpa' step='1'></div>
+</div>
+</fieldset>
+
+<fieldset><legend>O2 Sensors</legend>
+<div class='row2'>
+<div><label>AFR at 0V</label><input type='number' id='o2AfrAt0v' step='0.1'></div>
+<div><label>AFR at 5V</label><input type='number' id='o2AfrAt5v' step='0.1'></div>
+</div>
+<div class='row2'>
+<div><label>Closed Loop Min RPM</label><input type='number' id='closedLoopMinRpm'></div>
+<div><label>Closed Loop Max RPM</label><input type='number' id='closedLoopMaxRpm'></div>
+</div>
+<label>Closed Loop Max MAP (kPa)</label>
+<input type='number' id='closedLoopMaxMapKpa' step='1'>
+</fieldset>
+
+<fieldset><legend>WiFi</legend>
+<label>SSID</label><input type='text' id='wifiSSID'>
+<label>Password</label><input type='password' id='wifiPassword' placeholder='Leave blank to keep current'>
+<label>AP Fallback Timeout (minutes)</label><input type='number' id='apFallbackMin' min='1'>
+<a href='/wifi/view' style='font-size:13px;color:#2196F3;'>WiFi Setup Page</a>
+</fieldset>
+
+<fieldset><legend>MQTT</legend>
+<div class='row2'>
+<div><label>Host</label><input type='text' id='mqttHost'></div>
+<div><label>Port</label><input type='number' id='mqttPort'></div>
+</div>
+<div class='row2'>
+<div><label>User</label><input type='text' id='mqttUser'></div>
+<div><label>Password</label><input type='password' id='mqttPassword' placeholder='Leave blank to keep current'></div>
+</div>
+</fieldset>
+
+<fieldset><legend>Appearance</legend>
+<label>Theme</label>
+<select id='theme'><option value='light'>Light</option><option value='dark'>Dark</option></select>
+</fieldset>
+
+<fieldset><legend>Admin</legend>
+<label>New Admin Password</label>
+<input type='password' id='adminPassword' placeholder='Leave blank to keep current'>
+</fieldset>
+
+<fieldset><legend>FTP Server</legend>
+<div class='ftp-row'>
+<button type='button' class='btn-ftp' onclick='ftpEnable(10)'>Enable 10m</button>
+<button type='button' class='btn-ftp' onclick='ftpEnable(30)'>Enable 30m</button>
+<button type='button' class='btn-ftp' onclick='ftpEnable(60)'>Enable 60m</button>
+<button type='button' class='btn-ftp-off' onclick='ftpDisable()'>Disable</button>
+</div>
+<div class='ftp-status' id='ftpStatus'>Checking...</div>
+</fieldset>
+
+<button type='submit'>Save Configuration</button>
+</form>
+<div id='status'></div>
+</div>
+<script>
+function load(){
+  fetch('/config').then(function(r){return r.json();}).then(function(d){
+    document.getElementById('cylinders').value=d.cylinders||8;
+    document.getElementById('displacement').value=d.displacement||5700;
+    document.getElementById('firingOrder').value=(d.firingOrder||[]).join(',');
+    document.getElementById('crankTeeth').value=d.crankTeeth||36;
+    document.getElementById('crankMissing').value=d.crankMissing||1;
+    document.getElementById('hasCamSensor').value=d.hasCamSensor?'true':'false';
+    document.getElementById('revLimitRpm').value=d.revLimitRpm||6000;
+    document.getElementById('maxDwellMs').value=d.maxDwellMs||4.0;
+    document.getElementById('injectorFlowCcMin').value=d.injectorFlowCcMin||240;
+    document.getElementById('injectorDeadTimeMs').value=d.injectorDeadTimeMs||1.0;
+    document.getElementById('altTargetVoltage').value=d.altTargetVoltage||13.6;
+    document.getElementById('altPidP').value=d.altPidP||10;
+    document.getElementById('altPidI').value=d.altPidI||5;
+    document.getElementById('altPidD').value=d.altPidD||0;
+    document.getElementById('mapVoltageMin').value=d.mapVoltageMin||0.5;
+    document.getElementById('mapVoltageMax').value=d.mapVoltageMax||4.5;
+    document.getElementById('mapPressureMinKpa').value=d.mapPressureMinKpa||10;
+    document.getElementById('mapPressureMaxKpa').value=d.mapPressureMaxKpa||105;
+    document.getElementById('o2AfrAt0v').value=d.o2AfrAt0v||10;
+    document.getElementById('o2AfrAt5v').value=d.o2AfrAt5v||20;
+    document.getElementById('closedLoopMinRpm').value=d.closedLoopMinRpm||800;
+    document.getElementById('closedLoopMaxRpm').value=d.closedLoopMaxRpm||4000;
+    document.getElementById('closedLoopMaxMapKpa').value=d.closedLoopMaxMapKpa||80;
+    document.getElementById('wifiSSID').value=d.wifiSSID||'';
+    document.getElementById('apFallbackMin').value=Math.round((d.apFallbackSeconds||600)/60);
+    document.getElementById('mqttHost').value=d.mqttHost||'';
+    document.getElementById('mqttPort').value=d.mqttPort||1883;
+    document.getElementById('mqttUser').value=d.mqttUser||'';
+    document.getElementById('theme').value=d.theme||'dark';
+  }).catch(function(){});
+}
+
+function save(e){
+  e.preventDefault();
+  var fo=document.getElementById('firingOrder').value.split(',').map(Number);
+  var data={
+    cylinders:parseInt(document.getElementById('cylinders').value),
+    displacement:parseInt(document.getElementById('displacement').value),
+    firingOrder:fo,
+    crankTeeth:parseInt(document.getElementById('crankTeeth').value),
+    crankMissing:parseInt(document.getElementById('crankMissing').value),
+    hasCamSensor:document.getElementById('hasCamSensor').value==='true',
+    revLimitRpm:parseInt(document.getElementById('revLimitRpm').value),
+    maxDwellMs:parseFloat(document.getElementById('maxDwellMs').value),
+    injectorFlowCcMin:parseFloat(document.getElementById('injectorFlowCcMin').value),
+    injectorDeadTimeMs:parseFloat(document.getElementById('injectorDeadTimeMs').value),
+    altTargetVoltage:parseFloat(document.getElementById('altTargetVoltage').value),
+    altPidP:parseFloat(document.getElementById('altPidP').value),
+    altPidI:parseFloat(document.getElementById('altPidI').value),
+    altPidD:parseFloat(document.getElementById('altPidD').value),
+    mapVoltageMin:parseFloat(document.getElementById('mapVoltageMin').value),
+    mapVoltageMax:parseFloat(document.getElementById('mapVoltageMax').value),
+    mapPressureMinKpa:parseFloat(document.getElementById('mapPressureMinKpa').value),
+    mapPressureMaxKpa:parseFloat(document.getElementById('mapPressureMaxKpa').value),
+    o2AfrAt0v:parseFloat(document.getElementById('o2AfrAt0v').value),
+    o2AfrAt5v:parseFloat(document.getElementById('o2AfrAt5v').value),
+    closedLoopMinRpm:parseInt(document.getElementById('closedLoopMinRpm').value),
+    closedLoopMaxRpm:parseInt(document.getElementById('closedLoopMaxRpm').value),
+    closedLoopMaxMapKpa:parseFloat(document.getElementById('closedLoopMaxMapKpa').value),
+    wifiSSID:document.getElementById('wifiSSID').value,
+    apFallbackSeconds:parseInt(document.getElementById('apFallbackMin').value)*60,
+    mqttHost:document.getElementById('mqttHost').value,
+    mqttPort:parseInt(document.getElementById('mqttPort').value),
+    mqttUser:document.getElementById('mqttUser').value,
+    theme:document.getElementById('theme').value
+  };
+  var pw=document.getElementById('wifiPassword').value;if(pw) data.wifiPassword=pw;
+  var mpw=document.getElementById('mqttPassword').value;if(mpw) data.mqttPassword=mpw;
+  var apw=document.getElementById('adminPassword').value;if(apw) data.adminPassword=apw;
+
+  var s=document.getElementById('status');
+  fetch('/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)}).then(function(r){return r.json();}).then(function(d){
+    if(d.error){s.className='err';s.textContent=d.error;}
+    else{s.className='ok';s.textContent=d.message||'Configuration saved.';
+      var t=data.theme;document.documentElement.dataset.theme=t;localStorage.setItem('hp-theme',t);
+    }
+  }).catch(function(err){s.className='err';s.textContent='Error: '+err;});
+  return false;
+}
+
+function ftpEnable(min){fetch('/ftp',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'enable',duration:min})}).then(function(){checkFtp();});}
+function ftpDisable(){fetch('/ftp',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'disable'})}).then(function(){checkFtp();});}
+function checkFtp(){fetch('/ftp').then(function(r){return r.json();}).then(function(d){document.getElementById('ftpStatus').textContent=d.active?'Active ('+d.remainingMinutes+' min remaining)':'Inactive';}).catch(function(){document.getElementById('ftpStatus').textContent='Unknown';});}
+
+load();checkFtp();
+fetch('/theme').then(function(r){return r.json()}).then(function(d){var t=d.theme||'light';document.documentElement.dataset.theme=t;localStorage.setItem('hp-theme',t);}).catch(function(){});
+</script>
+</body></html>

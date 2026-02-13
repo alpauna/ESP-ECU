@@ -1,0 +1,62 @@
+<html><head><title>Log - ESP-ECU</title>
+<meta name='viewport' content='width=device-width,initial-scale=1'>
+<link rel='stylesheet' href='/theme.css'>
+<script>document.documentElement.dataset.theme=localStorage.getItem('hp-theme')||'dark'</script>
+<style>
+body{font-family:Arial,sans-serif;margin:0;padding:0;background:var(--bg);}
+nav{background:var(--nav-bg);padding:10px 20px;display:flex;align-items:center;gap:18px;}
+nav a{color:#fff;text-decoration:none;font-size:14px;padding:6px 12px;border-radius:4px;}
+nav a:hover,nav a.active{background:#4CAF50;}
+nav .brand{font-weight:bold;font-size:16px;margin-right:auto;color:#fff;}
+.content{max-width:800px;margin:20px auto;padding:0 20px;}
+h1{color:var(--text);display:flex;align-items:center;gap:12px;}
+h1 select{font-size:14px;padding:4px 8px;border:1px solid var(--input-border);border-radius:4px;background:var(--input-bg);color:var(--text);}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:15px;margin-bottom:15px;}
+.log-entry{font-family:monospace;font-size:12px;padding:4px 0;border-bottom:1px solid var(--border-light);word-break:break-all;}
+.log-entry:last-child{border-bottom:none;}
+.log-entry.error{color:#ef5350;}
+.log-entry.warn{color:#ffa726;}
+.log-entry.info{color:var(--text);}
+.log-entry.debug{color:var(--text-muted);}
+.footer{text-align:center;color:var(--text-muted);font-size:12px;margin-top:10px;}
+</style></head><body>
+<nav><span class='brand'>ESP-ECU</span>
+<a href='/'>Home</a>
+<a href='/dashboard'>Dashboard</a>
+<a href='/tune'>Tune</a>
+<a href='/config'>Config</a>
+<a href='/update'>Update</a>
+<a href='/log/view' class='active'>Log</a>
+<a href='/heap/view'>Heap</a>
+<a href='#' onclick="if(confirm('Reboot device?')){fetch('/reboot',{method:'POST',headers:{'Authorization':'Basic '+btoa(prompt('user:pass','admin:'))}}).then(r=>r.ok?alert('Rebooting...'):alert('Failed'))};return false" style='margin-left:auto;background:#d32f2f;'>Reboot</a>
+</nav>
+<div class='content'>
+<h1>Log <select id='limit' onchange='load()'>
+<option value='50'>50</option>
+<option value='100' selected>100</option>
+<option value='200'>200</option>
+<option value='500'>500</option>
+</select></h1>
+<div class='card' id='logCard'>
+<div id='entries'>Loading...</div>
+</div>
+<div id='footer' class='footer'></div>
+</div>
+<script>
+function levelClass(line){
+  if(line.indexOf('[ERROR]')>=0) return 'error';
+  if(line.indexOf('[WARN')>=0) return 'warn';
+  if(line.indexOf('[DEBUG]')>=0) return 'debug';
+  return 'info';
+}
+function load(){
+  var limit=document.getElementById('limit').value;
+  var xhr=new XMLHttpRequest();xhr.open('GET','/log?limit='+limit,true);
+  xhr.onload=function(){if(xhr.status===200){try{var d=JSON.parse(xhr.responseText);var el=document.getElementById('entries');if(!d.entries||d.entries.length===0){el.innerHTML='<em>No log entries</em>';return;}
+  var html='';for(var i=d.entries.length-1;i>=0;i--){var e=d.entries[i];html+="<div class='log-entry "+levelClass(e)+"'>"+e.replace(/</g,'&lt;')+"</div>";}
+  el.innerHTML=html;document.getElementById('footer').textContent=d.count+' entries | Updated: '+new Date().toLocaleTimeString();}catch(e){}}};xhr.send();
+}
+load();setInterval(load,5000);
+fetch('/theme').then(function(r){return r.json()}).then(function(d){var t=d.theme||'light';document.documentElement.dataset.theme=t;localStorage.setItem('hp-theme',t);}).catch(function(){});
+</script>
+</body></html>

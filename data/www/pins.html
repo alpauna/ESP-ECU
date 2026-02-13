@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ESP-ECU - Pin Map</title>
+<link rel="stylesheet" href="/theme.css">
+<style>
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 0; }
+nav { display: flex; align-items: center; padding: 0.5rem 1rem; border-bottom: 1px solid var(--border); background: var(--surface); }
+nav a { color: var(--text-muted); text-decoration: none; margin-right: 1rem; font-size: 0.9rem; }
+nav a:hover, nav a.active { color: var(--text); }
+nav .title { font-weight: 600; margin-right: 2rem; color: var(--text); }
+.container { max-width: 1000px; margin: 1rem auto; padding: 0 1rem; }
+h2 { color: var(--text); margin: 1.5rem 0 0.5rem; font-size: 1.1rem; border-bottom: 1px solid var(--border); padding-bottom: 0.3rem; }
+table { width: 100%; border-collapse: collapse; margin-bottom: 1rem; font-size: 0.85rem; }
+th { text-align: left; padding: 0.4rem 0.6rem; background: var(--surface); color: var(--text-muted); border-bottom: 2px solid var(--border); font-weight: 600; }
+td { padding: 0.4rem 0.6rem; border-bottom: 1px solid var(--border); color: var(--text); }
+tr:hover { background: var(--surface); }
+.pin { font-family: monospace; font-weight: 600; color: var(--accent, #4a9eff); }
+.type-digital { color: #4caf50; }
+.type-analog { color: #ff9800; }
+.type-pwm { color: #ab47bc; }
+.type-spi { color: #78909c; }
+.val { font-family: monospace; font-weight: 600; }
+.val-on { color: #4caf50; }
+.val-off { color: var(--text-muted); }
+.val-nc { color: #ef5350; font-style: italic; }
+.val-mv { color: #ff9800; }
+.val-pct { color: #ab47bc; }
+.note { color: var(--text-muted); font-size: 0.8rem; font-style: italic; }
+.sync-box { display: inline-block; padding: 0.3rem 0.8rem; border-radius: 4px; font-weight: 600; font-size: 0.85rem; margin-left: 1rem; }
+.sync-LOST { background: #ef5350; color: #fff; }
+.sync-SYNCING { background: #ff9800; color: #fff; }
+.sync-SYNCED { background: #4caf50; color: #fff; }
+.status-bar { display: flex; align-items: center; margin: 1rem 0; }
+.status-bar span { color: var(--text-muted); font-size: 0.85rem; }
+.refresh-note { color: var(--text-muted); font-size: 0.8rem; text-align: right; margin-top: 0.5rem; }
+</style>
+<script>
+(function(){var t=localStorage.getItem('theme');if(t)document.documentElement.setAttribute('data-theme',t);})();
+</script>
+</head>
+<body>
+<nav>
+    <span class="title">ESP-ECU</span>
+    <a href="/">Home</a>
+    <a href="/dashboard">Dashboard</a>
+    <a href="/pins" class="active">Pins</a>
+    <a href="/tune">Tune</a>
+    <a href="/config">Config</a>
+    <a href="/log/view">Log</a>
+    <a href="/heap/view">Heap</a>
+    <a href="/update">Update</a>
+</nav>
+<div class="container">
+    <div class="status-bar">
+        <span>Crank: <span id="crankSync" class="sync-box sync-LOST">--</span></span>
+        <span style="margin-left:1rem;">RPM: <strong id="rpm">0</strong></span>
+    </div>
+
+    <h2>Inputs</h2>
+    <table id="inputTable">
+        <thead><tr><th>GPIO</th><th>Name</th><th>Type</th><th>Mode</th><th>Value</th><th>Description</th></tr></thead>
+        <tbody></tbody>
+    </table>
+
+    <h2>Outputs</h2>
+    <table id="outputTable">
+        <thead><tr><th>GPIO</th><th>Name</th><th>Type</th><th>Mode</th><th>Value</th><th>Description</th></tr></thead>
+        <tbody></tbody>
+    </table>
+
+    <h2>Bus (SPI / SD Card)</h2>
+    <table id="busTable">
+        <thead><tr><th>GPIO</th><th>Name</th><th>Type</th><th>Mode</th></tr></thead>
+        <tbody></tbody>
+    </table>
+
+    <div class="refresh-note">Auto-refreshes every 2 seconds</div>
+</div>
+<script>
+function fmtVal(item) {
+    if (item.type === 'pwm') {
+        return '<span class="val val-pct">' + (item.percent !== undefined ? item.percent.toFixed(1) + '%' : '0%') + '</span>';
+    }
+    if (item.type === 'analog') {
+        return '<span class="val val-mv">' + item.mV + ' mV</span> <span class="note">(raw ' + item.raw + ')</span>';
+    }
+    // digital
+    var v = item.value || 'OFF';
+    if (v === 'N/C') return '<span class="val val-nc">N/C</span>';
+    if (v === 'ON' || v === 'HIGH') return '<span class="val val-on">' + v + '</span>';
+    return '<span class="val val-off">' + v + '</span>';
+}
+
+function typeClass(t) {
+    return 'type-' + t;
+}
+
+function buildInputs(rows) {
+    var tb = document.querySelector('#inputTable tbody');
+    var html = '';
+    for (var i = 0; i < rows.length; i++) {
+        var r = rows[i];
+        html += '<tr>';
+        html += '<td class="pin">' + r.pin + '</td>';
+        html += '<td>' + r.name + '</td>';
+        html += '<td class="' + typeClass(r.type) + '">' + r.type.toUpperCase() + '</td>';
+        html += '<td>' + r.mode + '</td>';
+        html += '<td>' + fmtVal(r) + '</td>';
+        html += '<td class="note">' + (r.desc || '') + '</td>';
+        html += '</tr>';
+    }
+    tb.innerHTML = html;
+}
+
+function buildOutputs(rows) {
+    var tb = document.querySelector('#outputTable tbody');
+    var html = '';
+    for (var i = 0; i < rows.length; i++) {
+        var r = rows[i];
+        var desc = r.desc || '';
+        if (r.note) desc += (desc ? ' ' : '') + '<em>(' + r.note + ')</em>';
+        html += '<tr>';
+        html += '<td class="pin">' + (r.pin || '--') + '</td>';
+        html += '<td>' + r.name + '</td>';
+        html += '<td class="' + typeClass(r.type) + '">' + r.type.toUpperCase() + '</td>';
+        html += '<td>' + r.mode + '</td>';
+        html += '<td>' + fmtVal(r) + '</td>';
+        html += '<td class="note">' + desc + '</td>';
+        html += '</tr>';
+    }
+    tb.innerHTML = html;
+}
+
+function buildBus(rows) {
+    var tb = document.querySelector('#busTable tbody');
+    var html = '';
+    for (var i = 0; i < rows.length; i++) {
+        var r = rows[i];
+        html += '<tr>';
+        html += '<td class="pin">' + r.pin + '</td>';
+        html += '<td>' + r.name + '</td>';
+        html += '<td class="type-spi">' + r.type + '</td>';
+        html += '<td>' + r.mode + '</td>';
+        html += '</tr>';
+    }
+    tb.innerHTML = html;
+}
+
+function refresh() {
+    fetch('/pins?format=json')
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+            buildInputs(d.inputs || []);
+            buildOutputs(d.outputs || []);
+            buildBus(d.bus || []);
+            var el = document.getElementById('crankSync');
+            var sync = d.crankSync || 'LOST';
+            el.textContent = sync;
+            el.className = 'sync-box sync-' + sync;
+            document.getElementById('rpm').textContent = d.rpm || 0;
+        })
+        .catch(function(e) { console.error('Fetch error:', e); });
+}
+
+// Theme sync
+fetch('/theme').then(function(r){return r.json();}).then(function(d){
+    if(d.theme){document.documentElement.setAttribute('data-theme',d.theme);localStorage.setItem('theme',d.theme);}
+});
+
+refresh();
+setInterval(refresh, 2000);
+</script>
+</body>
+</html>
