@@ -5,6 +5,7 @@
 #include "CrankSensor.h"
 #include "AlternatorControl.h"
 #include "SensorManager.h"
+#include "PinExpander.h"
 #include "OtaUtils.h"
 
 extern const char compile_date[];
@@ -567,18 +568,19 @@ void WebHandler::setupRoutes() {
                 o["value"] = digitalRead(coilPins[i]) ? "ON" : "OFF";
             }
 
-            // Digital outputs — injectors
-            const uint8_t injPins[] = {18,21,40,0,0,0,0,0};
+            // Digital outputs — injectors (native + PCF8575)
+            const uint8_t injPins[] = {18,21,40,103,104,105,106,107};
             for (uint8_t i = 0; i < 8; i++) {
                 JsonObject o = outputs.add<JsonObject>();
                 o["pin"] = injPins[i];
                 char nm[8]; snprintf(nm, sizeof(nm), "INJ_%d", i+1);
                 o["name"] = nm; o["type"] = "digital"; o["mode"] = "OUTPUT";
-                o["desc"] = "High-Z injector driver. HIGH=open, LOW=closed. Dead time 1.0ms";
-                if (injPins[i] == 0) {
-                    o["value"] = "N/C";
-                    o["note"] = "GPIO33-37 used by OPI PSRAM";
+                if (injPins[i] >= PCF_PIN_OFFSET) {
+                    o["desc"] = "High-Z injector via PCF8575. HIGH=open, LOW=closed";
+                    o["value"] = xDigitalRead(injPins[i]) ? "ON" : "OFF";
+                    o["bus"] = "I2C";
                 } else {
+                    o["desc"] = "High-Z injector driver. HIGH=open, LOW=closed. Dead time 1.0ms";
                     o["value"] = digitalRead(injPins[i]) ? "ON" : "OFF";
                 }
             }
@@ -593,26 +595,31 @@ void WebHandler::setupRoutes() {
                 o["percent"] = alt ? alt->getDuty() : 0.0f;
             }
 
-            // Digital output — fuel pump
+            // Digital output — fuel pump (PCF P0)
             {
                 JsonObject o = outputs.add<JsonObject>();
-                o["pin"] = 42; o["name"] = "FUEL_PUMP"; o["type"] = "digital"; o["mode"] = "OUTPUT";
-                o["desc"] = "Fuel pump relay. HIGH=pump on. Always on when ECU running";
-                o["value"] = digitalRead(42) ? "ON" : "OFF";
+                o["pin"] = 100; o["name"] = "FUEL_PUMP"; o["type"] = "digital"; o["mode"] = "OUTPUT";
+                o["desc"] = "Fuel pump relay via PCF8575 P0. HIGH=pump on. Always on when ECU running";
+                o["value"] = xDigitalRead(100) ? "ON" : "OFF";
+                o["bus"] = "I2C";
             }
 
-            // Disabled outputs
+            // Tach output (PCF P1)
             {
                 JsonObject o = outputs.add<JsonObject>();
-                o["pin"] = 0; o["name"] = "TACH_OUT"; o["type"] = "digital"; o["mode"] = "DISABLED";
-                o["desc"] = "Tachometer square wave output, 1 pulse per ignition event";
-                o["value"] = "N/C"; o["note"] = "GPIO43=TX0, needs remap";
+                o["pin"] = 101; o["name"] = "TACH_OUT"; o["type"] = "digital"; o["mode"] = "OUTPUT";
+                o["desc"] = "Tachometer square wave output via PCF8575 P1";
+                o["value"] = xDigitalRead(101) ? "ON" : "OFF";
+                o["bus"] = "I2C";
             }
+
+            // CEL (PCF P2)
             {
                 JsonObject o = outputs.add<JsonObject>();
-                o["pin"] = 0; o["name"] = "CEL"; o["type"] = "digital"; o["mode"] = "DISABLED";
-                o["desc"] = "Check engine light indicator. HIGH=fault active";
-                o["value"] = "N/C"; o["note"] = "GPIO44=RX0, needs remap";
+                o["pin"] = 102; o["name"] = "CEL"; o["type"] = "digital"; o["mode"] = "OUTPUT";
+                o["desc"] = "Check engine light via PCF8575 P2. HIGH=fault active";
+                o["value"] = xDigitalRead(102) ? "ON" : "OFF";
+                o["bus"] = "I2C";
             }
 
             // SPI bus
@@ -624,6 +631,38 @@ void WebHandler::setupRoutes() {
             addSpi(48, "SD_MISO");
             addSpi(38, "SD_MOSI");
             addSpi(39, "SD_CS");
+
+            // I2C bus
+            PinExpander& pcf = PinExpander::instance();
+            {
+                JsonObject o = bus.add<JsonObject>();
+                o["pin"] = pcf.getSDA(); o["name"] = "I2C_SDA"; o["type"] = "I2C"; o["mode"] = "PCF8575 @ 0x20";
+            }
+            {
+                JsonObject o = bus.add<JsonObject>();
+                o["pin"] = pcf.getSCL(); o["name"] = "I2C_SCL"; o["type"] = "I2C"; o["mode"] = "PCF8575 @ 0x20";
+            }
+
+            // PCF8575 expander info
+            JsonObject expander = doc["expander"].to<JsonObject>();
+            expander["type"] = "PCF8575";
+            expander["address"] = "0x20";
+            expander["ready"] = pcf.isReady();
+            expander["sda"] = pcf.getSDA();
+            expander["scl"] = pcf.getSCL();
+            if (pcf.isReady()) {
+                uint16_t raw = pcf.readAll();
+                JsonArray pins = expander["pins"].to<JsonArray>();
+                const char* pcfNames[] = {"FUEL_PUMP","TACH_OUT","CEL","INJ_4","INJ_5","INJ_6","INJ_7","INJ_8",
+                                           "SPARE_8","SPARE_9","SPARE_10","SPARE_11","SPARE_12","SPARE_13","SPARE_14","SPARE_15"};
+                for (uint8_t i = 0; i < 16; i++) {
+                    JsonObject p = pins.add<JsonObject>();
+                    p["pcfPin"] = i;
+                    p["globalPin"] = PCF_PIN_OFFSET + i;
+                    p["name"] = pcfNames[i];
+                    p["value"] = (raw & (1 << i)) ? "HIGH" : "LOW";
+                }
+            }
 
             // Crank sync state
             if (_ecu) {

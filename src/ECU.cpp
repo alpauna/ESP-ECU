@@ -9,23 +9,26 @@
 #include "TuneTable.h"
 #include "Config.h"
 #include "Logger.h"
+#include "PinExpander.h"
 #include <esp_task_wdt.h>
 
 // GPIO pin assignments (ESP32-S3)
 static const uint8_t PIN_CRANK        = 1;
 static const uint8_t PIN_CAM          = 2;
 static const uint8_t PIN_ALTERNATOR   = 41;
-static const uint8_t PIN_FUEL_PUMP    = 42;
-// GPIO43=TX0, GPIO44=RX0 — reserved for Serial (UART0)
-// Tach and CEL need reassignment; disabled for Phase 1
-static const uint8_t PIN_TACH_OUT     = 0;
-static const uint8_t PIN_CEL          = 0;
+
+// I2C bus for PCF8575 expander
+static const uint8_t I2C_SDA          = 0;   // GPIO0 — strapping pin, ext pull-up, works as I2C SDA after boot
+static const uint8_t I2C_SCL          = 42;  // GPIO42 — was FUEL_PUMP, now I2C SCL
+
+// PCF8575 outputs (pin 100+ = PCF8575 P0-P15)
+static const uint8_t PIN_FUEL_PUMP    = 100; // PCF P0 — moved from GPIO42
+static const uint8_t PIN_TACH_OUT     = 101; // PCF P1 — was disabled (GPIO43=TX conflict)
+static const uint8_t PIN_CEL          = 102; // PCF P2 — was disabled (GPIO44=RX conflict)
 
 static const uint8_t COIL_PINS[]     = {10, 11, 12, 13, 14, 15, 16, 17};
-// GPIO33-37 used by OPI PSRAM — CANNOT use as GPIO
-// GPIO38/39 reassigned to SD SPI
-// Phase 1: only 3 usable injector pins (full 8 requires I/O expander or pin remapping)
-static const uint8_t INJECTOR_PINS[] = {18, 21, 40, 0, 0, 0, 0, 0};
+// INJ 1-3: native GPIO for best timing; INJ 4-8: PCF8575 P3-P7
+static const uint8_t INJECTOR_PINS[] = {18, 21, 40, 103, 104, 105, 106, 107};
 
 ECU::ECU(Scheduler* ts)
     : _ts(ts), _tUpdate(nullptr), _crankTeeth(36), _crankMissing(1),
@@ -90,6 +93,9 @@ void ECU::configure(const ProjectInfo& proj) {
 }
 
 void ECU::begin() {
+    // Initialize PCF8575 I2C expander before subsystem init
+    PinExpander::instance().begin(I2C_SDA, I2C_SCL, 0x20);
+
     // Initialize subsystems
     _crank->begin(PIN_CRANK, _crankTeeth, _crankMissing);
     _cam->setCrankSensor(_crank);
@@ -103,23 +109,17 @@ void ECU::begin() {
     _alternator->begin(PIN_ALTERNATOR);
     _sensors->begin();
 
-    // Fuel pump relay ON
-    if (PIN_FUEL_PUMP) {
-        pinMode(PIN_FUEL_PUMP, OUTPUT);
-        digitalWrite(PIN_FUEL_PUMP, HIGH);
-    }
+    // Fuel pump relay ON (PCF P0)
+    xPinMode(PIN_FUEL_PUMP, OUTPUT);
+    xDigitalWrite(PIN_FUEL_PUMP, HIGH);
 
-    // Tach output (disabled if pin=0)
-    if (PIN_TACH_OUT) {
-        pinMode(PIN_TACH_OUT, OUTPUT);
-        digitalWrite(PIN_TACH_OUT, LOW);
-    }
+    // Tach output (PCF P1)
+    xPinMode(PIN_TACH_OUT, OUTPUT);
+    xDigitalWrite(PIN_TACH_OUT, LOW);
 
-    // CEL / check engine light (disabled if pin=0)
-    if (PIN_CEL) {
-        pinMode(PIN_CEL, OUTPUT);
-        digitalWrite(PIN_CEL, LOW);
-    }
+    // CEL / check engine light (PCF P2)
+    xPinMode(PIN_CEL, OUTPUT);
+    xDigitalWrite(PIN_CEL, LOW);
 
     // Sensor + fuel calc update task (10ms on Core 0)
     _tUpdate = new Task(10 * TASK_MILLISECOND, TASK_FOREVER, [this]() { update(); }, _ts, true);

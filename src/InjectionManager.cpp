@@ -1,4 +1,5 @@
 #include "InjectionManager.h"
+#include "PinExpander.h"
 #include "Logger.h"
 
 InjectionManager::InjectionManager()
@@ -19,8 +20,8 @@ void InjectionManager::begin(uint8_t numCylinders, const uint8_t* injectorPins, 
 
     for (uint8_t i = 0; i < _numCylinders; i++) {
         if (_injectorPins[i] != 0) {
-            pinMode(_injectorPins[i], OUTPUT);
-            digitalWrite(_injectorPins[i], LOW);
+            xPinMode(_injectorPins[i], OUTPUT);
+            xDigitalWrite(_injectorPins[i], LOW);
         }
         _injState[i] = {false, 0, 0};
     }
@@ -52,7 +53,7 @@ float InjectionManager::getEffectivePulseWidthUs(uint8_t cyl) const {
 void InjectionManager::cutFuel() {
     _fuelCut = true;
     for (uint8_t i = 0; i < _numCylinders; i++) {
-        if (_injectorPins[i] != 0) digitalWrite(_injectorPins[i], LOW);
+        if (_injectorPins[i] != 0) xDigitalWrite(_injectorPins[i], LOW);
         _injState[i].open = false;
     }
 }
@@ -91,7 +92,7 @@ void InjectionManager::update(uint16_t rpm, uint16_t toothPos, bool sequential) 
 
             if (angleDiff >= 0 && angleDiff < angleWindow && !_injState[cylIdx].open) {
                 // Open injector
-                digitalWrite(_injectorPins[cylIdx], HIGH);
+                xDigitalWrite(_injectorPins[cylIdx], HIGH);
                 _injState[cylIdx].open = true;
                 _injState[cylIdx].openTimeUs = nowUs;
                 _injState[cylIdx].scheduledPulseUs = effectivePw;
@@ -99,7 +100,7 @@ void InjectionManager::update(uint16_t rpm, uint16_t toothPos, bool sequential) 
         } else {
             // Batch mode: fire all injectors at TDC (tooth position 0)
             if (toothPos == 0 && !_injState[cylIdx].open) {
-                digitalWrite(_injectorPins[cylIdx], HIGH);
+                xDigitalWrite(_injectorPins[cylIdx], HIGH);
                 _injState[cylIdx].open = true;
                 _injState[cylIdx].openTimeUs = nowUs;
                 _injState[cylIdx].scheduledPulseUs = effectivePw / 2.0f;  // Half PW per event (fires twice per cycle)
@@ -110,7 +111,7 @@ void InjectionManager::update(uint16_t rpm, uint16_t toothPos, bool sequential) 
         if (_injState[cylIdx].open) {
             float elapsedUs = (float)(nowUs - _injState[cylIdx].openTimeUs);
             if (elapsedUs >= _injState[cylIdx].scheduledPulseUs) {
-                digitalWrite(_injectorPins[cylIdx], LOW);
+                xDigitalWrite(_injectorPins[cylIdx], LOW);
                 _injState[cylIdx].open = false;
             }
         }

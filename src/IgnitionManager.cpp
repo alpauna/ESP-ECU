@@ -1,4 +1,5 @@
 #include "IgnitionManager.h"
+#include "PinExpander.h"
 #include "Logger.h"
 
 IgnitionManager::IgnitionManager()
@@ -18,8 +19,8 @@ void IgnitionManager::begin(uint8_t numCylinders, const uint8_t* coilPins, const
 
     for (uint8_t i = 0; i < _numCylinders; i++) {
         if (_coilPins[i] != 0) {
-            pinMode(_coilPins[i], OUTPUT);
-            digitalWrite(_coilPins[i], LOW);
+            xPinMode(_coilPins[i], OUTPUT);
+            xDigitalWrite(_coilPins[i], LOW);
         }
         _coilState[i] = {false, 0};
     }
@@ -94,7 +95,7 @@ void IgnitionManager::update(uint16_t rpm, uint16_t toothPos, bool sequential) {
 
         if (angleDiff >= 0 && angleDiff < angleWindow && !_coilState[cylIdx].charging) {
             // Start dwell (charge coil)
-            digitalWrite(_coilPins[cylIdx], HIGH);
+            xDigitalWrite(_coilPins[cylIdx], HIGH);
             _coilState[cylIdx].charging = true;
             _coilState[cylIdx].dwellStartUs = nowUs;
         }
@@ -114,7 +115,7 @@ void IgnitionManager::update(uint16_t rpm, uint16_t toothPos, bool sequential) {
         if (_coilState[cylIdx].charging) {
             float elapsedMs = (nowUs - _coilState[cylIdx].dwellStartUs) / 1000.0f;
             if (elapsedMs > _maxDwellMs) {
-                digitalWrite(_coilPins[cylIdx], LOW);
+                xDigitalWrite(_coilPins[cylIdx], LOW);
                 _coilState[cylIdx].charging = false;
             }
         }
@@ -123,7 +124,7 @@ void IgnitionManager::update(uint16_t rpm, uint16_t toothPos, bool sequential) {
 
 void IgnitionManager::cutSpark() {
     for (uint8_t i = 0; i < _numCylinders; i++) {
-        if (_coilPins[i] != 0) digitalWrite(_coilPins[i], LOW);
+        if (_coilPins[i] != 0) xDigitalWrite(_coilPins[i], LOW);
         _coilState[i].charging = false;
     }
 }

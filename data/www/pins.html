@@ -26,6 +26,9 @@ tr:hover td{background:var(--hover-bg);}
 .t-analog{color:#ffa726;}
 .t-pwm{color:#ce93d8;}
 .t-spi{color:#90a4ae;}
+.t-i2c{color:#42a5f5;}
+.pcf-ready{color:#66bb6a;font-weight:bold;}
+.pcf-fail{color:#ef5350;font-weight:bold;}
 .v{font-family:monospace;font-weight:bold;}
 .v-on{color:#66bb6a;}
 .v-off{color:var(--text-muted);}
@@ -64,9 +67,21 @@ tr:hover td{background:var(--hover-bg);}
 <tbody></tbody>
 </table>
 
-<h2>Bus (SPI / SD Card)</h2>
+<h2>Bus (SPI / I2C)</h2>
 <table id='busTable'>
 <thead><tr><th>GPIO</th><th>Name</th><th>Type</th><th>Mode</th></tr></thead>
+<tbody></tbody>
+</table>
+
+<h2>I2C Expander (PCF8575)</h2>
+<div class='status-bar' id='pcfStatus'>
+<span class='lbl'>Status:</span> <span id='pcfReady' class='pcf-fail'>--</span>
+<span class='lbl' style='margin-left:12px;'>Address:</span> <span class='val' id='pcfAddr'>--</span>
+<span class='lbl' style='margin-left:12px;'>SDA:</span> <span class='val' id='pcfSda'>--</span>
+<span class='lbl' style='margin-left:12px;'>SCL:</span> <span class='val' id='pcfScl'>--</span>
+</div>
+<table id='pcfTable'>
+<thead><tr><th>PCF Pin</th><th>Global Pin</th><th>Name</th><th>Value</th></tr></thead>
 <tbody></tbody>
 </table>
 
@@ -98,12 +113,28 @@ function buildOutputs(rows){
 function buildBus(rows){
  var tb=document.querySelector('#busTable tbody'),h='';
  for(var i=0;i<rows.length;i++){var r=rows[i];
-  h+='<tr><td class="pin">'+r.pin+'</td><td>'+r.name+'</td><td class="t-spi">'+r.type+'</td><td>'+r.mode+'</td></tr>';
+  var cls=r.type==='I2C'?'t-i2c':'t-spi';
+  h+='<tr><td class="pin">'+r.pin+'</td><td>'+r.name+'</td><td class="'+cls+'">'+r.type+'</td><td>'+r.mode+'</td></tr>';
+ } tb.innerHTML=h;
+}
+function buildPcf(exp){
+ if(!exp){document.getElementById('pcfReady').textContent='N/A';return;}
+ var el=document.getElementById('pcfReady');
+ el.textContent=exp.ready?'READY':'NOT FOUND';
+ el.className=exp.ready?'pcf-ready':'pcf-fail';
+ document.getElementById('pcfAddr').textContent=exp.address||'--';
+ document.getElementById('pcfSda').textContent='GPIO'+exp.sda;
+ document.getElementById('pcfScl').textContent='GPIO'+exp.scl;
+ if(!exp.pins)return;
+ var tb=document.querySelector('#pcfTable tbody'),h='';
+ for(var i=0;i<exp.pins.length;i++){var p=exp.pins[i];
+  var vc=p.value==='HIGH'?'v-on':'v-off';
+  h+='<tr><td class="pin">P'+p.pcfPin+'</td><td class="pin">'+p.globalPin+'</td><td>'+p.name+'</td><td><span class="v '+vc+'">'+p.value+'</span></td></tr>';
  } tb.innerHTML=h;
 }
 function refresh(){
  fetch('/pins?format=json').then(function(r){return r.json();}).then(function(d){
-  buildInputs(d.inputs||[]);buildOutputs(d.outputs||[]);buildBus(d.bus||[]);
+  buildInputs(d.inputs||[]);buildOutputs(d.outputs||[]);buildBus(d.bus||[]);buildPcf(d.expander);
   var el=document.getElementById('crankSync'),s=d.crankSync||'LOST';
   el.textContent=s;el.className='sync-badge sync-'+s;
   document.getElementById('rpm').textContent=d.rpm||0;
