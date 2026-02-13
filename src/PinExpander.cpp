@@ -2,6 +2,7 @@
 #include "Logger.h"
 #include <Wire.h>
 #include <Adafruit_MCP23X17.h>
+#include <esp_log.h>
 
 static Adafruit_MCP23X17* _mcp = nullptr;
 
@@ -16,10 +17,31 @@ bool PinExpander::begin(uint8_t sda, uint8_t scl, uint8_t addr) {
     _addr = addr;
 
     Wire.begin(sda, scl);
-    _mcp = new Adafruit_MCP23X17();
 
-    if (!_mcp->begin_I2C(addr, &Wire)) {
-        Log.error("MCP", "MCP23017 not found at 0x%02X (SDA=%d, SCL=%d)", addr, sda, scl);
+    // Suppress Wire I2C error spam during probe
+    esp_log_level_set("Wire", ESP_LOG_NONE);
+
+    // Quick probe — single write transaction to check if device is present
+    Wire.beginTransmission(addr);
+    uint8_t probeErr = Wire.endTransmission();
+
+    if (probeErr != 0) {
+        esp_log_level_set("Wire", ESP_LOG_ERROR);
+        Log.warn("MCP", "MCP23017 not found at 0x%02X — expander disabled", addr);
+        _ready = false;
+        return false;
+    }
+
+    // Device responded — full initialization (keep Wire logging suppressed
+    // in case of transient errors during multi-register setup)
+    _mcp = new Adafruit_MCP23X17();
+    bool ok = _mcp->begin_I2C(addr, &Wire);
+
+    // Restore Wire logging
+    esp_log_level_set("Wire", ESP_LOG_ERROR);
+
+    if (!ok) {
+        Log.error("MCP", "MCP23017 init failed at 0x%02X", addr);
         delete _mcp;
         _mcp = nullptr;
         _ready = false;
