@@ -47,7 +47,7 @@ private:
 
     static constexpr float MB_MULTIPLIER = 1.0f / (1024.0f * 1024.0f);
 
-    static constexpr const char* NTP_SERVER1 = "192.168.0.1";
+    static constexpr const char* NTP_SERVER1 = "pool.ntp.org";
     static constexpr const char* NTP_SERVER2 = "time.nist.gov";
     int32_t _gmtOffsetSec = -21600;
     int32_t _daylightOffsetSec = 3600;

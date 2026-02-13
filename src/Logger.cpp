@@ -102,10 +102,9 @@ void Logger::log(Level level, const char* tag, const char* format, va_list args)
     vsnprintf(msgBuffer, sizeof(msgBuffer), format, args);
     struct tm timeinfo;
     char timeStr[20] = "----/--/-- --:--:--";
-    if (WiFi.isConnected()) {
-        if (getLocalTime(&timeinfo)) {
-            strftime(timeStr, sizeof(timeStr), "%Y/%m/%d %H:%M:%S", &timeinfo);
-        }
+    // Zero timeout — never block. Time becomes available after NTP sync.
+    if (getLocalTime(&timeinfo, 0)) {
+        strftime(timeStr, sizeof(timeStr), "%Y/%m/%d %H:%M:%S", &timeinfo);
     }
     snprintf(_buffer, sizeof(_buffer), "[%s] [%s] [%s] %s", timeStr, getLevelName(level), tag, msgBuffer);
     addToRingBuffer(_buffer);
