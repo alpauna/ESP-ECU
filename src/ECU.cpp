@@ -6,6 +6,8 @@
 #include "FuelManager.h"
 #include "AlternatorControl.h"
 #include "SensorManager.h"
+#include "CJ125Controller.h"
+#include "ADS1115Reader.h"
 #include "TuneTable.h"
 #include "Config.h"
 #include "Logger.h"
@@ -26,13 +28,22 @@ static const uint8_t PIN_FUEL_PUMP    = 100; // PCF P0 — moved from GPIO42
 static const uint8_t PIN_TACH_OUT     = 101; // PCF P1 — was disabled (GPIO43=TX conflict)
 static const uint8_t PIN_CEL          = 102; // PCF P2 — was disabled (GPIO44=RX conflict)
 
+// CJ125 wideband O2 controller pins (from WB_O2_Micro schematic)
+static const uint8_t PIN_SPI_SS_1     = 108; // MCP23017 P8 — CJ125 Bank 1 chip select
+static const uint8_t PIN_SPI_SS_2     = 109; // MCP23017 P9 — CJ125 Bank 2 chip select
+static const uint8_t PIN_HEATER_OUT_1 = 19;  // LEDC — heater PWM bank 1
+static const uint8_t PIN_HEATER_OUT_2 = 20;  // LEDC — heater PWM bank 2
+static const uint8_t PIN_CJ125_UA_1   = 3;   // ADC — CJ125 lambda output bank 1
+static const uint8_t PIN_CJ125_UA_2   = 4;   // ADC — CJ125 lambda output bank 2
+
 static const uint8_t COIL_PINS[]     = {10, 11, 12, 13, 14, 15, 16, 17};
 // INJ 1-3: native GPIO for best timing; INJ 4-8: PCF8575 P3-P7
 static const uint8_t INJECTOR_PINS[] = {18, 21, 40, 103, 104, 105, 106, 107};
 
 ECU::ECU(Scheduler* ts)
     : _ts(ts), _tUpdate(nullptr), _crankTeeth(36), _crankMissing(1),
-      _realtimeTaskHandle(nullptr) {
+      _realtimeTaskHandle(nullptr), _cj125(nullptr), _ads1115(nullptr),
+      _cj125Enabled(false) {
     memset(&_state, 0, sizeof(_state));
     memset(_firingOrder, 0, sizeof(_firingOrder));
     // Default SBC V8 firing order
@@ -57,6 +68,8 @@ ECU::~ECU() {
     delete _fuel;
     delete _alternator;
     delete _sensors;
+    delete _cj125;
+    delete _ads1115;
 }
 
 void ECU::configure(const ProjectInfo& proj) {
@@ -86,6 +99,9 @@ void ECU::configure(const ProjectInfo& proj) {
 
     // Configure alternator PID
     _alternator->setPID(proj.altPidP, proj.altPidI, proj.altPidD);
+
+    // CJ125 wideband O2
+    _cj125Enabled = proj.cj125Enabled;
 
     Log.info("ECU", "Configured: %d cyl, %d-%d trigger, cam=%s",
              proj.cylinders, proj.crankTeeth, proj.crankMissing,
@@ -121,6 +137,27 @@ void ECU::begin() {
     xPinMode(PIN_CEL, OUTPUT);
     xDigitalWrite(PIN_CEL, LOW);
 
+    // CJ125 wideband O2 controller
+    if (_cj125Enabled) {
+        // SPI chip selects via MCP23017 — deselect before init
+        xPinMode(PIN_SPI_SS_1, OUTPUT);
+        xDigitalWrite(PIN_SPI_SS_1, HIGH);
+        xPinMode(PIN_SPI_SS_2, OUTPUT);
+        xDigitalWrite(PIN_SPI_SS_2, HIGH);
+
+        _ads1115 = new ADS1115Reader();
+        _ads1115->begin(0x48);
+
+        _cj125 = new CJ125Controller(&SPI);
+        _cj125->setADS1115(_ads1115);
+        _cj125->begin(PIN_SPI_SS_1, PIN_SPI_SS_2,
+                       PIN_HEATER_OUT_1, PIN_HEATER_OUT_2,
+                       PIN_CJ125_UA_1, PIN_CJ125_UA_2);
+
+        _sensors->setCJ125(_cj125);
+        Log.info("ECU", "CJ125 wideband O2 enabled");
+    }
+
     // Sensor + fuel calc update task (10ms on Core 0)
     _tUpdate = new Task(10 * TASK_MILLISECOND, TASK_FOREVER, [this]() { update(); }, _ts, true);
 
@@ -144,6 +181,16 @@ void ECU::update() {
     _state.coolantTempF = _sensors->getCoolantTempF();
     _state.iatTempF = _sensors->getIatTempF();
     _state.batteryVoltage = _sensors->getBatteryVoltage();
+
+    // CJ125 wideband O2 update
+    if (_cj125) {
+        _cj125->update(_state.batteryVoltage);
+        for (uint8_t i = 0; i < 2; i++) {
+            _state.lambda[i] = _cj125->getLambda(i);
+            _state.oxygenPct[i] = _cj125->getOxygen(i);
+            _state.cj125Ready[i] = _cj125->isReady(i);
+        }
+    }
 
     // Engine state detection
     _state.cranking = (_state.rpm > 0 && _state.rpm < 400);

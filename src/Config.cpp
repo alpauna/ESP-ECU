@@ -209,6 +209,7 @@ bool Config::loadConfig(const char* filename, ProjectInfo& proj) {
     proj.closedLoopMinRpm = doc["o2"]["closedLoopMinRpm"] | 800;
     proj.closedLoopMaxRpm = doc["o2"]["closedLoopMaxRpm"] | 4000;
     proj.closedLoopMaxMapKpa = doc["o2"]["closedLoopMaxMapKpa"] | 80.0f;
+    proj.cj125Enabled = doc["engine"]["cj125Enabled"] | false;
 
     Serial.printf("Config loaded: %d cyl, %d-%d trigger\n", proj.cylinders, proj.crankTeeth, proj.crankMissing);
     return true;
@@ -262,6 +263,7 @@ bool Config::saveConfig(const char* filename, ProjectInfo& proj) {
     engine["injectorDeadTimeMs"] = proj.injectorDeadTimeMs;
     engine["revLimitRpm"] = proj.revLimitRpm;
     engine["maxDwellMs"] = proj.maxDwellMs;
+    engine["cj125Enabled"] = proj.cj125Enabled;
 
     JsonObject alt = doc["alternator"].to<JsonObject>();
     alt["targetVoltage"] = proj.altTargetVoltage;
@@ -328,6 +330,7 @@ bool Config::updateConfig(const char* filename, ProjectInfo& proj) {
     engine["injectorDeadTimeMs"] = proj.injectorDeadTimeMs;
     engine["revLimitRpm"] = proj.revLimitRpm;
     engine["maxDwellMs"] = proj.maxDwellMs;
+    engine["cj125Enabled"] = proj.cj125Enabled;
 
     doc["alternator"]["targetVoltage"] = proj.altTargetVoltage;
     doc["alternator"]["pidP"] = proj.altPidP;

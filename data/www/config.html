@@ -60,6 +60,7 @@ button:hover{background:#45a049;}
 <div><label>Injector Flow (cc/min)</label><input type='number' id='injectorFlowCcMin' step='1'></div>
 <div><label>Injector Dead Time (ms)</label><input type='number' id='injectorDeadTimeMs' step='0.1'></div>
 </div>
+<label style='margin-top:10px'><input type='checkbox' id='cj125Enabled' style='width:auto;margin-right:6px'>CJ125 Wideband O2 Controller (requires reboot)</label>
 </fieldset>
 
 <fieldset><legend>Alternator</legend>
@@ -152,6 +153,7 @@ function load(){
     document.getElementById('maxDwellMs').value=d.maxDwellMs||4.0;
     document.getElementById('injectorFlowCcMin').value=d.injectorFlowCcMin||240;
     document.getElementById('injectorDeadTimeMs').value=d.injectorDeadTimeMs||1.0;
+    document.getElementById('cj125Enabled').checked=d.cj125Enabled||false;
     document.getElementById('altTargetVoltage').value=d.altTargetVoltage||13.6;
     document.getElementById('altPidP').value=d.altPidP||10;
     document.getElementById('altPidI').value=d.altPidI||5;
@@ -188,6 +190,7 @@ function save(e){
     maxDwellMs:parseFloat(document.getElementById('maxDwellMs').value),
     injectorFlowCcMin:parseFloat(document.getElementById('injectorFlowCcMin').value),
     injectorDeadTimeMs:parseFloat(document.getElementById('injectorDeadTimeMs').value),
+    cj125Enabled:document.getElementById('cj125Enabled').checked,
     altTargetVoltage:parseFloat(document.getElementById('altTargetVoltage').value),
     altPidP:parseFloat(document.getElementById('altPidP').value),
     altPidI:parseFloat(document.getElementById('altPidI').value),

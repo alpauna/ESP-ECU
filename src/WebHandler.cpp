@@ -5,6 +5,7 @@
 #include "CrankSensor.h"
 #include "AlternatorControl.h"
 #include "SensorManager.h"
+#include "CJ125Controller.h"
 #include "PinExpander.h"
 #include "OtaUtils.h"
 
@@ -171,6 +172,26 @@ void WebHandler::setupRoutes() {
             // Per-cylinder trim
             JsonArray trim = doc["injTrim"].to<JsonArray>();
             for (uint8_t i = 0; i < s.numCylinders; i++) trim.add(s.injTrim[i]);
+
+            // CJ125 wideband O2
+            CJ125Controller* cj = _ecu->getCJ125();
+            JsonObject cj125 = doc["cj125"].to<JsonObject>();
+            cj125["enabled"] = (cj != nullptr);
+            if (cj) {
+                for (uint8_t b = 0; b < 2; b++) {
+                    char key[6]; snprintf(key, sizeof(key), "bank%d", b + 1);
+                    JsonObject bk = cj125[key].to<JsonObject>();
+                    bk["lambda"] = cj->getLambda(b);
+                    bk["afr"] = cj->getAfr(b);
+                    bk["o2pct"] = cj->getOxygen(b);
+                    bk["heaterState"] = cj->getHeaterStateStr(b);
+                    bk["heaterDuty"] = cj->getHeaterDuty(b);
+                    bk["ur"] = cj->getUrValue(b);
+                    bk["ua"] = cj->getUaValue(b);
+                    bk["diag"] = cj->getDiagStatus(b);
+                    bk["ready"] = cj->isReady(b);
+                }
+            }
         }
         doc["cpuLoad0"] = getCpuLoadCore0();
         doc["cpuLoad1"] = getCpuLoadCore1();
@@ -356,6 +377,7 @@ void WebHandler::setupRoutes() {
             doc["closedLoopMinRpm"] = proj->closedLoopMinRpm;
             doc["closedLoopMaxRpm"] = proj->closedLoopMaxRpm;
             doc["closedLoopMaxMapKpa"] = proj->closedLoopMaxMapKpa;
+            doc["cj125Enabled"] = proj->cj125Enabled;
             String json;
             serializeJson(doc, json);
             request->send(200, "application/json", json);
@@ -436,6 +458,7 @@ void WebHandler::setupRoutes() {
         proj->closedLoopMinRpm = data["closedLoopMinRpm"] | proj->closedLoopMinRpm;
         proj->closedLoopMaxRpm = data["closedLoopMaxRpm"] | proj->closedLoopMaxRpm;
         proj->closedLoopMaxMapKpa = data["closedLoopMaxMapKpa"] | proj->closedLoopMaxMapKpa;
+        if (data["cj125Enabled"].is<bool>()) proj->cj125Enabled = data["cj125Enabled"].as<bool>();
 
         bool saved = _config->updateConfig("/config.txt", *proj);
 
@@ -632,6 +655,18 @@ void WebHandler::setupRoutes() {
             addSpi(38, "SD_MOSI");
             addSpi(39, "SD_CS");
 
+            // CJ125 heater PWM outputs
+            {
+                JsonObject o = outputs.add<JsonObject>();
+                o["pin"] = 19; o["name"] = "HEATER_OUT_1"; o["type"] = "pwm";
+                o["mode"] = "LEDC 100Hz"; o["desc"] = "CJ125 heater bank 1 via BTS3134. 8-bit PWM";
+            }
+            {
+                JsonObject o = outputs.add<JsonObject>();
+                o["pin"] = 20; o["name"] = "HEATER_OUT_2"; o["type"] = "pwm";
+                o["mode"] = "LEDC 100Hz"; o["desc"] = "CJ125 heater bank 2 via BTS3134. 8-bit PWM";
+            }
+
             // I2C bus
             PinExpander& pcf = PinExpander::instance();
             {
@@ -641,6 +676,10 @@ void WebHandler::setupRoutes() {
             {
                 JsonObject o = bus.add<JsonObject>();
                 o["pin"] = pcf.getSCL(); o["name"] = "I2C_SCL"; o["type"] = "I2C"; o["mode"] = "MCP23017 @ 0x20";
+            }
+            {
+                JsonObject o = bus.add<JsonObject>();
+                o["pin"] = pcf.getSDA(); o["name"] = "I2C_SDA"; o["type"] = "I2C"; o["mode"] = "ADS1115 @ 0x48 (CJ125_UR)";
             }
 
             // PCF8575 expander info
@@ -654,7 +693,7 @@ void WebHandler::setupRoutes() {
                 uint16_t raw = pcf.readAll();
                 JsonArray pins = expander["pins"].to<JsonArray>();
                 const char* pcfNames[] = {"FUEL_PUMP","TACH_OUT","CEL","INJ_4","INJ_5","INJ_6","INJ_7","INJ_8",
-                                           "SPARE_8","SPARE_9","SPARE_10","SPARE_11","SPARE_12","SPARE_13","SPARE_14","SPARE_15"};
+                                           "SPI_SS_1","SPI_SS_2","SPARE_10","SPARE_11","SPARE_12","SPARE_13","SPARE_14","SPARE_15"};
                 for (uint8_t i = 0; i < 16; i++) {
                     JsonObject p = pins.add<JsonObject>();
                     p["pcfPin"] = i;

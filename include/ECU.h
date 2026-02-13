@@ -10,6 +10,8 @@ class InjectionManager;
 class FuelManager;
 class AlternatorControl;
 class SensorManager;
+class CJ125Controller;
+class ADS1115Reader;
 struct ProjectInfo;
 
 struct EngineState {
@@ -28,6 +30,9 @@ struct EngineState {
     volatile bool  cranking;
     volatile uint8_t numCylinders;
     volatile bool  sequentialMode;
+    volatile float lambda[2];
+    volatile float oxygenPct[2];
+    volatile bool  cj125Ready[2];
 };
 
 class ECU {
@@ -49,6 +54,7 @@ public:
     FuelManager* getFuelManager() { return _fuel; }
     AlternatorControl* getAlternator() { return _alternator; }
     SensorManager* getSensorManager() { return _sensors; }
+    CJ125Controller* getCJ125() { return _cj125; }
 
 private:
     Scheduler* _ts;
@@ -62,6 +68,9 @@ private:
     FuelManager* _fuel;
     AlternatorControl* _alternator;
     SensorManager* _sensors;
+    CJ125Controller* _cj125;
+    ADS1115Reader* _ads1115;
+    bool _cj125Enabled;
 
     uint8_t _firingOrder[12];
     uint8_t _crankTeeth;

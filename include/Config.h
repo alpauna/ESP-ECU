@@ -44,6 +44,7 @@ struct ProjectInfo {
     uint16_t closedLoopMinRpm;
     uint16_t closedLoopMaxRpm;
     float closedLoopMaxMapKpa;
+    bool cj125Enabled;
 };
 
 class Config {

@@ -2,6 +2,8 @@
 
 #include <Arduino.h>
 
+class CJ125Controller;
+
 class SensorManager {
 public:
     static const uint8_t O2_BANK1_PIN = 3;
@@ -48,7 +50,11 @@ public:
     void setO2Calibration(float afrAt0v, float afrAt5v);
     void setVbatDividerRatio(float ratio);
 
+    void setCJ125(CJ125Controller* cj125) { _cj125 = cj125; }
+    CJ125Controller* getCJ125() const { return _cj125; }
+
 private:
+    CJ125Controller* _cj125 = nullptr;
     AdcCalibration _cal;
     float _rawFiltered[NUM_CHANNELS];
     uint16_t _rawAdc[NUM_CHANNELS];

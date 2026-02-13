@@ -64,12 +64,14 @@ nav .brand{font-weight:bold;font-size:16px;margin-right:auto;color:#fff;}
 <div class='gauge'><div class='val' id='tps'>0</div><div class='unit'>%</div></div>
 </div>
 
-<!-- AFR -->
-<div class='card'>
-<h3>AFR</h3>
+<!-- AFR / CJ125 Wideband -->
+<div class='card' id='afrCard'>
+<h3 id='afrTitle'>AFR</h3>
+<div id='afrContent'>
 <div class='dual-gauge'>
 <div class='gauge'><div class='val' id='afr1'>--</div><div class='label'>Bank 1</div></div>
 <div class='gauge'><div class='val' id='afr2'>--</div><div class='label'>Bank 2</div></div>
+</div>
 </div>
 </div>
 
@@ -134,9 +136,37 @@ function poll(){
     document.getElementById('map').textContent=(d.mapKpa||0).toFixed(1);
     document.getElementById('tps').textContent=(d.tps||0).toFixed(1);
 
-    var afr=d.afr||[0,0];
-    document.getElementById('afr1').textContent=afr[0]?afr[0].toFixed(1):'--';
-    document.getElementById('afr2').textContent=afr[1]?afr[1].toFixed(1):'--';
+    // AFR / CJ125 Wideband O2
+    var cj=d.cj125;
+    if(cj&&cj.enabled){
+      document.getElementById('afrTitle').textContent='CJ125 Wideband O2';
+      document.getElementById('afrCard').style.gridColumn='span 2';
+      var h='';
+      for(var b=1;b<=2;b++){
+        var bk=cj['bank'+b];
+        if(!bk)continue;
+        var st=bk.heaterState||'IDLE';
+        var stColor=st==='PID'?'#4CAF50':st==='ERROR'?'#f44336':'#ff9800';
+        var label=bk.ready?'Ready':(st==='PID'?'Ready':st);
+        h+="<div style='flex:1;min-width:180px'>";
+        h+="<div style='font-size:11px;color:var(--text-secondary);margin-bottom:4px'>Bank "+b+" <span style='color:"+stColor+";font-weight:bold'>"+label+"</span></div>";
+        if(bk.ready){
+          h+="<div class='row'><span class='lbl'>Lambda</span><span class='val'>"+bk.lambda.toFixed(3)+"</span></div>";
+          h+="<div class='row'><span class='lbl'>AFR</span><span class='val'>"+bk.afr.toFixed(1)+"</span></div>";
+          h+="<div class='row'><span class='lbl'>O2 %</span><span class='val'>"+bk.o2pct.toFixed(1)+"</span></div>";
+        }else{
+          h+="<div class='row'><span class='lbl'>Status</span><span class='val' style='color:"+stColor+"'>"+st+"</span></div>";
+        }
+        h+="<div class='row'><span class='lbl'>Heater</span><span class='val'>"+bk.heaterDuty.toFixed(0)+"%</span></div>";
+        h+="</div>";
+      }
+      document.getElementById('afrContent').innerHTML="<div style='display:flex;gap:15px;flex-wrap:wrap'>"+h+"</div>";
+    }else{
+      document.getElementById('afrTitle').textContent='AFR';
+      document.getElementById('afrCard').style.gridColumn='';
+      var afr=d.afr||[0,0];
+      document.getElementById('afrContent').innerHTML="<div class='dual-gauge'><div class='gauge'><div class='val'>"+(afr[0]?afr[0].toFixed(1):'--')+"</div><div class='label'>Bank 1</div></div><div class='gauge'><div class='val'>"+(afr[1]?afr[1].toFixed(1):'--')+"</div><div class='label'>Bank 2</div></div></div>";
+    }
 
     document.getElementById('clt').textContent=(d.coolantTempF||0).toFixed(0)+' F';
     document.getElementById('iat').textContent=(d.iatTempF||0).toFixed(0)+' F';

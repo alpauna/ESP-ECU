@@ -102,7 +102,8 @@ ProjectInfo proj = {
     20.0f,                      // o2AfrAt5v
     800,                        // closedLoopMinRpm
     4000,                       // closedLoopMaxRpm
-    80.0f                       // closedLoopMaxMapKpa
+    80.0f,                       // closedLoopMaxMapKpa
+    false                        // cj125Enabled
 };
 
 // Core objects

@@ -1,4 +1,5 @@
 #include "SensorManager.h"
+#include "CJ125Controller.h"
 #include <esp_adc_cal.h>
 #include "Logger.h"
 
@@ -57,8 +58,15 @@ void SensorManager::update() {
     float vIat  = adcToVoltage((uint16_t)_rawFiltered[5]);
     float vBat  = adcToVoltage((uint16_t)_rawFiltered[6]);
 
-    _o2Afr[0]       = voltageToAfr(vO2_1);
-    _o2Afr[1]       = voltageToAfr(vO2_2);
+    if (_cj125 && _cj125->isReady(0))
+        _o2Afr[0] = _cj125->getAfr(0);
+    else
+        _o2Afr[0] = voltageToAfr(vO2_1);
+
+    if (_cj125 && _cj125->isReady(1))
+        _o2Afr[1] = _cj125->getAfr(1);
+    else
+        _o2Afr[1] = voltageToAfr(vO2_2);
     _mapKpa          = voltageToMapKpa(vMap);
     _tpsPercent      = voltageToTpsPercent(vTps);
     _coolantTempF    = voltageToNtcTempF(vClt);
