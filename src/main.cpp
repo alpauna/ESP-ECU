@@ -10,6 +10,8 @@
 #include "WebHandler.h"
 #include "MQTTHandler.h"
 #include "ECU.h"
+#include "FuelManager.h"
+#include "TuneTable.h"
 
 #ifndef AP_PASSWORD
 #error "AP_PASSWORD not defined — create secrets.ini with: -D AP_PASSWORD=\\\"yourpassword\\\""
@@ -301,6 +303,31 @@ void setup() {
 
     // Initialize ECU with config
     ecu.configure(proj);
+
+    // Load tune tables from SD card (overrides defaults if files exist)
+    {
+        FuelManager* fuel = ecu.getFuelManager();
+        const char* names[] = {"spark", "ve", "afr"};
+        TuneTable3D* tables[] = {fuel->getSparkTable(), fuel->getVeTable(), fuel->getAfrTable()};
+        for (int i = 0; i < 3; i++) {
+            TuneTable3D* t = tables[i];
+            if (!t || !t->isInitialized()) continue;
+            uint8_t cols = t->getXSize(), rows = t->getYSize();
+            float* data = new float[rows * cols];
+            float* xAxis = new float[cols];
+            float* yAxis = new float[rows];
+            if (config.loadTuneData("/tune.json", names[i], data, rows, cols, xAxis, yAxis)) {
+                t->setXAxis(xAxis);
+                t->setYAxis(yAxis);
+                t->setValues(data);
+                Serial.printf("Loaded tune table: %s\n", names[i]);
+            }
+            delete[] data;
+            delete[] xAxis;
+            delete[] yAxis;
+        }
+    }
+
     ecu.begin();
 
     // Enable tasks

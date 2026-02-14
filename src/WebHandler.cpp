@@ -6,6 +6,8 @@
 #include "AlternatorControl.h"
 #include "SensorManager.h"
 #include "CJ125Controller.h"
+#include "FuelManager.h"
+#include "TuneTable.h"
 #include "PinExpander.h"
 #include "OtaUtils.h"
 
@@ -144,7 +146,88 @@ void WebHandler::setupRoutes() {
     _server.on("/theme.css", HTTP_GET, [this](AsyncWebServerRequest* r) { serveFile(r, "/theme.css"); });
     _server.on("/", HTTP_GET, [this](AsyncWebServerRequest* r) { serveFile(r, "/index.html"); });
     _server.on("/dashboard", HTTP_GET, [this](AsyncWebServerRequest* r) { serveFile(r, "/dashboard.html"); });
-    _server.on("/tune", HTTP_GET, [this](AsyncWebServerRequest* r) { serveFile(r, "/tune.html"); });
+    _server.on("/tune", HTTP_GET, [this](AsyncWebServerRequest* r) {
+        if (!checkAuth(r)) return;
+        if (!r->hasParam("table")) { serveFile(r, "/tune.html"); return; }
+        if (!_ecu) { r->send(500, "application/json", "{\"error\":\"ECU not available\"}"); return; }
+        String tableName = r->getParam("table")->value();
+        FuelManager* fuel = _ecu->getFuelManager();
+        TuneTable3D* table = nullptr;
+        if (tableName == "spark") table = fuel->getSparkTable();
+        else if (tableName == "ve") table = fuel->getVeTable();
+        else if (tableName == "afr") table = fuel->getAfrTable();
+        if (!table || !table->isInitialized()) {
+            r->send(404, "application/json", "{\"error\":\"Table not found\"}");
+            return;
+        }
+        JsonDocument doc;
+        uint8_t cols = table->getXSize(), rows = table->getYSize();
+        JsonArray rpmArr = doc["rpmAxis"].to<JsonArray>();
+        for (uint8_t i = 0; i < cols; i++) rpmArr.add(table->getXAxisValue(i));
+        JsonArray mapArr = doc["mapAxis"].to<JsonArray>();
+        for (uint8_t i = 0; i < rows; i++) mapArr.add(table->getYAxisValue(i));
+        JsonArray values = doc["values"].to<JsonArray>();
+        for (uint8_t y = 0; y < rows; y++) {
+            JsonArray row = values.add<JsonArray>();
+            for (uint8_t x = 0; x < cols; x++)
+                row.add(table->getValue(x, y));
+        }
+        String json;
+        serializeJson(doc, json);
+        r->send(200, "application/json", json);
+    });
+    auto* tunePostHandler = new AsyncCallbackJsonWebHandler("/tune", [this](AsyncWebServerRequest* request, JsonVariant& json) {
+        if (!checkAuth(request)) return;
+        if (!_ecu || !_config) { request->send(500, "application/json", "{\"error\":\"Not available\"}"); return; }
+        JsonObject data = json.as<JsonObject>();
+        String tableName = data["table"] | String("");
+        FuelManager* fuel = _ecu->getFuelManager();
+        TuneTable3D* table = nullptr;
+        if (tableName == "spark") table = fuel->getSparkTable();
+        else if (tableName == "ve") table = fuel->getVeTable();
+        else if (tableName == "afr") table = fuel->getAfrTable();
+        if (!table || !table->isInitialized()) {
+            request->send(404, "application/json", "{\"error\":\"Table not found\"}");
+            return;
+        }
+        uint8_t cols = table->getXSize(), rows = table->getYSize();
+        JsonArray rpmArr = data["rpmAxis"];
+        if (rpmArr) {
+            float* xAxis = new float[cols];
+            for (uint8_t i = 0; i < cols && i < rpmArr.size(); i++) xAxis[i] = rpmArr[i];
+            table->setXAxis(xAxis);
+            delete[] xAxis;
+        }
+        JsonArray mapArr = data["mapAxis"];
+        if (mapArr) {
+            float* yAxis = new float[rows];
+            for (uint8_t i = 0; i < rows && i < mapArr.size(); i++) yAxis[i] = mapArr[i];
+            table->setYAxis(yAxis);
+            delete[] yAxis;
+        }
+        JsonArray values = data["values"];
+        if (values) {
+            for (uint8_t y = 0; y < rows && y < values.size(); y++) {
+                JsonArray row = values[y];
+                for (uint8_t x = 0; x < cols && x < row.size(); x++)
+                    table->setValue(x, y, row[x]);
+            }
+        }
+        // Persist to SD
+        float* flatData = new float[rows * cols];
+        float* xOut = new float[cols];
+        float* yOut = new float[rows];
+        for (uint8_t x = 0; x < cols; x++) xOut[x] = table->getXAxisValue(x);
+        for (uint8_t y = 0; y < rows; y++) yOut[y] = table->getYAxisValue(y);
+        for (uint8_t y = 0; y < rows; y++)
+            for (uint8_t x = 0; x < cols; x++)
+                flatData[y * cols + x] = table->getValue(x, y);
+        bool saved = _config->saveTuneData("/tune.json", tableName.c_str(), flatData, rows, cols, xOut, yOut);
+        delete[] flatData; delete[] xOut; delete[] yOut;
+        if (saved) request->send(200, "application/json", "{\"status\":\"ok\"}");
+        else request->send(500, "application/json", "{\"error\":\"Failed to save\"}");
+    });
+    _server.addHandler(tunePostHandler);
     _server.on("/log/view", HTTP_GET, [this](AsyncWebServerRequest* r) { serveFile(r, "/log.html"); });
     _server.on("/heap/view", HTTP_GET, [this](AsyncWebServerRequest* r) { serveFile(r, "/heap.html"); });
 

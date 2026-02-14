@@ -103,6 +103,45 @@ void ECU::configure(const ProjectInfo& proj) {
     // CJ125 wideband O2
     _cj125Enabled = proj.cj125Enabled;
 
+    // Create 16x16 tune tables with defaults
+    static const float defaultRpmAxis[16] = {
+        500, 1000, 1500, 2000, 2500, 3000, 3500, 4000,
+        4500, 5000, 5500, 6000, 6500, 7000, 7500, 8000
+    };
+    static const float defaultMapAxis[16] = {
+        10, 15, 20, 25, 30, 40, 50, 60,
+        70, 80, 85, 90, 95, 100, 105, 110
+    };
+
+    float defaults[256];
+
+    // Spark advance: 15° default
+    for (int i = 0; i < 256; i++) defaults[i] = 15.0f;
+    TuneTable3D* sparkTable = new TuneTable3D();
+    sparkTable->init(16, 16);
+    sparkTable->setXAxis(defaultRpmAxis);
+    sparkTable->setYAxis(defaultMapAxis);
+    sparkTable->setValues(defaults);
+    _fuel->setSparkTable(sparkTable);
+
+    // VE: 80% default
+    for (int i = 0; i < 256; i++) defaults[i] = 80.0f;
+    TuneTable3D* veTable = new TuneTable3D();
+    veTable->init(16, 16);
+    veTable->setXAxis(defaultRpmAxis);
+    veTable->setYAxis(defaultMapAxis);
+    veTable->setValues(defaults);
+    _fuel->setVeTable(veTable);
+
+    // AFR target: 14.7 (stoich) default
+    for (int i = 0; i < 256; i++) defaults[i] = 14.7f;
+    TuneTable3D* afrTable = new TuneTable3D();
+    afrTable->init(16, 16);
+    afrTable->setXAxis(defaultRpmAxis);
+    afrTable->setYAxis(defaultMapAxis);
+    afrTable->setValues(defaults);
+    _fuel->setAfrTable(afrTable);
+
     Log.info("ECU", "Configured: %d cyl, %d-%d trigger, cam=%s",
              proj.cylinders, proj.crankTeeth, proj.crankMissing,
              proj.hasCamSensor ? "yes" : "no");
