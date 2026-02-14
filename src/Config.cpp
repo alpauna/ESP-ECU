@@ -333,13 +333,25 @@ bool Config::updateConfig(const char* filename, ProjectInfo& proj) {
     doc["project"] = proj.name;
     doc["description"] = proj.description;
 
-    doc["wifi"]["ssid"] = _wifiSSID;
-    doc["wifi"]["password"] = encryptPassword(_wifiPassword);
+    // Guard: never overwrite valid SSID/MQTT with empty values
+    if (_wifiSSID.length() > 0) {
+        doc["wifi"]["ssid"] = _wifiSSID;
+    }
+    if (_wifiPassword.length() > 0) {
+        doc["wifi"]["password"] = encryptPassword(_wifiPassword);
+    }
     doc["wifi"]["apFallbackSeconds"] = proj.apFallbackSeconds;
 
-    doc["mqtt"]["user"] = _mqttUser;
-    doc["mqtt"]["password"] = encryptPassword(_mqttPassword);
-    doc["mqtt"]["host"] = _mqttHost.toString();
+    if (_mqttUser.length() > 0) {
+        doc["mqtt"]["user"] = _mqttUser;
+    }
+    if (_mqttPassword.length() > 0) {
+        doc["mqtt"]["password"] = encryptPassword(_mqttPassword);
+    }
+    IPAddress zeroIP(0, 0, 0, 0);
+    if (_mqttHost != zeroIP) {
+        doc["mqtt"]["host"] = _mqttHost.toString();
+    }
     doc["mqtt"]["port"] = _mqttPort;
 
     doc["logging"]["maxLogSize"] = proj.maxLogSize;
