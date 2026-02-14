@@ -24,10 +24,10 @@ static const uint8_t PIN_ALTERNATOR   = 41;
 static const uint8_t I2C_SDA          = 0;   // GPIO0 — strapping pin, ext pull-up, works as I2C SDA after boot
 static const uint8_t I2C_SCL          = 42;  // GPIO42 — was FUEL_PUMP, now I2C SCL
 
-// PCF8575 outputs (pin 100+ = PCF8575 P0-P15)
-static const uint8_t PIN_FUEL_PUMP    = 100; // PCF P0 — moved from GPIO42
-static const uint8_t PIN_TACH_OUT     = 101; // PCF P1 — was disabled (GPIO43=TX conflict)
-static const uint8_t PIN_CEL          = 102; // PCF P2 — was disabled (GPIO44=RX conflict)
+// MCP23017 #0 outputs (pin 100+ = I2C expander P0-P15)
+static const uint8_t PIN_FUEL_PUMP    = 100; // MCP23017 #0 P0 — moved from GPIO42
+static const uint8_t PIN_TACH_OUT     = 101; // MCP23017 #0 P1 — was disabled (GPIO43=TX conflict)
+static const uint8_t PIN_CEL          = 102; // MCP23017 #0 P2 — was disabled (GPIO44=RX conflict)
 
 // CJ125 wideband O2 controller pins (from WB_O2_Micro schematic)
 static const uint8_t PIN_SPI_SS_1     = 108; // MCP23017 P8 — CJ125 Bank 1 chip select
@@ -48,9 +48,20 @@ static const uint8_t PIN_EPC_PWM     = 46;  // LEDC ch6 — Electronic pressure 
 // OSS/TSS: GPIO 5/6 freed when second ADS1115 at 0x49 takes over MAP/TPS reads
 // Without second ADS1115, GPIO 5=MAP and GPIO 6=TPS (native ADC) → OSS/TSS disabled
 
-static const uint8_t COIL_PINS[]     = {10, 11, 12, 13, 14, 15, 16, 17};
-// INJ 1-3: native GPIO for best timing; INJ 4-8: PCF8575 P3-P7
-static const uint8_t INJECTOR_PINS[] = {18, 21, 40, 103, 104, 105, 106, 107};
+// HSPI bus (SPI3_HOST) — dedicated for MCP23S17 coil/injector expanders
+static const uint8_t HSPI_SCK       = 10;
+static const uint8_t HSPI_MOSI      = 11;
+static const uint8_t HSPI_MISO      = 12;
+static const uint8_t HSPI_CS_COILS  = 13;  // MCP23S17 #0 chip select
+static const uint8_t HSPI_CS_INJ    = 14;  // MCP23S17 #1 chip select
+// GPIO 15-18, 21, 40 freed — available for future use
+
+static SPIClass hspi(HSPI);
+
+// Coils on MCP23S17 #0 (SPI, pins 200-207)
+static const uint8_t COIL_PINS[]     = {200, 201, 202, 203, 204, 205, 206, 207};
+// Injectors on MCP23S17 #1 (SPI, pins 216-223)
+static const uint8_t INJECTOR_PINS[] = {216, 217, 218, 219, 220, 221, 222, 223};
 
 ECU::ECU(Scheduler* ts)
     : _ts(ts), _tUpdate(nullptr), _crankTeeth(36), _crankMissing(1),
@@ -169,8 +180,21 @@ void ECU::configure(const ProjectInfo& proj) {
 }
 
 void ECU::begin() {
-    // Initialize MCP23017 I2C expander before subsystem init
+    // Initialize MCP23017 I2C expander #0 before subsystem init
     PinExpander::instance().begin(I2C_SDA, I2C_SCL, 0x20);
+
+    // Probe optional MCP23017 #2 and #3 (graceful if absent)
+    PinExpander::instance().begin(2, I2C_SDA, I2C_SCL, 0x22);
+    PinExpander::instance().begin(3, I2C_SDA, I2C_SCL, 0x23);
+
+    // Initialize HSPI bus for MCP23S17 coil/injector expanders
+    hspi.begin(HSPI_SCK, HSPI_MISO, HSPI_MOSI);
+    if (!PinExpander::instance().beginSPI(0, &hspi, HSPI_CS_COILS, 0)) {
+        Log.error("ECU", "MCP23S17 #0 (coils) not detected on HSPI — coil outputs disabled");
+    }
+    if (!PinExpander::instance().beginSPI(1, &hspi, HSPI_CS_INJ, 0)) {
+        Log.error("ECU", "MCP23S17 #1 (injectors) not detected on HSPI — injector outputs disabled");
+    }
 
     // Initialize subsystems
     _crank->begin(PIN_CRANK, _crankTeeth, _crankMissing);

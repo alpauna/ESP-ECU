@@ -61,7 +61,7 @@ Cores communicate via shared `EngineState` struct with volatile fields.
 | `src/CJ125Controller.cpp` | Dual-bank CJ125 wideband O2 controller (SPI + heater PID) |
 | `src/ADS1115Reader.cpp` | ADS1115 I2C ADC wrapper (CJ125 Nernst @ 0x48, MAP/TPS @ 0x49) |
 | `src/TransmissionManager.cpp` | Ford 4R70W/4R100 automatic transmission controller |
-| `src/PinExpander.cpp` | Multi-device MCP23017 I2C GPIO expander manager |
+| `src/PinExpander.cpp` | I2C MCP23017 + SPI MCP23S17 GPIO expander manager |
 | `src/Config.cpp` | SD card and JSON configuration |
 | `src/Logger.cpp` | Multi-output logging with tar.gz rotation |
 | `src/WebHandler.cpp` | Web server and REST API |
@@ -93,25 +93,24 @@ Cores communicate via shared `EngineState` struct with volatile fields.
 
 **Outputs:**
 
-| Pin | GPIO | Description |
-|-----|------|-------------|
-| Coils 1-8 | 10-17 | COP ignition outputs |
-| Injectors 1-3 | 18, 21, 40 | Native GPIO injector outputs |
-| Injectors 4-8 | MCP23017 P3-P7 | I2C expander injector outputs |
+| Pin | GPIO / Bus | Description |
+|-----|------------|-------------|
+| Coils 1-8 | MCP23S17 #0 P0-P7 | COP ignition via SPI (HSPI 10MHz), pins 200-207 |
+| Injectors 1-8 | MCP23S17 #1 P0-P7 | High-Z injectors via SPI (HSPI 10MHz), pins 216-223 |
 | HEATER_OUT_1 | 19 | LEDC ch1 100Hz -- CJ125 heater bank 1 via BTS3134 |
 | HEATER_OUT_2 | 20 | LEDC ch2 100Hz -- CJ125 heater bank 2 via BTS3134 |
 | Alternator field | 41 | LEDC 25kHz PWM |
 | TCC_PWM | 45 | LEDC ch4 200Hz -- Torque converter clutch (strapping pin, OK after boot) |
 | EPC_PWM | 46 | LEDC ch6 5kHz -- Electronic pressure control (strapping pin, OK after boot) |
-| Fuel pump relay | MCP23017 P0 | I2C expander |
-| Tachometer output | MCP23017 P1 | I2C expander |
-| Check engine light | MCP23017 P2 | I2C expander |
-| SS_A | MCP23017 #1 P0 | Shift Solenoid A (5V via PCA9306) |
-| SS_B | MCP23017 #1 P1 | Shift Solenoid B (5V via PCA9306) |
-| SS_C | MCP23017 #1 P2 | Shift Solenoid C -- 4R100 only (5V via PCA9306) |
-| SS_D | MCP23017 #1 P3 | Coast Clutch -- 4R100 only (5V via PCA9306) |
+| Fuel pump relay | MCP23017 #0 P0 | I2C expander (pin 100) |
+| Tachometer output | MCP23017 #0 P1 | I2C expander (pin 101) |
+| Check engine light | MCP23017 #0 P2 | I2C expander (pin 102) |
+| SS_A | MCP23017 #1 P0 | Shift Solenoid A (5V via PCA9306, pin 116) |
+| SS_B | MCP23017 #1 P1 | Shift Solenoid B (5V via PCA9306, pin 117) |
+| SS_C | MCP23017 #1 P2 | Shift Solenoid C -- 4R100 only (5V via PCA9306, pin 118) |
+| SS_D | MCP23017 #1 P3 | Coast Clutch -- 4R100 only (5V via PCA9306, pin 119) |
 
-**SPI Bus (VSPI, shared SD + CJ125):**
+**SPI Bus — FSPI (shared SD + CJ125):**
 
 | Pin | GPIO | Description |
 |-----|------|-------------|
@@ -122,18 +121,32 @@ Cores communicate via shared `EngineState` struct with volatile fields.
 | SPI_SS_1 | MCP23017 P8 | CJ125 Bank 1 chip select (SPI_MODE1 @ 125kHz) |
 | SPI_SS_2 | MCP23017 P9 | CJ125 Bank 2 chip select (SPI_MODE1 @ 125kHz) |
 
+**SPI Bus — HSPI (MCP23S17 coils + injectors, 10MHz):**
+
+| Pin | GPIO | Description |
+|-----|------|-------------|
+| HSPI_SCK | 10 | SPI clock |
+| HSPI_MOSI | 11 | SPI data out |
+| HSPI_MISO | 12 | SPI data in |
+| HSPI_CS0 | 13 | MCP23S17 #0 chip select (coils) |
+| HSPI_CS1 | 14 | MCP23S17 #1 chip select (injectors) |
+
 **I2C Bus (SDA=GPIO0, SCL=GPIO42):**
 
 | Device | Address | Description |
 |--------|---------|-------------|
-| MCP23017 #0 | 0x20 | GPIO expander -- injectors 4-8, fuel pump, tach, CEL, SPI_SS_1/2 |
+| MCP23017 #0 | 0x20 | GPIO expander -- fuel pump, tach, CEL, SPI_SS_1/2, spares |
 | MCP23017 #1 | 0x21 | GPIO expander -- shift solenoids SS-A/B/C/D (5V via PCA9306) |
+| MCP23017 #2 | 0x22 | GPIO expander -- future expansion (16 spare) |
+| MCP23017 #3 | 0x23 | GPIO expander -- future expansion (16 spare) |
 | ADS1115 #0 | 0x48 | 16-bit ADC -- CJ125_UR (CH0/1), TFT temp (CH2), MLPS (CH3) |
 | ADS1115 #1 | 0x49 | 16-bit ADC -- MAP (CH0), TPS (CH1). Frees GPIO 5/6 for OSS/TSS |
+| MCP23S17 #0 | HSPI CS=13 | SPI GPIO expander -- coils 1-8 (P0-P7), 8 spare (P8-P15) |
+| MCP23S17 #1 | HSPI CS=14 | SPI GPIO expander -- injectors 1-8 (P0-P7), 8 spare (P8-P15) |
 
 **GPIO Allocation Summary:**
 
-All 23 usable native GPIOs (0-21, 38-48) are assigned. GPIO 22-25 do not exist on ESP32-S3. GPIO 26-32 are reserved for SPI flash. GPIO 33-37 are reserved for OPI PSRAM. A second ADS1115 at 0x49 reads MAP/TPS via I2C, freeing GPIO 5/6 for OSS/TSS speed sensor inputs.
+MCP23S17 migration freed GPIO 15-18, 21, 40 (6 pins). HSPI bus uses GPIO 10-14 (5 pins). Net gain: 6 free GPIO. GPIO 22-25 do not exist on ESP32-S3. GPIO 26-32 are reserved for SPI flash. GPIO 33-37 are reserved for OPI PSRAM. A second ADS1115 at 0x49 reads MAP/TPS via I2C, freeing GPIO 5/6 for OSS/TSS speed sensor inputs.
 
 | Range | Assignment |
 |-------|------------|
@@ -142,8 +155,8 @@ All 23 usable native GPIOs (0-21, 38-48) are assigned. GPIO 22-25 do not exist o
 | 3-4 | CJ125 wideband O2 ADC |
 | 5-6 | OSS/TSS speed ISR (freed from MAP/TPS by ADS1115@0x49) |
 | 7-9 | Sensor ADC (CLT, IAT, VBAT) |
-| 10-17 | Coil outputs (COP ignition) |
-| 18, 21, 40 | Injector outputs (native GPIO) |
+| 10-14 | HSPI bus (SCK, MOSI, MISO, CS0, CS1) — MCP23S17 coils + injectors |
+| 15-18, 21, 40 | **FREE** — available for future use |
 | 19-20 | CJ125 heater PWM |
 | 38-39 | SD card SPI (MOSI, CS) |
 | 41 | Alternator field PWM |
@@ -151,6 +164,17 @@ All 23 usable native GPIOs (0-21, 38-48) are assigned. GPIO 22-25 do not exist o
 | 43-44 | UART TX/RX (Serial) |
 | 45-46 | TCC/EPC PWM (strapping pins, OK after boot) |
 | 47-48 | SD card SPI (CLK, MISO) |
+
+**Virtual Pin Ranges:**
+
+| Range | Bus | Device |
+|-------|-----|--------|
+| 100-115 | I2C | MCP23017 #0 (0x20) |
+| 116-131 | I2C | MCP23017 #1 (0x21) |
+| 132-147 | I2C | MCP23017 #2 (0x22) |
+| 148-163 | I2C | MCP23017 #3 (0x23) |
+| 200-215 | SPI | MCP23S17 #0 (HSPI, CS=13) — coils |
+| 216-231 | SPI | MCP23S17 #1 (HSPI, CS=14) — injectors |
 
 ## CJ125 Wideband O2 Controller
 

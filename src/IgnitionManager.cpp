@@ -107,7 +107,7 @@ void IgnitionManager::update(uint16_t rpm, uint16_t toothPos, bool sequential) {
 
         if (sparkDiff >= 0 && sparkDiff < angleWindow && _coilState[cylIdx].charging) {
             // Fire spark
-            digitalWrite(_coilPins[cylIdx], LOW);
+            xDigitalWrite(_coilPins[cylIdx], LOW);
             _coilState[cylIdx].charging = false;
         }
 
