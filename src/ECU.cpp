@@ -45,10 +45,8 @@ static const uint8_t PIN_SS_D        = 119; // MCP23017 #1 P3 — Coast Clutch (
 static const uint8_t PIN_TCC_PWM     = 45;  // LEDC ch4 — Torque converter clutch (strapping pin, OK after boot)
 static const uint8_t PIN_EPC_PWM     = 46;  // LEDC ch6 — Electronic pressure control (strapping pin, OK after boot)
 // NOTE: GPIO 33-37 are reserved by OPI PSRAM — cannot be used
-// OSS/TSS speed sensors disabled (0xFF) — no free GPIO for ISR inputs
-// To enable, repurpose unused coil pins (e.g., GPIO 14-17 if < 8 cylinders)
-static const uint8_t PIN_OSS         = 0xFF;  // Disabled — Output shaft speed
-static const uint8_t PIN_TSS         = 0xFF;  // Disabled — Turbine shaft speed
+static const uint8_t PIN_OSS         = 5;   // ISR — Output shaft speed
+static const uint8_t PIN_TSS         = 6;   // ISR — Turbine shaft speed
 
 static const uint8_t COIL_PINS[]     = {10, 11, 12, 13, 14, 15, 16, 17};
 // INJ 1-3: native GPIO for best timing; INJ 4-8: PCF8575 P3-P7
