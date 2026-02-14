@@ -203,7 +203,9 @@ function load(){
     document.getElementById('closedLoopMinRpm').value=d.closedLoopMinRpm||800;
     document.getElementById('closedLoopMaxRpm').value=d.closedLoopMaxRpm||4000;
     document.getElementById('closedLoopMaxMapKpa').value=d.closedLoopMaxMapKpa||80;
-    document.getElementById('transType').value=d.transType||0;
+    var tt=String(d.transType||0);
+    document.getElementById('transType').value=tt;
+    _prevTransType=tt;
     document.getElementById('upshift12Rpm').value=d.upshift12Rpm||1500;
     document.getElementById('upshift23Rpm').value=d.upshift23Rpm||2500;
     document.getElementById('upshift34Rpm').value=d.upshift34Rpm||3000;
@@ -294,7 +296,20 @@ function ftpEnable(min){fetch('/ftp',{method:'POST',headers:{'Content-Type':'app
 function ftpDisable(){fetch('/ftp',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'disable'})}).then(function(){checkFtp();});}
 function checkFtp(){fetch('/ftp').then(function(r){return r.json();}).then(function(d){document.getElementById('ftpStatus').textContent=d.active?'Active ('+d.remainingMinutes+' min remaining)':'Inactive';}).catch(function(){document.getElementById('ftpStatus').textContent='Unknown';});}
 
-function toggleTransFields(){document.getElementById('transFields').style.display=document.getElementById('transType').value!=='0'?'block':'none';}
+var _transPresets={
+  '1':{upshift12Rpm:1500,upshift23Rpm:2500,upshift34Rpm:3000,downshift21Rpm:1200,downshift32Rpm:1800,downshift43Rpm:2200,tccLockRpm:1500,tccLockGear:3,tccApplyRate:5.0,shiftTimeMs:500,epcBaseDuty:50,epcShiftBoost:80,maxTftTempF:275},
+  '2':{upshift12Rpm:1800,upshift23Rpm:2800,upshift34Rpm:3200,downshift21Rpm:1400,downshift32Rpm:2000,downshift43Rpm:2500,tccLockRpm:1600,tccLockGear:3,tccApplyRate:3.0,shiftTimeMs:600,epcBaseDuty:40,epcShiftBoost:85,maxTftTempF:275}
+};
+var _prevTransType='0';
+function toggleTransFields(){
+  var v=document.getElementById('transType').value;
+  document.getElementById('transFields').style.display=v!=='0'?'block':'none';
+  if(_prevTransType==='0'&&v!=='0'&&_transPresets[v]){
+    var p=_transPresets[v];
+    for(var k in p)document.getElementById(k).value=p[k];
+  }
+  _prevTransType=v;
+}
 load();checkFtp();
 fetch('/theme').then(function(r){return r.json()}).then(function(d){var t=d.theme||'light';document.documentElement.dataset.theme=t;localStorage.setItem('hp-theme',t);}).catch(function(){});
 </script>

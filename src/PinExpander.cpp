@@ -63,6 +63,10 @@ bool PinExpander::begin(uint8_t index, uint8_t sda, uint8_t scl, uint8_t addr) {
 
     _ready[index] = true;
     Log.info("MCP", "MCP23017 #%d initialized at 0x%02X (SDA=%d, SCL=%d)", index, addr, sda, scl);
+
+    // Suppress Wire I2C error spam from non-present devices on shared bus
+    esp_log_level_set("Wire", ESP_LOG_NONE);
+
     return true;
 }
 
