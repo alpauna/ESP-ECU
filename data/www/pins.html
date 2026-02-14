@@ -106,24 +106,35 @@ function buildOutputs(rows){
 function buildBus(rows){
  var tb=document.querySelector('#busTable tbody'),h='';
  for(var i=0;i<rows.length;i++){var r=rows[i];
-  var cls=r.type==='I2C'?'t-i2c':'t-spi';
+  var cls=r.type==='I2C'?'t-i2c':r.type==='GPIO'?'t-digital':'t-spi';
   h+='<tr><td class="pin">'+r.pin+'</td><td>'+r.name+'</td><td class="'+cls+'">'+r.type+'</td><td>'+r.mode+'</td></tr>';
  } tb.innerHTML=h;
 }
 function buildExpanders(list){
  var sec=document.getElementById('expandersSection');
- if(!list||!list.length){sec.innerHTML='<h2>I2C Expanders</h2><p style="color:var(--text-muted)">No expanders detected</p>';return;}
+ if(!list||!list.length){sec.innerHTML='<h2>Expanders</h2><p style="color:var(--text-muted)">No expanders detected</p>';return;}
  var h='';
  for(var e=0;e<list.length;e++){var exp=list[e];
+  var isSpi=exp.type==='MCP23S17';
   var note=exp.note?' ('+exp.note+')':'';
-  h+='<h2>MCP23017 #'+exp.index+' @ '+exp.address+note+'</h2>';
+  var label=exp.type+' #'+exp.index;
+  if(isSpi) label+=' ['+exp.bus+', CS=GPIO'+exp.cs+']';
+  else label+=' @ '+exp.address;
+  h+='<h2>'+label+note+'</h2>';
   h+='<div class="status-bar"><span class="lbl">Status:</span> <span class="'+(exp.ready?'pcf-ready':'pcf-fail')+'">'+(exp.ready?'READY':'NOT FOUND')+'</span>';
-  h+='<span class="lbl" style="margin-left:12px">SDA:</span> <span class="val">GPIO'+exp.sda+'</span>';
-  h+='<span class="lbl" style="margin-left:12px">SCL:</span> <span class="val">GPIO'+exp.scl+'</span></div>';
+  if(isSpi){
+   h+='<span class="lbl" style="margin-left:12px">CS:</span> <span class="val">GPIO'+exp.cs+'</span>';
+   h+='<span class="lbl" style="margin-left:12px">HW Addr:</span> <span class="val">'+exp.hwAddr+'</span>';
+  }else{
+   h+='<span class="lbl" style="margin-left:12px">SDA:</span> <span class="val">GPIO'+exp.sda+'</span>';
+   h+='<span class="lbl" style="margin-left:12px">SCL:</span> <span class="val">GPIO'+exp.scl+'</span>';
+  }
+  h+='</div>';
   if(exp.pins){
    h+='<table><thead><tr><th>Pin</th><th>Global</th><th>Name</th><th>Value</th></tr></thead><tbody>';
    for(var i=0;i<exp.pins.length;i++){var p=exp.pins[i];var vc=p.value==='HIGH'?'v-on':'v-off';
-    h+='<tr><td class="pin">P'+p.pcfPin+'</td><td class="pin">'+p.globalPin+'</td><td>'+p.name+'</td><td><span class="v '+vc+'">'+p.value+'</span></td></tr>';
+    var pn=p.pcfPin!==undefined?p.pcfPin:p.spiPin;
+    h+='<tr><td class="pin">P'+pn+'</td><td class="pin">'+p.globalPin+'</td><td>'+p.name+'</td><td><span class="v '+vc+'">'+p.value+'</span></td></tr>';
    }h+='</tbody></table>';
   }
  }sec.innerHTML=h;
