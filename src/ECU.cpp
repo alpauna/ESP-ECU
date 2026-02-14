@@ -49,19 +49,24 @@ static const uint8_t PIN_EPC_PWM     = 46;  // LEDC ch6 — Electronic pressure 
 // Without second ADS1115, GPIO 5=MAP and GPIO 6=TPS (native ADC) → OSS/TSS disabled
 
 // HSPI bus (SPI3_HOST) — dedicated for MCP23S17 coil/injector expanders
+// Activated by USE_SPI_EXPANDERS build flag; otherwise coils/injectors stay on native GPIO
 static const uint8_t HSPI_SCK       = 10;
 static const uint8_t HSPI_MOSI      = 11;
 static const uint8_t HSPI_MISO      = 12;
 static const uint8_t HSPI_CS_COILS  = 13;  // MCP23S17 #0 chip select
 static const uint8_t HSPI_CS_INJ    = 14;  // MCP23S17 #1 chip select
-// GPIO 15-18, 21, 40 freed — available for future use
 
+#ifdef USE_SPI_EXPANDERS
 static SPIClass hspi(HSPI);
-
 // Coils on MCP23S17 #0 (SPI, pins 200-207)
 static const uint8_t COIL_PINS[]     = {200, 201, 202, 203, 204, 205, 206, 207};
 // Injectors on MCP23S17 #1 (SPI, pins 216-223)
 static const uint8_t INJECTOR_PINS[] = {216, 217, 218, 219, 220, 221, 222, 223};
+#else
+// Native GPIO — used until MCP23S17 hardware is installed
+static const uint8_t COIL_PINS[]     = {10, 11, 12, 13, 14, 15, 16, 17};
+static const uint8_t INJECTOR_PINS[] = {18, 21, 40, 103, 104, 105, 106, 107};
+#endif
 
 ECU::ECU(Scheduler* ts)
     : _ts(ts), _tUpdate(nullptr), _crankTeeth(36), _crankMissing(1),
@@ -183,10 +188,7 @@ void ECU::begin() {
     // Initialize MCP23017 I2C expander #0 before subsystem init
     PinExpander::instance().begin(I2C_SDA, I2C_SCL, 0x20);
 
-    // Probe optional MCP23017 #2 and #3 (graceful if absent)
-    PinExpander::instance().begin(2, I2C_SDA, I2C_SCL, 0x22);
-    PinExpander::instance().begin(3, I2C_SDA, I2C_SCL, 0x23);
-
+#ifdef USE_SPI_EXPANDERS
     // Initialize HSPI bus for MCP23S17 coil/injector expanders
     hspi.begin(HSPI_SCK, HSPI_MISO, HSPI_MOSI);
     if (!PinExpander::instance().beginSPI(0, &hspi, HSPI_CS_COILS, 0)) {
@@ -195,6 +197,7 @@ void ECU::begin() {
     if (!PinExpander::instance().beginSPI(1, &hspi, HSPI_CS_INJ, 0)) {
         Log.error("ECU", "MCP23S17 #1 (injectors) not detected on HSPI — injector outputs disabled");
     }
+#endif
 
     // Initialize subsystems
     _crank->begin(PIN_CRANK, _crankTeeth, _crankMissing);

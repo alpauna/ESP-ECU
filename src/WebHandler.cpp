@@ -735,28 +735,33 @@ void WebHandler::setupRoutes() {
             addAnalog(8, "IAT", 5, "Intake air NTC thermistor, 2.49k pullup, beta=3380. ~0.1F resolution");
             addAnalog(9, "VBAT", 6, "Battery via 47k/10k divider (5.7:1). 0-3.3V ADC = 0-18.8V actual");
 
-            // Digital outputs — coils (MCP23S17 #0, SPI HSPI 10MHz)
+            // Digital outputs — coils
+            const uint8_t coilPins[] = {10,11,12,13,14,15,16,17};
             for (uint8_t i = 0; i < 8; i++) {
-                uint8_t pin = 200 + i; // SPI_EXP_PIN_OFFSET + i
                 JsonObject o = outputs.add<JsonObject>();
-                o["pin"] = pin;
+                o["pin"] = coilPins[i];
                 char nm[8]; snprintf(nm, sizeof(nm), "COIL_%d", i+1);
                 o["name"] = nm; o["type"] = "digital"; o["mode"] = "OUTPUT";
-                o["desc"] = "COP coil driver via MCP23S17. HIGH=charging, LOW=fire. Dwell max 4.0ms";
-                o["value"] = xDigitalRead(pin) ? "ON" : "OFF";
-                o["bus"] = "SPI (HSPI 10MHz)";
+                char desc[64]; snprintf(desc, sizeof(desc), "COP coil driver. HIGH=charging, LOW=fire. Dwell max 4.0ms");
+                o["desc"] = desc;
+                o["value"] = digitalRead(coilPins[i]) ? "ON" : "OFF";
             }
 
-            // Digital outputs — injectors (MCP23S17 #1, SPI HSPI 10MHz)
+            // Digital outputs — injectors (native + MCP23017)
+            const uint8_t injPins[] = {18,21,40,103,104,105,106,107};
             for (uint8_t i = 0; i < 8; i++) {
-                uint8_t pin = 216 + i; // SPI_EXP_PIN_OFFSET + 16 + i
                 JsonObject o = outputs.add<JsonObject>();
-                o["pin"] = pin;
+                o["pin"] = injPins[i];
                 char nm[8]; snprintf(nm, sizeof(nm), "INJ_%d", i+1);
                 o["name"] = nm; o["type"] = "digital"; o["mode"] = "OUTPUT";
-                o["desc"] = "High-Z injector via MCP23S17. HIGH=open, LOW=closed. Dead time 1.0ms";
-                o["value"] = xDigitalRead(pin) ? "ON" : "OFF";
-                o["bus"] = "SPI (HSPI 10MHz)";
+                if (injPins[i] >= PCF_PIN_OFFSET) {
+                    o["desc"] = "High-Z injector via MCP23017. HIGH=open, LOW=closed";
+                    o["value"] = xDigitalRead(injPins[i]) ? "ON" : "OFF";
+                    o["bus"] = "I2C";
+                } else {
+                    o["desc"] = "High-Z injector driver. HIGH=open, LOW=closed. Dead time 1.0ms";
+                    o["value"] = digitalRead(injPins[i]) ? "ON" : "OFF";
+                }
             }
 
             // PWM output — alternator
@@ -796,21 +801,15 @@ void WebHandler::setupRoutes() {
                 o["bus"] = "I2C";
             }
 
-            // SPI bus — FSPI (SD card + CJ125)
-            auto addSpi = [&](uint8_t pin, const char* name, const char* mode) {
+            // SPI bus
+            auto addSpi = [&](uint8_t pin, const char* name) {
                 JsonObject o = bus.add<JsonObject>();
-                o["pin"] = pin; o["name"] = name; o["type"] = "SPI"; o["mode"] = mode;
+                o["pin"] = pin; o["name"] = name; o["type"] = "SPI"; o["mode"] = "SD Card";
             };
-            addSpi(47, "SD_CLK", "FSPI — SD Card");
-            addSpi(48, "SD_MISO", "FSPI — SD Card");
-            addSpi(38, "SD_MOSI", "FSPI — SD Card");
-            addSpi(39, "SD_CS", "FSPI — SD Card");
-            // SPI bus — HSPI (MCP23S17 coils + injectors)
-            addSpi(10, "HSPI_SCK", "HSPI — MCP23S17 10MHz");
-            addSpi(11, "HSPI_MOSI", "HSPI — MCP23S17 10MHz");
-            addSpi(12, "HSPI_MISO", "HSPI — MCP23S17 10MHz");
-            addSpi(13, "HSPI_CS0", "HSPI — MCP23S17 #0 (coils)");
-            addSpi(14, "HSPI_CS1", "HSPI — MCP23S17 #1 (injectors)");
+            addSpi(47, "SD_CLK");
+            addSpi(48, "SD_MISO");
+            addSpi(38, "SD_MOSI");
+            addSpi(39, "SD_CS");
 
             // CJ125 heater PWM outputs
             {
@@ -857,7 +856,7 @@ void WebHandler::setupRoutes() {
                 if (pcf.isReady(0)) {
                     uint16_t raw = pcf.readAll(0);
                     JsonArray pins = exp0["pins"].to<JsonArray>();
-                    const char* pcfNames[] = {"FUEL_PUMP","TACH_OUT","CEL","SPARE_3","SPARE_4","SPARE_5","SPARE_6","SPARE_7",
+                    const char* pcfNames[] = {"FUEL_PUMP","TACH_OUT","CEL","INJ_4","INJ_5","INJ_6","INJ_7","INJ_8",
                                                "SPI_SS_1","SPI_SS_2","SPARE_10","SPARE_11","SPARE_12","SPARE_13","SPARE_14","SPARE_15"};
                     for (uint8_t i = 0; i < 16; i++) {
                         JsonObject p = pins.add<JsonObject>();
@@ -893,111 +892,6 @@ void WebHandler::setupRoutes() {
                         p["name"] = exp1Names[i];
                         p["value"] = (raw & (1 << i)) ? "HIGH" : "LOW";
                     }
-                }
-            }
-
-            // MCP23017 expander #2 (0x22, future expansion)
-            {
-                JsonObject exp2 = expanders.add<JsonObject>();
-                exp2["index"] = 2;
-                exp2["type"] = "MCP23017";
-                char addrStr2[6]; snprintf(addrStr2, sizeof(addrStr2), "0x%02X", pcf.getAddress(2));
-                exp2["address"] = addrStr2;
-                exp2["ready"] = pcf.isReady(2);
-                exp2["sda"] = pcf.getSDA();
-                exp2["scl"] = pcf.getSCL();
-                if (pcf.isReady(2)) {
-                    uint16_t raw = pcf.readAll(2);
-                    JsonArray pins = exp2["pins"].to<JsonArray>();
-                    for (uint8_t i = 0; i < 16; i++) {
-                        JsonObject p = pins.add<JsonObject>();
-                        p["pcfPin"] = i;
-                        p["globalPin"] = PCF_PIN_OFFSET + 32 + i;
-                        char nm[10]; snprintf(nm, sizeof(nm), "SPARE_%d", i);
-                        p["name"] = nm;
-                        p["value"] = (raw & (1 << i)) ? "HIGH" : "LOW";
-                    }
-                }
-            }
-            // MCP23017 expander #3 (0x23, future expansion)
-            {
-                JsonObject exp3 = expanders.add<JsonObject>();
-                exp3["index"] = 3;
-                exp3["type"] = "MCP23017";
-                char addrStr3[6]; snprintf(addrStr3, sizeof(addrStr3), "0x%02X", pcf.getAddress(3));
-                exp3["address"] = addrStr3;
-                exp3["ready"] = pcf.isReady(3);
-                exp3["sda"] = pcf.getSDA();
-                exp3["scl"] = pcf.getSCL();
-                if (pcf.isReady(3)) {
-                    uint16_t raw = pcf.readAll(3);
-                    JsonArray pins = exp3["pins"].to<JsonArray>();
-                    for (uint8_t i = 0; i < 16; i++) {
-                        JsonObject p = pins.add<JsonObject>();
-                        p["pcfPin"] = i;
-                        p["globalPin"] = PCF_PIN_OFFSET + 48 + i;
-                        char nm[10]; snprintf(nm, sizeof(nm), "SPARE_%d", i);
-                        p["name"] = nm;
-                        p["value"] = (raw & (1 << i)) ? "HIGH" : "LOW";
-                    }
-                }
-            }
-            // MCP23S17 expander #0 (SPI, coils)
-            {
-                JsonObject spiExp0 = expanders.add<JsonObject>();
-                spiExp0["index"] = 4;
-                spiExp0["type"] = "MCP23S17";
-                spiExp0["bus"] = "HSPI 10MHz";
-                spiExp0["cs"] = pcf.getSpiCS(0);
-                spiExp0["hwAddr"] = pcf.getSpiHwAddr(0);
-                spiExp0["ready"] = pcf.isSpiReady(0);
-                if (pcf.isSpiReady(0)) {
-                    uint16_t raw = pcf.readAllSpi(0);
-                    JsonArray pins = spiExp0["pins"].to<JsonArray>();
-                    for (uint8_t i = 0; i < 16; i++) {
-                        JsonObject p = pins.add<JsonObject>();
-                        p["spiPin"] = i;
-                        p["globalPin"] = SPI_EXP_PIN_OFFSET + i;
-                        char nm[10];
-                        if (i < 8) snprintf(nm, sizeof(nm), "COIL_%d", i+1);
-                        else snprintf(nm, sizeof(nm), "SPARE_%d", i);
-                        p["name"] = nm;
-                        p["value"] = (raw & (1 << i)) ? "HIGH" : "LOW";
-                    }
-                }
-            }
-            // MCP23S17 expander #1 (SPI, injectors)
-            {
-                JsonObject spiExp1 = expanders.add<JsonObject>();
-                spiExp1["index"] = 5;
-                spiExp1["type"] = "MCP23S17";
-                spiExp1["bus"] = "HSPI 10MHz";
-                spiExp1["cs"] = pcf.getSpiCS(1);
-                spiExp1["hwAddr"] = pcf.getSpiHwAddr(1);
-                spiExp1["ready"] = pcf.isSpiReady(1);
-                if (pcf.isSpiReady(1)) {
-                    uint16_t raw = pcf.readAllSpi(1);
-                    JsonArray pins = spiExp1["pins"].to<JsonArray>();
-                    for (uint8_t i = 0; i < 16; i++) {
-                        JsonObject p = pins.add<JsonObject>();
-                        p["spiPin"] = i;
-                        p["globalPin"] = SPI_EXP_PIN_OFFSET + 16 + i;
-                        char nm[10];
-                        if (i < 8) snprintf(nm, sizeof(nm), "INJ_%d", i+1);
-                        else snprintf(nm, sizeof(nm), "SPARE_%d", i);
-                        p["name"] = nm;
-                        p["value"] = (raw & (1 << i)) ? "HIGH" : "LOW";
-                    }
-                }
-            }
-
-            // Freed GPIO (available for future use)
-            {
-                const uint8_t freedPins[] = {15, 16, 17, 18, 21, 40};
-                for (uint8_t i = 0; i < 6; i++) {
-                    JsonObject o = bus.add<JsonObject>();
-                    o["pin"] = freedPins[i]; o["name"] = "FREE"; o["type"] = "GPIO";
-                    o["mode"] = "Available — freed by MCP23S17 migration";
                 }
             }
 
