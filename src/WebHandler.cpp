@@ -351,6 +351,16 @@ void WebHandler::setupRoutes() {
         request->send(200, "application/json", json);
     });
 
+    // Preset files from SD card
+    _server.on("/presets/engines", HTTP_GET, [](AsyncWebServerRequest* r) {
+        if (!SD.exists("/engines.json")) { r->send(200, "application/json", "{}"); return; }
+        r->send(SD, "/engines.json", "application/json");
+    });
+    _server.on("/presets/transmissions", HTTP_GET, [](AsyncWebServerRequest* r) {
+        if (!SD.exists("/transmissions.json")) { r->send(200, "application/json", "{}"); return; }
+        r->send(SD, "/transmissions.json", "application/json");
+    });
+
     // Theme
     _server.on("/theme", HTTP_GET, [this](AsyncWebServerRequest* request) {
         String theme = "dark";

@@ -151,6 +151,17 @@ Task tPublishState(500 * TASK_MILLISECOND, TASK_FOREVER, []() {
     mqttHandler.publishState();
 }, &ts, false);
 
+// WiFi signal strength monitor
+Task tWifiSignal(TASK_MINUTE, TASK_FOREVER, []() {
+    if (WiFi.status() == WL_CONNECTED) {
+        int32_t rssi = WiFi.RSSI();
+        const char* quality = rssi >= -50 ? "Excellent" : rssi >= -60 ? "Good" : rssi >= -70 ? "Fair" : rssi >= -80 ? "Weak" : "Very Weak";
+        Serial.printf("[WIFI] RSSI: %d dBm (%s) | IP: %s | CH: %d\n", rssi, quality, WiFi.localIP().toString().c_str(), WiFi.channel());
+    } else {
+        Serial.printf("[WIFI] Disconnected\n");
+    }
+}, &ts, true);
+
 // Save config to SD every 5 minutes
 Task tSaveConfig(5 * TASK_MINUTE, TASK_FOREVER, []() {
     config.updateConfig(_filename, proj);

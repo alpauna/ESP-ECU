@@ -43,6 +43,10 @@ button:hover{background:#45a049;}
 <form id='configForm' onsubmit='return save(event)'>
 
 <fieldset><legend>Engine</legend>
+<label>Engine Preset</label>
+<select id='enginePreset' onchange='applyEnginePreset()'>
+<option value=''>Custom</option>
+</select>
 <div class='row2'>
 <div><label>Cylinders</label><input type='number' id='cylinders' min='1' max='12'></div>
 <div><label>Displacement (cc)</label><input type='number' id='displacement'></div>
@@ -102,11 +106,13 @@ button:hover{background:#45a049;}
 </fieldset>
 
 <fieldset><legend>Transmission</legend>
+<label>Transmission Preset</label>
+<select id='transPreset' onchange='applyTransPreset()'>
+<option value=''>None</option>
+</select>
 <label>Type (requires reboot)</label>
 <select id='transType' onchange='toggleTransFields()'>
 <option value='0'>None</option>
-<option value='1'>Ford 4R70W</option>
-<option value='2'>Ford 4R100</option>
 </select>
 <div id='transFields' style='display:none'>
 <div class='row2'>
@@ -180,8 +186,35 @@ button:hover{background:#45a049;}
 <div id='status'></div>
 </div>
 <script>
+var _enginePresets={};
+var _transPresets={};
+var _prevTransType='0';
+
 function load(){
-  fetch('/config').then(function(r){return r.json();}).then(function(d){
+  Promise.all([
+    fetch('/presets/engines').then(function(r){return r.json()}).catch(function(){return {}}),
+    fetch('/presets/transmissions').then(function(r){return r.json()}).catch(function(){return {}}),
+    fetch('/config?format=json').then(function(r){return r.json()})
+  ]).then(function(results){
+    _enginePresets=results[0];
+    _transPresets=results[1];
+    var d=results[2];
+
+    // Populate engine preset dropdown
+    var ep=document.getElementById('enginePreset');
+    for(var name in _enginePresets){
+      var o=document.createElement('option');o.value=name;o.textContent=name;ep.appendChild(o);
+    }
+
+    // Populate transmission preset dropdown and transType options
+    var tp=document.getElementById('transPreset');
+    var tt=document.getElementById('transType');
+    for(var name in _transPresets){
+      var o=document.createElement('option');o.value=name;o.textContent=name;tp.appendChild(o);
+      var to=document.createElement('option');to.value=_transPresets[name].transType;to.textContent=name;tt.appendChild(to);
+    }
+
+    // Fill form fields from current config
     document.getElementById('cylinders').value=d.cylinders||8;
     document.getElementById('displacement').value=d.displacement||5700;
     document.getElementById('firingOrder').value=(d.firingOrder||[]).join(',');
@@ -206,9 +239,9 @@ function load(){
     document.getElementById('closedLoopMinRpm').value=d.closedLoopMinRpm||800;
     document.getElementById('closedLoopMaxRpm').value=d.closedLoopMaxRpm||4000;
     document.getElementById('closedLoopMaxMapKpa').value=d.closedLoopMaxMapKpa||80;
-    var tt=String(d.transType||0);
-    document.getElementById('transType').value=tt;
-    _prevTransType=tt;
+    var tv=String(d.transType||0);
+    document.getElementById('transType').value=tv;
+    _prevTransType=tv;
     document.getElementById('upshift12Rpm').value=d.upshift12Rpm||1500;
     document.getElementById('upshift23Rpm').value=d.upshift23Rpm||2500;
     document.getElementById('upshift34Rpm').value=d.upshift34Rpm||3000;
@@ -229,7 +262,84 @@ function load(){
     document.getElementById('mqttPort').value=d.mqttPort||1883;
     document.getElementById('mqttUser').value=d.mqttUser||'';
     document.getElementById('theme').value=d.theme||'dark';
+
+    // Try to match current config against engine presets
+    matchEnginePreset();
+    matchTransPreset();
   }).catch(function(){});
+}
+
+function matchEnginePreset(){
+  var ep=document.getElementById('enginePreset');
+  var keys=['cylinders','displacement','crankTeeth','crankMissing','revLimitRpm'];
+  for(var name in _enginePresets){
+    var p=_enginePresets[name];var match=true;
+    for(var i=0;i<keys.length;i++){
+      var el=document.getElementById(keys[i]);
+      if(el&&String(el.value)!==String(p[keys[i]])){match=false;break;}
+    }
+    if(match){
+      var fo=document.getElementById('firingOrder').value;
+      if(fo!==(p.firingOrder||[]).join(',')){match=false;}
+    }
+    if(match){ep.value=name;return;}
+  }
+  ep.value='';
+}
+
+function matchTransPreset(){
+  var tp=document.getElementById('transPreset');
+  var tt=document.getElementById('transType').value;
+  if(tt==='0'){tp.value='';return;}
+  var keys=['upshift12Rpm','upshift23Rpm','upshift34Rpm','downshift21Rpm','downshift32Rpm','downshift43Rpm','tccLockRpm','tccLockGear','tccApplyRate','epcBaseDuty','epcShiftBoost','shiftTimeMs','maxTftTempF'];
+  for(var name in _transPresets){
+    var p=_transPresets[name];
+    if(String(p.transType)!==tt)continue;
+    var match=true;
+    for(var i=0;i<keys.length;i++){
+      var el=document.getElementById(keys[i]);
+      if(el&&String(el.value)!==String(p[keys[i]])){match=false;break;}
+    }
+    if(match){tp.value=name;return;}
+  }
+  tp.value='';
+}
+
+function applyEnginePreset(){
+  var name=document.getElementById('enginePreset').value;
+  if(!name||!_enginePresets[name])return;
+  var p=_enginePresets[name];
+  for(var k in p){
+    if(k==='firingOrder'){
+      document.getElementById('firingOrder').value=(p[k]||[]).join(',');
+    } else if(k==='hasCamSensor'){
+      document.getElementById('hasCamSensor').value=p[k]?'true':'false';
+    } else {
+      var el=document.getElementById(k);
+      if(el)el.value=p[k];
+    }
+  }
+}
+
+function applyTransPreset(){
+  var name=document.getElementById('transPreset').value;
+  if(!name||!_transPresets[name]){
+    document.getElementById('transType').value='0';
+    toggleTransFields();
+    return;
+  }
+  var p=_transPresets[name];
+  for(var k in p){
+    var el=document.getElementById(k);
+    if(el)el.value=p[k];
+  }
+  toggleTransFields();
+}
+
+function toggleTransFields(){
+  var v=document.getElementById('transType').value;
+  document.getElementById('transFields').style.display=v!=='0'?'block':'none';
+  _prevTransType=v;
 }
 
 function save(e){
@@ -299,20 +409,6 @@ function ftpEnable(min){fetch('/ftp',{method:'POST',headers:{'Content-Type':'app
 function ftpDisable(){fetch('/ftp',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'disable'})}).then(function(){checkFtp();});}
 function checkFtp(){fetch('/ftp').then(function(r){return r.json();}).then(function(d){document.getElementById('ftpStatus').textContent=d.active?'Active ('+d.remainingMinutes+' min remaining)':'Inactive';}).catch(function(){document.getElementById('ftpStatus').textContent='Unknown';});}
 
-var _transPresets={
-  '1':{upshift12Rpm:1500,upshift23Rpm:2500,upshift34Rpm:3000,downshift21Rpm:1200,downshift32Rpm:1800,downshift43Rpm:2200,tccLockRpm:1500,tccLockGear:3,tccApplyRate:5.0,shiftTimeMs:500,epcBaseDuty:50,epcShiftBoost:80,maxTftTempF:275},
-  '2':{upshift12Rpm:1800,upshift23Rpm:2800,upshift34Rpm:3200,downshift21Rpm:1400,downshift32Rpm:2000,downshift43Rpm:2500,tccLockRpm:1600,tccLockGear:3,tccApplyRate:3.0,shiftTimeMs:600,epcBaseDuty:40,epcShiftBoost:85,maxTftTempF:275}
-};
-var _prevTransType='0';
-function toggleTransFields(){
-  var v=document.getElementById('transType').value;
-  document.getElementById('transFields').style.display=v!=='0'?'block':'none';
-  if(_prevTransType==='0'&&v!=='0'&&_transPresets[v]){
-    var p=_transPresets[v];
-    for(var k in p)document.getElementById(k).value=p[k];
-  }
-  _prevTransType=v;
-}
 load();checkFtp();
 fetch('/theme').then(function(r){return r.json()}).then(function(d){var t=d.theme||'light';document.documentElement.dataset.theme=t;localStorage.setItem('hp-theme',t);}).catch(function(){});
 </script>
