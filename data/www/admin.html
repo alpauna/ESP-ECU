@@ -21,9 +21,11 @@ button:hover{background:#45a049;}
 .err{background:#f8d7da;color:#721c24;display:block!important;}
 </style></head><body>
 <nav><span class='brand'>ESP-ECU</span>
+<button class='hamburger' onclick='this.nextElementSibling.classList.toggle("open")'><span></span><span></span><span></span></button>
+<div class='nav-links'>
 <a href='/'>Home</a>
 <a href='/dashboard'>Dashboard</a>
-</nav>
+</div></nav>
 <div class='container'>
 <h1>Admin Setup</h1>
 <div class='notice'>An admin password is required before accessing configuration. This password protects the config, update, and FTP endpoints.</div>

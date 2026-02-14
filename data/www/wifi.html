@@ -38,15 +38,18 @@ input[type=text],input[type=password]{width:100%;padding:8px;border:1px solid va
 @keyframes spin{0%{transform:rotate(0deg);}100%{transform:rotate(360deg);}}
 </style></head><body>
 <nav><span class='brand'>ESP-ECU</span>
+<button class='hamburger' onclick='this.nextElementSibling.classList.toggle("open")'><span></span><span></span><span></span></button>
+<div class='nav-links'>
 <a href='/'>Home</a>
 <a href='/dashboard'>Dashboard</a>
 <a href='/tune'>Tune</a>
+<a href='/pins'>Pins</a>
 <a href='/config'>Config</a>
 <a href='/update'>Update</a>
 <a href='/log/view'>Log</a>
 <a href='/heap/view'>Heap</a>
-<a href='#' onclick="if(confirm('Reboot device?')){fetch('/reboot',{method:'POST',headers:{'Authorization':'Basic '+btoa(prompt('user:pass','admin:'))}}).then(r=>r.ok?alert('Rebooting...'):alert('Failed'))};return false" style='margin-left:auto;background:#d32f2f;'>Reboot</a>
-</nav>
+<a href='#' class='reboot' onclick="if(confirm('Reboot device?')){fetch('/reboot',{method:'POST',headers:{'Authorization':'Basic '+btoa(prompt('user:pass','admin:'))}}).then(r=>r.ok?alert('Rebooting...'):alert('Failed'))};return false">Reboot</a>
+</div></nav>
 <div class='content'>
 <h1>WiFi Setup</h1>
 <div class='card'>

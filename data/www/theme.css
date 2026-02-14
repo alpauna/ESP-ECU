@@ -29,3 +29,21 @@
     --selected-bg: #2e5a2e;
     --code-bg: #2d2d2d;
 }
+
+/* Hamburger button — hidden on desktop */
+.hamburger{display:none;flex-direction:column;justify-content:center;gap:4px;background:none;border:none;cursor:pointer;padding:6px;}
+.hamburger span{display:block;width:22px;height:2px;background:#fff;border-radius:1px;}
+
+/* Reboot link pushed right on desktop */
+.nav-links{display:contents;}
+.nav-links a.reboot{margin-left:auto;background:#d32f2f;}
+
+/* Mobile responsive nav */
+@media(max-width:600px){
+  .hamburger{display:flex;}
+  nav{flex-wrap:wrap;}
+  .nav-links{display:none;width:100%;flex-direction:column;}
+  .nav-links.open{display:flex;}
+  .nav-links a{padding:10px 20px;border-top:1px solid rgba(255,255,255,0.1);border-radius:0;}
+  .nav-links a.reboot{margin-left:0;text-align:center;}
+}

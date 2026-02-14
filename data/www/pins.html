@@ -39,15 +39,18 @@ tr:hover td{background:var(--hover-bg);}
 .footer{text-align:center;color:var(--text-muted);font-size:11px;margin-top:8px;}
 </style></head><body>
 <nav><span class='brand'>ESP-ECU</span>
+<button class='hamburger' onclick='this.nextElementSibling.classList.toggle("open")'><span></span><span></span><span></span></button>
+<div class='nav-links'>
 <a href='/'>Home</a>
 <a href='/dashboard'>Dashboard</a>
-<a href='/pins' class='active'>Pins</a>
 <a href='/tune'>Tune</a>
+<a href='/pins' class='active'>Pins</a>
 <a href='/config'>Config</a>
 <a href='/update'>Update</a>
 <a href='/log/view'>Log</a>
 <a href='/heap/view'>Heap</a>
-</nav>
+<a href='#' class='reboot' onclick="if(confirm('Reboot device?')){fetch('/reboot',{method:'POST',headers:{'Authorization':'Basic '+btoa(prompt('user:pass','admin:'))}}).then(r=>r.ok?alert('Rebooting...'):alert('Failed'))};return false">Reboot</a>
+</div></nav>
 <div class='content'>
 
 <div class='status-bar'>
