@@ -716,8 +716,21 @@ void WebHandler::setupRoutes() {
             };
             addAnalog(3, "O2_BANK1", 0, "Wideband O2, 0-5V maps to AFR 10.0-20.0. 12-bit ADC, 0.81mV/step");
             addAnalog(4, "O2_BANK2", 1, "Wideband O2, 0-5V maps to AFR 10.0-20.0. 12-bit ADC, 0.81mV/step");
-            addAnalog(5, "MAP", 2, "Manifold pressure, 0.5-4.5V = 10-105 kPa. ~23.75 kPa/V");
-            addAnalog(6, "TPS", 3, "Throttle position, 0.5V=closed, 4.5V=WOT. 0-100%");
+            bool hasAds2 = sens && sens->hasMapTpsADS1115();
+            if (hasAds2) {
+                // MAP/TPS via second ADS1115 — GPIO 5/6 freed for OSS/TSS
+                JsonObject oMap = inputs.add<JsonObject>();
+                oMap["pin"] = "ADS1115@0x49 CH0"; oMap["name"] = "MAP"; oMap["type"] = "analog"; oMap["mode"] = "I2C ADC";
+                oMap["desc"] = "Manifold pressure via ADS1115, 0.5-4.5V = 10-105 kPa (GAIN_TWOTHIRDS, 860SPS)";
+                oMap["raw"] = 0; oMap["mV"] = 0;
+                JsonObject oTps = inputs.add<JsonObject>();
+                oTps["pin"] = "ADS1115@0x49 CH1"; oTps["name"] = "TPS"; oTps["type"] = "analog"; oTps["mode"] = "I2C ADC";
+                oTps["desc"] = "Throttle position via ADS1115, 0.5V=closed, 4.5V=WOT (GAIN_TWOTHIRDS, 860SPS)";
+                oTps["raw"] = 0; oTps["mV"] = 0;
+            } else {
+                addAnalog(5, "MAP", 2, "Manifold pressure, 0.5-4.5V = 10-105 kPa. ~23.75 kPa/V");
+                addAnalog(6, "TPS", 3, "Throttle position, 0.5V=closed, 4.5V=WOT. 0-100%");
+            }
             addAnalog(7, "CLT", 4, "Coolant NTC thermistor, 2.49k pullup, beta=3380. ~0.1F resolution");
             addAnalog(8, "IAT", 5, "Intake air NTC thermistor, 2.49k pullup, beta=3380. ~0.1F resolution");
             addAnalog(9, "VBAT", 6, "Battery via 47k/10k divider (5.7:1). 0-3.3V ADC = 0-18.8V actual");
@@ -824,6 +837,10 @@ void WebHandler::setupRoutes() {
                 JsonObject o = bus.add<JsonObject>();
                 o["pin"] = pcf.getSDA(); o["name"] = "I2C_SDA"; o["type"] = "I2C"; o["mode"] = "ADS1115 @ 0x48 (CJ125_UR)";
             }
+            if (sens && sens->hasMapTpsADS1115()) {
+                JsonObject o = bus.add<JsonObject>();
+                o["pin"] = pcf.getSDA(); o["name"] = "I2C_SDA"; o["type"] = "I2C"; o["mode"] = "ADS1115 @ 0x49 (MAP/TPS)";
+            }
 
             // MCP23017 expander #0
             JsonArray expanders = doc["expanders"].to<JsonArray>();
@@ -893,17 +910,25 @@ void WebHandler::setupRoutes() {
                     o["mode"] = "LEDC 5kHz"; o["desc"] = "Electronic pressure control PWM via MOSFET driver";
                     o["percent"] = ts.epcDuty;
                 }
-                // Speed sensor inputs (disabled when pin is 0xFF)
+                // Speed sensor inputs — GPIO 5/6 when second ADS1115 takes over MAP/TPS
                 {
+                    bool ossEnabled = sens && sens->hasMapTpsADS1115();
                     JsonObject o = inputs.add<JsonObject>();
-                    o["pin"] = "--"; o["name"] = "OSS"; o["type"] = "digital"; o["mode"] = "DISABLED";
-                    o["desc"] = "Output shaft speed — no free GPIO (all native pins assigned)";
+                    o["pin"] = ossEnabled ? 5 : (int)0;
+                    o["name"] = "OSS"; o["type"] = "digital";
+                    o["mode"] = ossEnabled ? "ISR PULSE" : "DISABLED";
+                    o["desc"] = ossEnabled ? "Output shaft speed, 8 pulses/rev, ISR counting"
+                                           : "Output shaft speed — needs ADS1115 @ 0x49 to free GPIO 5";
                     o["rpm"] = ts.ossRpm;
                 }
                 {
+                    bool tssEnabled = sens && sens->hasMapTpsADS1115();
                     JsonObject o = inputs.add<JsonObject>();
-                    o["pin"] = "--"; o["name"] = "TSS"; o["type"] = "digital"; o["mode"] = "DISABLED";
-                    o["desc"] = "Turbine shaft speed — no free GPIO (all native pins assigned)";
+                    o["pin"] = tssEnabled ? 6 : (int)0;
+                    o["name"] = "TSS"; o["type"] = "digital";
+                    o["mode"] = tssEnabled ? "ISR PULSE" : "DISABLED";
+                    o["desc"] = tssEnabled ? "Turbine shaft speed, 8 pulses/rev, ISR counting"
+                                           : "Turbine shaft speed — needs ADS1115 @ 0x49 to free GPIO 6";
                     o["rpm"] = ts.tssRpm;
                 }
             }

@@ -3,11 +3,11 @@
 
 ADS1115Reader::ADS1115Reader() : _ready(false) {}
 
-bool ADS1115Reader::begin(uint8_t addr) {
+bool ADS1115Reader::begin(uint8_t addr, adsGain_t gain, uint16_t rate) {
     _ready = _ads.begin(addr);
     if (_ready) {
-        _ads.setGain(GAIN_ONE); // +/- 4.096V range
-        _ads.setDataRate(RATE_ADS1115_128SPS);
+        _ads.setGain(gain);
+        _ads.setDataRate(rate);
         Log.info("ADS", "ADS1115 initialized at 0x%02X", addr);
     } else {
         Log.error("ADS", "ADS1115 not found at 0x%02X", addr);

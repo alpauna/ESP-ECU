@@ -6,7 +6,8 @@
 class ADS1115Reader {
 public:
     ADS1115Reader();
-    bool begin(uint8_t addr = 0x48);
+    bool begin(uint8_t addr = 0x48, adsGain_t gain = GAIN_ONE,
+               uint16_t rate = RATE_ADS1115_128SPS);
     int16_t readChannel(uint8_t ch);
     float readMillivolts(uint8_t ch);
     bool isReady() const { return _ready; }

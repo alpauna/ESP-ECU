@@ -59,7 +59,7 @@ Cores communicate via shared `EngineState` struct with volatile fields.
 | `src/TuneTable.cpp` | 2D/3D interpolated lookup tables |
 | `src/SensorManager.cpp` | ADC reads: O2, MAP, TPS, CLT, IAT, VBAT |
 | `src/CJ125Controller.cpp` | Dual-bank CJ125 wideband O2 controller (SPI + heater PID) |
-| `src/ADS1115Reader.cpp` | ADS1115 I2C ADC wrapper for CJ125 Nernst cell temp |
+| `src/ADS1115Reader.cpp` | ADS1115 I2C ADC wrapper (CJ125 Nernst @ 0x48, MAP/TPS @ 0x49) |
 | `src/TransmissionManager.cpp` | Ford 4R70W/4R100 automatic transmission controller |
 | `src/PinExpander.cpp` | Multi-device MCP23017 I2C GPIO expander manager |
 | `src/Config.cpp` | SD card and JSON configuration |
@@ -83,13 +83,13 @@ Cores communicate via shared `EngineState` struct with volatile fields.
 | Cam | 2 | Digital interrupt, phase detection |
 | CJ125_UA Bank 1 | 3 | ADC -- wideband O2 lambda/pump current |
 | CJ125_UA Bank 2 | 4 | ADC -- wideband O2 lambda/pump current |
-| MAP | 5 | ADC -- Manifold Absolute Pressure |
-| TPS | 6 | ADC -- Throttle Position Sensor |
+| MAP | ADS1115@0x49 CH0 | I2C ADC -- Manifold Absolute Pressure (GAIN_TWOTHIRDS, 860SPS) |
+| TPS | ADS1115@0x49 CH1 | I2C ADC -- Throttle Position Sensor (GAIN_TWOTHIRDS, 860SPS) |
+| OSS | 5 | Digital ISR -- Output shaft speed (freed by ADS1115@0x49) |
+| TSS | 6 | Digital ISR -- Turbine shaft speed (freed by ADS1115@0x49) |
 | CLT | 7 | ADC -- Coolant Temperature (NTC thermistor) |
 | IAT | 8 | ADC -- Intake Air Temperature (NTC thermistor) |
 | VBAT | 9 | ADC -- Battery voltage (47k/10k divider, 5.7:1) |
-| OSS | -- | Output shaft speed (disabled -- no free GPIO) |
-| TSS | -- | Turbine shaft speed (disabled -- no free GPIO) |
 
 **Outputs:**
 
@@ -128,18 +128,20 @@ Cores communicate via shared `EngineState` struct with volatile fields.
 |--------|---------|-------------|
 | MCP23017 #0 | 0x20 | GPIO expander -- injectors 4-8, fuel pump, tach, CEL, SPI_SS_1/2 |
 | MCP23017 #1 | 0x21 | GPIO expander -- shift solenoids SS-A/B/C/D (5V via PCA9306) |
-| ADS1115 | 0x48 | 16-bit ADC -- CJ125_UR (CH0/1), TFT temp (CH2), MLPS (CH3) |
+| ADS1115 #0 | 0x48 | 16-bit ADC -- CJ125_UR (CH0/1), TFT temp (CH2), MLPS (CH3) |
+| ADS1115 #1 | 0x49 | 16-bit ADC -- MAP (CH0), TPS (CH1). Frees GPIO 5/6 for OSS/TSS |
 
 **GPIO Allocation Summary:**
 
-All 23 usable native GPIOs (0-21, 38-48) are assigned. GPIO 22-25 do not exist on ESP32-S3. GPIO 26-32 are reserved for SPI flash. GPIO 33-37 are reserved for OPI PSRAM.
+All 23 usable native GPIOs (0-21, 38-48) are assigned. GPIO 22-25 do not exist on ESP32-S3. GPIO 26-32 are reserved for SPI flash. GPIO 33-37 are reserved for OPI PSRAM. A second ADS1115 at 0x49 reads MAP/TPS via I2C, freeing GPIO 5/6 for OSS/TSS speed sensor inputs.
 
 | Range | Assignment |
 |-------|------------|
 | 0 | I2C SDA |
 | 1-2 | Crank + Cam ISR inputs |
 | 3-4 | CJ125 wideband O2 ADC |
-| 5-9 | Sensor ADC (MAP, TPS, CLT, IAT, VBAT) |
+| 5-6 | OSS/TSS speed ISR (freed from MAP/TPS by ADS1115@0x49) |
+| 7-9 | Sensor ADC (CLT, IAT, VBAT) |
 | 10-17 | Coil outputs (COP ignition) |
 | 18, 21, 40 | Injector outputs (native GPIO) |
 | 19-20 | CJ125 heater PWM |

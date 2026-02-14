@@ -45,13 +45,8 @@ static const uint8_t PIN_SS_D        = 119; // MCP23017 #1 P3 — Coast Clutch (
 static const uint8_t PIN_TCC_PWM     = 45;  // LEDC ch4 — Torque converter clutch (strapping pin, OK after boot)
 static const uint8_t PIN_EPC_PWM     = 46;  // LEDC ch6 — Electronic pressure control (strapping pin, OK after boot)
 // NOTE: GPIO 33-37 are reserved by OPI PSRAM — cannot be used
-// OSS/TSS: no free native GPIO — all 0-21 assigned (sensors/coils/injectors),
-// 26-37 reserved (flash/PSRAM), 38-48 assigned (SD/I2C/ALT/TCC/EPC/UART)
-// Options: (a) add second ADS1115 to free GPIO 5-9 ADC pins,
-//          (b) reduce coil count and repurpose GPIO 14-17,
-//          (c) calculate gear ratio from engine RPM + shift solenoid state
-static const uint8_t PIN_OSS         = 0xFF;  // Disabled — Output shaft speed
-static const uint8_t PIN_TSS         = 0xFF;  // Disabled — Turbine shaft speed
+// OSS/TSS: GPIO 5/6 freed when second ADS1115 at 0x49 takes over MAP/TPS reads
+// Without second ADS1115, GPIO 5=MAP and GPIO 6=TPS (native ADC) → OSS/TSS disabled
 
 static const uint8_t COIL_PINS[]     = {10, 11, 12, 13, 14, 15, 16, 17};
 // INJ 1-3: native GPIO for best timing; INJ 4-8: PCF8575 P3-P7
@@ -60,7 +55,7 @@ static const uint8_t INJECTOR_PINS[] = {18, 21, 40, 103, 104, 105, 106, 107};
 ECU::ECU(Scheduler* ts)
     : _ts(ts), _tUpdate(nullptr), _crankTeeth(36), _crankMissing(1),
       _realtimeTaskHandle(nullptr), _cj125(nullptr), _ads1115(nullptr),
-      _trans(nullptr), _cj125Enabled(false), _transType(0) {
+      _ads1115_2(nullptr), _trans(nullptr), _cj125Enabled(false), _transType(0) {
     memset(&_state, 0, sizeof(_state));
     memset(_firingOrder, 0, sizeof(_firingOrder));
     // Default SBC V8 firing order
@@ -87,6 +82,7 @@ ECU::~ECU() {
     delete _sensors;
     delete _cj125;
     delete _ads1115;
+    delete _ads1115_2;
     delete _trans;
 }
 
@@ -187,6 +183,18 @@ void ECU::begin() {
     _injection->begin(_state.numCylinders, INJECTOR_PINS, _firingOrder);
     _fuel->begin();
     _alternator->begin(PIN_ALTERNATOR);
+
+    // Probe second ADS1115 at 0x49 for MAP/TPS — frees GPIO 5/6 for OSS/TSS
+    _ads1115_2 = new ADS1115Reader();
+    if (_ads1115_2->begin(0x49, GAIN_TWOTHIRDS, RATE_ADS1115_860SPS)) {
+        _sensors->setMapTpsADS1115(_ads1115_2);
+        Log.info("ECU", "ADS1115 @ 0x49 found — MAP/TPS via I2C, GPIO 5/6 freed for OSS/TSS");
+    } else {
+        delete _ads1115_2;
+        _ads1115_2 = nullptr;
+        Log.warn("ECU", "ADS1115 @ 0x49 not found — MAP/TPS on native ADC (GPIO 5/6), OSS/TSS disabled");
+    }
+
     _sensors->begin();
 
     // Fuel pump relay ON (PCF P0)
@@ -235,10 +243,15 @@ void ECU::begin() {
             _ads1115->begin(0x48);
         }
         _trans->setADS1115(_ads1115);
+        // OSS/TSS: GPIO 5/6 available only if second ADS1115 took over MAP/TPS
+        uint8_t ossPin = _ads1115_2 ? 5 : 0xFF;
+        uint8_t tssPin = _ads1115_2 ? 6 : 0xFF;
         _trans->begin(PIN_SS_A, PIN_SS_B, PIN_SS_C, PIN_SS_D,
-                      PIN_TCC_PWM, PIN_EPC_PWM, PIN_OSS, PIN_TSS);
-        Log.info("ECU", "Transmission controller enabled: %s",
-                 TransmissionManager::typeToString(_trans->getType()));
+                      PIN_TCC_PWM, PIN_EPC_PWM, ossPin, tssPin);
+        Log.info("ECU", "Transmission controller enabled: %s, OSS=%s, TSS=%s",
+                 TransmissionManager::typeToString(_trans->getType()),
+                 ossPin != 0xFF ? "GPIO5" : "DISABLED",
+                 tssPin != 0xFF ? "GPIO6" : "DISABLED");
     }
 
     // Sensor + fuel calc update task (10ms on Core 0)

@@ -1,5 +1,6 @@
 #include "SensorManager.h"
 #include "CJ125Controller.h"
+#include "ADS1115Reader.h"
 #include <esp_adc_cal.h>
 #include "Logger.h"
 
@@ -31,19 +32,26 @@ SensorManager::SensorManager()
 SensorManager::~SensorManager() {}
 
 void SensorManager::begin() {
-    // Configure all ADC1 pins for analog read
+    // Configure ADC1 pins for analog read (skip MAP/TPS if using external ADS1115)
     for (uint8_t i = 0; i < NUM_CHANNELS; i++) {
+        if (_mapTpsAds && (_channelPins[i] == MAP_PIN || _channelPins[i] == TPS_PIN))
+            continue;
         pinMode(_channelPins[i], INPUT);
         analogSetPinAttenuation(_channelPins[i], ADC_11db);
     }
     analogSetAttenuation(ADC_11db);
     analogReadResolution(12);
-    Log.info("SENS", "SensorManager initialized (%d channels)", NUM_CHANNELS);
+    if (_mapTpsAds)
+        Log.info("SENS", "SensorManager initialized (%d channels, MAP/TPS via ADS1115)", NUM_CHANNELS);
+    else
+        Log.info("SENS", "SensorManager initialized (%d channels)", NUM_CHANNELS);
 }
 
 void SensorManager::update() {
-    // Read all ADC channels and apply EMA filter
+    // Read ADC channels and apply EMA filter (skip MAP/TPS if using ADS1115)
     for (uint8_t i = 0; i < NUM_CHANNELS; i++) {
+        if (_mapTpsAds && (_channelPins[i] == MAP_PIN || _channelPins[i] == TPS_PIN))
+            continue;
         _rawAdc[i] = analogRead(_channelPins[i]);
         float raw = (float)_rawAdc[i];
         _rawFiltered[i] = _rawFiltered[i] + _cal.emaAlpha * (raw - _rawFiltered[i]);
@@ -52,11 +60,20 @@ void SensorManager::update() {
     // Convert filtered ADC values to engineering units
     float vO2_1 = adcToVoltage((uint16_t)_rawFiltered[0]);
     float vO2_2 = adcToVoltage((uint16_t)_rawFiltered[1]);
-    float vMap  = adcToVoltage((uint16_t)_rawFiltered[2]);
-    float vTps  = adcToVoltage((uint16_t)_rawFiltered[3]);
     float vClt  = adcToVoltage((uint16_t)_rawFiltered[4]);
     float vIat  = adcToVoltage((uint16_t)_rawFiltered[5]);
     float vBat  = adcToVoltage((uint16_t)_rawFiltered[6]);
+
+    // MAP/TPS: read from second ADS1115 (CH0=MAP, CH1=TPS) if available, else native ADC
+    float vMap, vTps;
+    if (_mapTpsAds && _mapTpsAds->isReady()) {
+        // ADS1115 at GAIN_TWOTHIRDS returns actual voltage (0-6.144V range)
+        vMap = _mapTpsAds->readMillivolts(0) / 1000.0f;
+        vTps = _mapTpsAds->readMillivolts(1) / 1000.0f;
+    } else {
+        vMap = adcToVoltage((uint16_t)_rawFiltered[2]);
+        vTps = adcToVoltage((uint16_t)_rawFiltered[3]);
+    }
 
     if (_cj125 && _cj125->isReady(0))
         _o2Afr[0] = _cj125->getAfr(0);

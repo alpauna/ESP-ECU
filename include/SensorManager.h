@@ -3,6 +3,7 @@
 #include <Arduino.h>
 
 class CJ125Controller;
+class ADS1115Reader;
 
 class SensorManager {
 public:
@@ -53,8 +54,12 @@ public:
     void setCJ125(CJ125Controller* cj125) { _cj125 = cj125; }
     CJ125Controller* getCJ125() const { return _cj125; }
 
+    void setMapTpsADS1115(ADS1115Reader* ads) { _mapTpsAds = ads; }
+    bool hasMapTpsADS1115() const { return _mapTpsAds != nullptr; }
+
 private:
     CJ125Controller* _cj125 = nullptr;
+    ADS1115Reader* _mapTpsAds = nullptr;
     AdcCalibration _cal;
     float _rawFiltered[NUM_CHANNELS];
     uint16_t _rawAdc[NUM_CHANNELS];

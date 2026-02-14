@@ -72,6 +72,7 @@ private:
     SensorManager* _sensors;
     CJ125Controller* _cj125;
     ADS1115Reader* _ads1115;
+    ADS1115Reader* _ads1115_2;   // Second ADS1115 at 0x49 for MAP/TPS (frees GPIO 5/6 for OSS/TSS)
     TransmissionManager* _trans;
     bool _cj125Enabled;
     uint8_t _transType;
