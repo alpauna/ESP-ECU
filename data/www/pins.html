@@ -73,17 +73,7 @@ tr:hover td{background:var(--hover-bg);}
 <tbody></tbody>
 </table>
 
-<h2>I2C Expander (MCP23017)</h2>
-<div class='status-bar' id='pcfStatus'>
-<span class='lbl'>Status:</span> <span id='pcfReady' class='pcf-fail'>--</span>
-<span class='lbl' style='margin-left:12px;'>Address:</span> <span class='val' id='pcfAddr'>--</span>
-<span class='lbl' style='margin-left:12px;'>SDA:</span> <span class='val' id='pcfSda'>--</span>
-<span class='lbl' style='margin-left:12px;'>SCL:</span> <span class='val' id='pcfScl'>--</span>
-</div>
-<table id='pcfTable'>
-<thead><tr><th>PCF Pin</th><th>Global Pin</th><th>Name</th><th>Value</th></tr></thead>
-<tbody></tbody>
-</table>
+<div id='expandersSection'></div>
 
 <div class='footer'>Auto-refreshes every 2s</div>
 </div>
@@ -117,24 +107,27 @@ function buildBus(rows){
   h+='<tr><td class="pin">'+r.pin+'</td><td>'+r.name+'</td><td class="'+cls+'">'+r.type+'</td><td>'+r.mode+'</td></tr>';
  } tb.innerHTML=h;
 }
-function buildPcf(exp){
- if(!exp){document.getElementById('pcfReady').textContent='N/A';return;}
- var el=document.getElementById('pcfReady');
- el.textContent=exp.ready?'READY':'NOT FOUND';
- el.className=exp.ready?'pcf-ready':'pcf-fail';
- document.getElementById('pcfAddr').textContent=exp.address||'--';
- document.getElementById('pcfSda').textContent='GPIO'+exp.sda;
- document.getElementById('pcfScl').textContent='GPIO'+exp.scl;
- if(!exp.pins)return;
- var tb=document.querySelector('#pcfTable tbody'),h='';
- for(var i=0;i<exp.pins.length;i++){var p=exp.pins[i];
-  var vc=p.value==='HIGH'?'v-on':'v-off';
-  h+='<tr><td class="pin">P'+p.pcfPin+'</td><td class="pin">'+p.globalPin+'</td><td>'+p.name+'</td><td><span class="v '+vc+'">'+p.value+'</span></td></tr>';
- } tb.innerHTML=h;
+function buildExpanders(list){
+ var sec=document.getElementById('expandersSection');
+ if(!list||!list.length){sec.innerHTML='<h2>I2C Expanders</h2><p style="color:var(--text-muted)">No expanders detected</p>';return;}
+ var h='';
+ for(var e=0;e<list.length;e++){var exp=list[e];
+  var note=exp.note?' ('+exp.note+')':'';
+  h+='<h2>MCP23017 #'+exp.index+' @ '+exp.address+note+'</h2>';
+  h+='<div class="status-bar"><span class="lbl">Status:</span> <span class="'+(exp.ready?'pcf-ready':'pcf-fail')+'">'+(exp.ready?'READY':'NOT FOUND')+'</span>';
+  h+='<span class="lbl" style="margin-left:12px">SDA:</span> <span class="val">GPIO'+exp.sda+'</span>';
+  h+='<span class="lbl" style="margin-left:12px">SCL:</span> <span class="val">GPIO'+exp.scl+'</span></div>';
+  if(exp.pins){
+   h+='<table><thead><tr><th>Pin</th><th>Global</th><th>Name</th><th>Value</th></tr></thead><tbody>';
+   for(var i=0;i<exp.pins.length;i++){var p=exp.pins[i];var vc=p.value==='HIGH'?'v-on':'v-off';
+    h+='<tr><td class="pin">P'+p.pcfPin+'</td><td class="pin">'+p.globalPin+'</td><td>'+p.name+'</td><td><span class="v '+vc+'">'+p.value+'</span></td></tr>';
+   }h+='</tbody></table>';
+  }
+ }sec.innerHTML=h;
 }
 function refresh(){
  fetch('/pins?format=json').then(function(r){return r.json();}).then(function(d){
-  buildInputs(d.inputs||[]);buildOutputs(d.outputs||[]);buildBus(d.bus||[]);buildPcf(d.expander);
+  buildInputs(d.inputs||[]);buildOutputs(d.outputs||[]);buildBus(d.bus||[]);buildExpanders(d.expanders||[]);
   var el=document.getElementById('crankSync'),s=d.crankSync||'LOST';
   el.textContent=s;el.className='sync-badge sync-'+s;
   document.getElementById('rpm').textContent=d.rpm||0;

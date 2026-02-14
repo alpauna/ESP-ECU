@@ -120,6 +120,27 @@ nav .brand{font-weight:bold;font-size:16px;margin-right:auto;color:#fff;}
 <div class='row'><span class='lbl'>Free Heap</span><span class='val' id='heap'>--</span></div>
 <div class='row'><span class='lbl'>Sequential</span><span class='val' id='sequential'>--</span></div>
 </div>
+
+<!-- Transmission (hidden if not enabled) -->
+<div class='card' id='transCard' style='display:none;grid-column:span 2;'>
+<h3>Transmission</h3>
+<div style='display:flex;gap:15px;flex-wrap:wrap;'>
+<div style='flex:1;min-width:140px;'>
+<div class='gauge'><div class='val' id='transGear' style='font-size:48px;'>P</div><div class='unit'>Gear</div></div>
+</div>
+<div style='flex:2;min-width:200px;'>
+<div class='row'><span class='lbl'>MLPS</span><span class='val' id='transMlps'>--</span></div>
+<div class='row'><span class='lbl'>OSS</span><span class='val' id='transOss'>--</span></div>
+<div class='row'><span class='lbl'>TSS</span><span class='val' id='transTss'>--</span></div>
+<div class='row'><span class='lbl'>Slip RPM</span><span class='val' id='transSlip'>--</span></div>
+<div class='row'><span class='lbl'>TFT Temp</span><span class='val' id='transTft'>--</span></div>
+<div class='row'><span class='lbl'>TCC Duty</span><span class='val' id='transTcc'>--</span></div>
+<div class='row'><span class='lbl'>EPC Duty</span><span class='val' id='transEpc'>--</span></div>
+<div class='row'><span class='lbl'>Solenoids</span><span class='val' id='transSol'>--</span></div>
+<div class='row'><span class='lbl'>Status</span><span class='val' id='transStatus'>--</span></div>
+</div>
+</div>
+</div>
 </div>
 
 <div class='footer' id='footer'></div>
@@ -199,6 +220,33 @@ function poll(){
     document.getElementById('cpu1').textContent=(d.cpuLoad1!==undefined?d.cpuLoad1+'%':'--');
     document.getElementById('heap').textContent=d.freeHeap?Math.round(d.freeHeap/1024)+' KB':'--';
     document.getElementById('sequential').textContent=d.sequential?'Yes':'No';
+
+    // Transmission card
+    var tr=d.transmission;
+    if(tr&&tr.enabled){
+      document.getElementById('transCard').style.display='';
+      document.getElementById('transGear').textContent=tr.gear||'P';
+      document.getElementById('transMlps').textContent=tr.mlps||'--';
+      document.getElementById('transOss').textContent=(tr.ossRpm||0)+' RPM';
+      document.getElementById('transTss').textContent=(tr.tssRpm||0)+' RPM';
+      document.getElementById('transSlip').textContent=(tr.slipRpm||0)+' RPM';
+      var tftEl=document.getElementById('transTft');
+      tftEl.textContent=(tr.tftTempF||0).toFixed(0)+' F';
+      tftEl.style.color=tr.overTemp?'#f44336':'';
+      document.getElementById('transTcc').textContent=(tr.tccDuty||0).toFixed(0)+'%'+(tr.tccLocked?' LOCKED':'');
+      document.getElementById('transEpc').textContent=(tr.epcDuty||0).toFixed(0)+'%';
+      var sol='A:'+(tr.ssA?'ON':'off')+' B:'+(tr.ssB?'ON':'off');
+      if(tr.ssC!==undefined)sol+=' C:'+(tr.ssC?'ON':'off');
+      if(tr.ssD!==undefined)sol+=' D:'+(tr.ssD?'ON':'off');
+      document.getElementById('transSol').textContent=sol;
+      var status=[];
+      if(tr.shifting)status.push('SHIFTING');
+      if(tr.overTemp)status.push('OVER TEMP');
+      if(tr.tccLocked)status.push('TCC LOCKED');
+      document.getElementById('transStatus').textContent=status.length?status.join(', '):'Normal';
+    }else{
+      document.getElementById('transCard').style.display='none';
+    }
 
     document.getElementById('footer').textContent='Updated: '+new Date().toLocaleTimeString();
   }).catch(function(){});

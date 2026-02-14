@@ -1,5 +1,6 @@
 #include "MQTTHandler.h"
 #include "ECU.h"
+#include "TransmissionManager.h"
 #include <ArduinoJson.h>
 
 MQTTHandler::MQTTHandler(Scheduler* ts)
@@ -52,7 +53,23 @@ void MQTTHandler::publishState() {
     doc["cranking"] = s.cranking;
     doc["sequential"] = s.sequentialMode;
 
-    char buf[512];
+    // Transmission
+    TransmissionManager* trans = _ecu->getTransmission();
+    if (trans) {
+        const TransmissionState& ts = trans->getState();
+        JsonObject transObj = doc["trans"].to<JsonObject>();
+        transObj["gear"] = TransmissionManager::gearToString(ts.currentGear);
+        transObj["mlps"] = TransmissionManager::mlpsToString(ts.mlpsPosition);
+        transObj["oss"] = ts.ossRpm;
+        transObj["tss"] = ts.tssRpm;
+        transObj["tft"] = ts.tftTempF;
+        transObj["tcc"] = ts.tccDuty;
+        transObj["epc"] = ts.epcDuty;
+        transObj["shift"] = ts.shifting;
+        transObj["slip"] = ts.slipRpm;
+    }
+
+    char buf[768];
     size_t len = serializeJson(doc, buf, sizeof(buf));
     _client.publish("ecu/state", 0, false, buf, len);
 }

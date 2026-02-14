@@ -6,6 +6,7 @@
 #include "AlternatorControl.h"
 #include "SensorManager.h"
 #include "CJ125Controller.h"
+#include "TransmissionManager.h"
 #include "FuelManager.h"
 #include "TuneTable.h"
 #include "PinExpander.h"
@@ -275,6 +276,31 @@ void WebHandler::setupRoutes() {
                     bk["ready"] = cj->isReady(b);
                 }
             }
+
+            // Transmission
+            TransmissionManager* trans = _ecu->getTransmission();
+            JsonObject transObj = doc["transmission"].to<JsonObject>();
+            transObj["enabled"] = (trans != nullptr);
+            if (trans) {
+                const TransmissionState& ts = trans->getState();
+                transObj["type"] = TransmissionManager::typeToString(trans->getType());
+                transObj["gear"] = TransmissionManager::gearToString(ts.currentGear);
+                transObj["targetGear"] = TransmissionManager::gearToString(ts.targetGear);
+                transObj["mlps"] = TransmissionManager::mlpsToString(ts.mlpsPosition);
+                transObj["ossRpm"] = ts.ossRpm;
+                transObj["tssRpm"] = ts.tssRpm;
+                transObj["tftTempF"] = ts.tftTempF;
+                transObj["tccDuty"] = ts.tccDuty;
+                transObj["epcDuty"] = ts.epcDuty;
+                transObj["ssA"] = ts.ssA;
+                transObj["ssB"] = ts.ssB;
+                transObj["ssC"] = ts.ssC;
+                transObj["ssD"] = ts.ssD;
+                transObj["tccLocked"] = ts.tccLocked;
+                transObj["shifting"] = ts.shifting;
+                transObj["slipRpm"] = ts.slipRpm;
+                transObj["overTemp"] = ts.overTemp;
+            }
         }
         doc["cpuLoad0"] = getCpuLoadCore0();
         doc["cpuLoad1"] = getCpuLoadCore1();
@@ -461,6 +487,21 @@ void WebHandler::setupRoutes() {
             doc["closedLoopMaxRpm"] = proj->closedLoopMaxRpm;
             doc["closedLoopMaxMapKpa"] = proj->closedLoopMaxMapKpa;
             doc["cj125Enabled"] = proj->cj125Enabled;
+            // Transmission
+            doc["transType"] = proj->transType;
+            doc["upshift12Rpm"] = proj->upshift12Rpm;
+            doc["upshift23Rpm"] = proj->upshift23Rpm;
+            doc["upshift34Rpm"] = proj->upshift34Rpm;
+            doc["downshift21Rpm"] = proj->downshift21Rpm;
+            doc["downshift32Rpm"] = proj->downshift32Rpm;
+            doc["downshift43Rpm"] = proj->downshift43Rpm;
+            doc["tccLockRpm"] = proj->tccLockRpm;
+            doc["tccLockGear"] = proj->tccLockGear;
+            doc["tccApplyRate"] = proj->tccApplyRate;
+            doc["epcBaseDuty"] = proj->epcBaseDuty;
+            doc["epcShiftBoost"] = proj->epcShiftBoost;
+            doc["shiftTimeMs"] = proj->shiftTimeMs;
+            doc["maxTftTempF"] = proj->maxTftTempF;
             String json;
             serializeJson(doc, json);
             request->send(200, "application/json", json);
@@ -542,6 +583,25 @@ void WebHandler::setupRoutes() {
         proj->closedLoopMaxRpm = data["closedLoopMaxRpm"] | proj->closedLoopMaxRpm;
         proj->closedLoopMaxMapKpa = data["closedLoopMaxMapKpa"] | proj->closedLoopMaxMapKpa;
         if (data["cj125Enabled"].is<bool>()) proj->cj125Enabled = data["cj125Enabled"].as<bool>();
+
+        // Transmission config
+        {
+            uint8_t newTransType = data["transType"] | proj->transType;
+            if (newTransType != proj->transType) { proj->transType = newTransType; needsReboot = true; }
+        }
+        proj->upshift12Rpm = data["upshift12Rpm"] | proj->upshift12Rpm;
+        proj->upshift23Rpm = data["upshift23Rpm"] | proj->upshift23Rpm;
+        proj->upshift34Rpm = data["upshift34Rpm"] | proj->upshift34Rpm;
+        proj->downshift21Rpm = data["downshift21Rpm"] | proj->downshift21Rpm;
+        proj->downshift32Rpm = data["downshift32Rpm"] | proj->downshift32Rpm;
+        proj->downshift43Rpm = data["downshift43Rpm"] | proj->downshift43Rpm;
+        proj->tccLockRpm = data["tccLockRpm"] | proj->tccLockRpm;
+        proj->tccLockGear = data["tccLockGear"] | proj->tccLockGear;
+        proj->tccApplyRate = data["tccApplyRate"] | proj->tccApplyRate;
+        proj->epcBaseDuty = data["epcBaseDuty"] | proj->epcBaseDuty;
+        proj->epcShiftBoost = data["epcShiftBoost"] | proj->epcShiftBoost;
+        proj->shiftTimeMs = data["shiftTimeMs"] | proj->shiftTimeMs;
+        proj->maxTftTempF = data["maxTftTempF"] | proj->maxTftTempF;
 
         bool saved = _config->updateConfig("/config.txt", *proj);
 
@@ -765,24 +825,86 @@ void WebHandler::setupRoutes() {
                 o["pin"] = pcf.getSDA(); o["name"] = "I2C_SDA"; o["type"] = "I2C"; o["mode"] = "ADS1115 @ 0x48 (CJ125_UR)";
             }
 
-            // PCF8575 expander info
-            JsonObject expander = doc["expander"].to<JsonObject>();
-            expander["type"] = "MCP23017";
-            expander["address"] = "0x20";
-            expander["ready"] = pcf.isReady();
-            expander["sda"] = pcf.getSDA();
-            expander["scl"] = pcf.getSCL();
-            if (pcf.isReady()) {
-                uint16_t raw = pcf.readAll();
-                JsonArray pins = expander["pins"].to<JsonArray>();
-                const char* pcfNames[] = {"FUEL_PUMP","TACH_OUT","CEL","INJ_4","INJ_5","INJ_6","INJ_7","INJ_8",
-                                           "SPI_SS_1","SPI_SS_2","SPARE_10","SPARE_11","SPARE_12","SPARE_13","SPARE_14","SPARE_15"};
-                for (uint8_t i = 0; i < 16; i++) {
-                    JsonObject p = pins.add<JsonObject>();
-                    p["pcfPin"] = i;
-                    p["globalPin"] = PCF_PIN_OFFSET + i;
-                    p["name"] = pcfNames[i];
-                    p["value"] = (raw & (1 << i)) ? "HIGH" : "LOW";
+            // MCP23017 expander #0
+            JsonArray expanders = doc["expanders"].to<JsonArray>();
+            {
+                JsonObject exp0 = expanders.add<JsonObject>();
+                exp0["index"] = 0;
+                exp0["type"] = "MCP23017";
+                char addrStr[6]; snprintf(addrStr, sizeof(addrStr), "0x%02X", pcf.getAddress(0));
+                exp0["address"] = addrStr;
+                exp0["ready"] = pcf.isReady(0);
+                exp0["sda"] = pcf.getSDA();
+                exp0["scl"] = pcf.getSCL();
+                if (pcf.isReady(0)) {
+                    uint16_t raw = pcf.readAll(0);
+                    JsonArray pins = exp0["pins"].to<JsonArray>();
+                    const char* pcfNames[] = {"FUEL_PUMP","TACH_OUT","CEL","INJ_4","INJ_5","INJ_6","INJ_7","INJ_8",
+                                               "SPI_SS_1","SPI_SS_2","SPARE_10","SPARE_11","SPARE_12","SPARE_13","SPARE_14","SPARE_15"};
+                    for (uint8_t i = 0; i < 16; i++) {
+                        JsonObject p = pins.add<JsonObject>();
+                        p["pcfPin"] = i;
+                        p["globalPin"] = PCF_PIN_OFFSET + i;
+                        p["name"] = pcfNames[i];
+                        p["value"] = (raw & (1 << i)) ? "HIGH" : "LOW";
+                    }
+                }
+            }
+            // MCP23017 expander #1 (transmission, 5V via PCA9306)
+            {
+                JsonObject exp1 = expanders.add<JsonObject>();
+                exp1["index"] = 1;
+                exp1["type"] = "MCP23017";
+                char addrStr[6]; snprintf(addrStr, sizeof(addrStr), "0x%02X", pcf.getAddress(1));
+                exp1["address"] = addrStr;
+                exp1["ready"] = pcf.isReady(1);
+                exp1["sda"] = pcf.getSDA();
+                exp1["scl"] = pcf.getSCL();
+                exp1["note"] = "5V via PCA9306DCUR level shifter";
+                if (pcf.isReady(1)) {
+                    uint16_t raw = pcf.readAll(1);
+                    JsonArray pins = exp1["pins"].to<JsonArray>();
+                    const char* exp1Names[] = {"SS_A","SS_B","SS_C","SS_D",
+                                                "SPARE_4","SPARE_5","SPARE_6","SPARE_7",
+                                                "SPARE_8","SPARE_9","SPARE_10","SPARE_11",
+                                                "SPARE_12","SPARE_13","SPARE_14","SPARE_15"};
+                    for (uint8_t i = 0; i < 16; i++) {
+                        JsonObject p = pins.add<JsonObject>();
+                        p["pcfPin"] = i;
+                        p["globalPin"] = PCF_PIN_OFFSET + 16 + i;
+                        p["name"] = exp1Names[i];
+                        p["value"] = (raw & (1 << i)) ? "HIGH" : "LOW";
+                    }
+                }
+            }
+
+            // Transmission PWM outputs
+            if (_ecu && _ecu->getTransmission()) {
+                const TransmissionState& ts = _ecu->getTransmission()->getState();
+                {
+                    JsonObject o = outputs.add<JsonObject>();
+                    o["pin"] = 35; o["name"] = "TCC_PWM"; o["type"] = "pwm";
+                    o["mode"] = "LEDC 200Hz"; o["desc"] = "Torque converter clutch PWM via MOSFET driver";
+                    o["percent"] = ts.tccDuty;
+                }
+                {
+                    JsonObject o = outputs.add<JsonObject>();
+                    o["pin"] = 36; o["name"] = "EPC_PWM"; o["type"] = "pwm";
+                    o["mode"] = "LEDC 5kHz"; o["desc"] = "Electronic pressure control PWM via MOSFET driver";
+                    o["percent"] = ts.epcDuty;
+                }
+                // Speed sensor inputs
+                {
+                    JsonObject o = inputs.add<JsonObject>();
+                    o["pin"] = 33; o["name"] = "OSS"; o["type"] = "digital"; o["mode"] = "ISR RISING";
+                    o["desc"] = "Output shaft speed, 8 pulses/rev";
+                    o["rpm"] = ts.ossRpm;
+                }
+                {
+                    JsonObject o = inputs.add<JsonObject>();
+                    o["pin"] = 34; o["name"] = "TSS"; o["type"] = "digital"; o["mode"] = "ISR RISING";
+                    o["desc"] = "Turbine shaft speed, 8 pulses/rev";
+                    o["rpm"] = ts.tssRpm;
                 }
             }
 

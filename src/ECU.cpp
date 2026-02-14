@@ -8,6 +8,7 @@
 #include "SensorManager.h"
 #include "CJ125Controller.h"
 #include "ADS1115Reader.h"
+#include "TransmissionManager.h"
 #include "TuneTable.h"
 #include "Config.h"
 #include "Logger.h"
@@ -36,6 +37,16 @@ static const uint8_t PIN_HEATER_OUT_2 = 20;  // LEDC — heater PWM bank 2
 static const uint8_t PIN_CJ125_UA_1   = 3;   // ADC — CJ125 lambda output bank 1
 static const uint8_t PIN_CJ125_UA_2   = 4;   // ADC — CJ125 lambda output bank 2
 
+// Transmission control pins (second MCP23017 at 0x21, pin range 116-131)
+static const uint8_t PIN_SS_A        = 116; // MCP23017 #1 P0 — Shift Solenoid A
+static const uint8_t PIN_SS_B        = 117; // MCP23017 #1 P1 — Shift Solenoid B
+static const uint8_t PIN_SS_C        = 118; // MCP23017 #1 P2 — Shift Solenoid C (4R100 only)
+static const uint8_t PIN_SS_D        = 119; // MCP23017 #1 P3 — Coast Clutch (4R100 only)
+static const uint8_t PIN_TCC_PWM     = 35;  // LEDC ch4 — Torque converter clutch
+static const uint8_t PIN_EPC_PWM     = 36;  // LEDC ch6 — Electronic pressure control
+static const uint8_t PIN_OSS         = 33;  // ISR — Output shaft speed
+static const uint8_t PIN_TSS         = 34;  // ISR — Turbine shaft speed
+
 static const uint8_t COIL_PINS[]     = {10, 11, 12, 13, 14, 15, 16, 17};
 // INJ 1-3: native GPIO for best timing; INJ 4-8: PCF8575 P3-P7
 static const uint8_t INJECTOR_PINS[] = {18, 21, 40, 103, 104, 105, 106, 107};
@@ -43,7 +54,7 @@ static const uint8_t INJECTOR_PINS[] = {18, 21, 40, 103, 104, 105, 106, 107};
 ECU::ECU(Scheduler* ts)
     : _ts(ts), _tUpdate(nullptr), _crankTeeth(36), _crankMissing(1),
       _realtimeTaskHandle(nullptr), _cj125(nullptr), _ads1115(nullptr),
-      _cj125Enabled(false) {
+      _trans(nullptr), _cj125Enabled(false), _transType(0) {
     memset(&_state, 0, sizeof(_state));
     memset(_firingOrder, 0, sizeof(_firingOrder));
     // Default SBC V8 firing order
@@ -70,6 +81,7 @@ ECU::~ECU() {
     delete _sensors;
     delete _cj125;
     delete _ads1115;
+    delete _trans;
 }
 
 void ECU::configure(const ProjectInfo& proj) {
@@ -102,6 +114,13 @@ void ECU::configure(const ProjectInfo& proj) {
 
     // CJ125 wideband O2
     _cj125Enabled = proj.cj125Enabled;
+
+    // Transmission
+    _transType = proj.transType;
+    if (_transType > 0) {
+        _trans = new TransmissionManager();
+        _trans->configure(proj);
+    }
 
     // Create 16x16 tune tables with defaults
     static const float defaultRpmAxis[16] = {
@@ -176,6 +195,11 @@ void ECU::begin() {
     xPinMode(PIN_CEL, OUTPUT);
     xDigitalWrite(PIN_CEL, LOW);
 
+    // Initialize second MCP23017 for transmission (0x21, 5V via level shifter)
+    if (_transType > 0) {
+        PinExpander::instance().begin(1, I2C_SDA, I2C_SCL, 0x21);
+    }
+
     // CJ125 wideband O2 controller
     if (_cj125Enabled) {
         // SPI chip selects via MCP23017 — deselect before init
@@ -195,6 +219,20 @@ void ECU::begin() {
 
         _sensors->setCJ125(_cj125);
         Log.info("ECU", "CJ125 wideband O2 enabled");
+    }
+
+    // Transmission controller
+    if (_trans) {
+        // ADS1115 shared: CJ125 uses CH0/CH1, transmission uses CH2/CH3
+        if (!_ads1115) {
+            _ads1115 = new ADS1115Reader();
+            _ads1115->begin(0x48);
+        }
+        _trans->setADS1115(_ads1115);
+        _trans->begin(PIN_SS_A, PIN_SS_B, PIN_SS_C, PIN_SS_D,
+                      PIN_TCC_PWM, PIN_EPC_PWM, PIN_OSS, PIN_TSS);
+        Log.info("ECU", "Transmission controller enabled: %s",
+                 TransmissionManager::typeToString(_trans->getType()));
     }
 
     // Sensor + fuel calc update task (10ms on Core 0)
@@ -250,6 +288,11 @@ void ECU::update() {
 
     // Alternator control (100ms effective via PID internal dt)
     _alternator->update(_state.batteryVoltage);
+
+    // Transmission control
+    if (_trans) {
+        _trans->update(_state.rpm, _state.tps, _state.batteryVoltage);
+    }
 }
 
 void ECU::realtimeTask(void* param) {

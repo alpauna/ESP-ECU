@@ -98,6 +98,42 @@ button:hover{background:#45a049;}
 <input type='number' id='closedLoopMaxMapKpa' step='1'>
 </fieldset>
 
+<fieldset><legend>Transmission</legend>
+<label>Type (requires reboot)</label>
+<select id='transType' onchange='toggleTransFields()'>
+<option value='0'>None</option>
+<option value='1'>Ford 4R70W</option>
+<option value='2'>Ford 4R100</option>
+</select>
+<div id='transFields' style='display:none'>
+<div class='row2'>
+<div><label>Upshift 1-2 RPM</label><input type='number' id='upshift12Rpm'></div>
+<div><label>Upshift 2-3 RPM</label><input type='number' id='upshift23Rpm'></div>
+</div>
+<div class='row2'>
+<div><label>Upshift 3-4 RPM</label><input type='number' id='upshift34Rpm'></div>
+<div><label>Downshift 2-1 RPM</label><input type='number' id='downshift21Rpm'></div>
+</div>
+<div class='row2'>
+<div><label>Downshift 3-2 RPM</label><input type='number' id='downshift32Rpm'></div>
+<div><label>Downshift 4-3 RPM</label><input type='number' id='downshift43Rpm'></div>
+</div>
+<div class='row2'>
+<div><label>TCC Lock RPM</label><input type='number' id='tccLockRpm'></div>
+<div><label>TCC Lock Gear</label><input type='number' id='tccLockGear' min='1' max='4'></div>
+</div>
+<div class='row2'>
+<div><label>TCC Apply Rate (%/100ms)</label><input type='number' id='tccApplyRate' step='0.5'></div>
+<div><label>Shift Time (ms)</label><input type='number' id='shiftTimeMs'></div>
+</div>
+<div class='row2'>
+<div><label>EPC Base Duty (%)</label><input type='number' id='epcBaseDuty' step='1'></div>
+<div><label>EPC Shift Boost (%)</label><input type='number' id='epcShiftBoost' step='1'></div>
+</div>
+<label>Max TFT Temp (F)</label><input type='number' id='maxTftTempF' step='5'>
+</div>
+</fieldset>
+
 <fieldset><legend>WiFi</legend>
 <label>SSID</label><input type='text' id='wifiSSID'>
 <label>Password</label><input type='password' id='wifiPassword' placeholder='Leave blank to keep current'>
@@ -167,6 +203,21 @@ function load(){
     document.getElementById('closedLoopMinRpm').value=d.closedLoopMinRpm||800;
     document.getElementById('closedLoopMaxRpm').value=d.closedLoopMaxRpm||4000;
     document.getElementById('closedLoopMaxMapKpa').value=d.closedLoopMaxMapKpa||80;
+    document.getElementById('transType').value=d.transType||0;
+    document.getElementById('upshift12Rpm').value=d.upshift12Rpm||1500;
+    document.getElementById('upshift23Rpm').value=d.upshift23Rpm||2500;
+    document.getElementById('upshift34Rpm').value=d.upshift34Rpm||3000;
+    document.getElementById('downshift21Rpm').value=d.downshift21Rpm||1200;
+    document.getElementById('downshift32Rpm').value=d.downshift32Rpm||1800;
+    document.getElementById('downshift43Rpm').value=d.downshift43Rpm||2200;
+    document.getElementById('tccLockRpm').value=d.tccLockRpm||1500;
+    document.getElementById('tccLockGear').value=d.tccLockGear||3;
+    document.getElementById('tccApplyRate').value=d.tccApplyRate||5.0;
+    document.getElementById('epcBaseDuty').value=d.epcBaseDuty||50;
+    document.getElementById('epcShiftBoost').value=d.epcShiftBoost||80;
+    document.getElementById('shiftTimeMs').value=d.shiftTimeMs||500;
+    document.getElementById('maxTftTempF').value=d.maxTftTempF||275;
+    toggleTransFields();
     document.getElementById('wifiSSID').value=d.wifiSSID||'';
     document.getElementById('apFallbackMin').value=Math.round((d.apFallbackSeconds||600)/60);
     document.getElementById('mqttHost').value=d.mqttHost||'';
@@ -204,6 +255,20 @@ function save(e){
     closedLoopMinRpm:parseInt(document.getElementById('closedLoopMinRpm').value),
     closedLoopMaxRpm:parseInt(document.getElementById('closedLoopMaxRpm').value),
     closedLoopMaxMapKpa:parseFloat(document.getElementById('closedLoopMaxMapKpa').value),
+    transType:parseInt(document.getElementById('transType').value),
+    upshift12Rpm:parseInt(document.getElementById('upshift12Rpm').value),
+    upshift23Rpm:parseInt(document.getElementById('upshift23Rpm').value),
+    upshift34Rpm:parseInt(document.getElementById('upshift34Rpm').value),
+    downshift21Rpm:parseInt(document.getElementById('downshift21Rpm').value),
+    downshift32Rpm:parseInt(document.getElementById('downshift32Rpm').value),
+    downshift43Rpm:parseInt(document.getElementById('downshift43Rpm').value),
+    tccLockRpm:parseInt(document.getElementById('tccLockRpm').value),
+    tccLockGear:parseInt(document.getElementById('tccLockGear').value),
+    tccApplyRate:parseFloat(document.getElementById('tccApplyRate').value),
+    epcBaseDuty:parseFloat(document.getElementById('epcBaseDuty').value),
+    epcShiftBoost:parseFloat(document.getElementById('epcShiftBoost').value),
+    shiftTimeMs:parseInt(document.getElementById('shiftTimeMs').value),
+    maxTftTempF:parseFloat(document.getElementById('maxTftTempF').value),
     wifiSSID:document.getElementById('wifiSSID').value,
     apFallbackSeconds:parseInt(document.getElementById('apFallbackMin').value)*60,
     mqttHost:document.getElementById('mqttHost').value,
@@ -229,6 +294,7 @@ function ftpEnable(min){fetch('/ftp',{method:'POST',headers:{'Content-Type':'app
 function ftpDisable(){fetch('/ftp',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'disable'})}).then(function(){checkFtp();});}
 function checkFtp(){fetch('/ftp').then(function(r){return r.json();}).then(function(d){document.getElementById('ftpStatus').textContent=d.active?'Active ('+d.remainingMinutes+' min remaining)':'Inactive';}).catch(function(){document.getElementById('ftpStatus').textContent='Unknown';});}
 
+function toggleTransFields(){document.getElementById('transFields').style.display=document.getElementById('transType').value!=='0'?'block':'none';}
 load();checkFtp();
 fetch('/theme').then(function(r){return r.json()}).then(function(d){var t=d.theme||'light';document.documentElement.dataset.theme=t;localStorage.setItem('hp-theme',t);}).catch(function(){});
 </script>

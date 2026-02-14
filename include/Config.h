@@ -45,6 +45,21 @@ struct ProjectInfo {
     uint16_t closedLoopMaxRpm;
     float closedLoopMaxMapKpa;
     bool cj125Enabled;
+    // Transmission
+    uint8_t transType;              // 0=NONE, 1=4R70W, 2=4R100
+    uint16_t upshift12Rpm;          // default 1500
+    uint16_t upshift23Rpm;          // default 2500
+    uint16_t upshift34Rpm;          // default 3000
+    uint16_t downshift21Rpm;        // default 1200
+    uint16_t downshift32Rpm;        // default 1800
+    uint16_t downshift43Rpm;        // default 2200
+    uint16_t tccLockRpm;            // default 1500
+    uint8_t tccLockGear;            // default 3
+    float tccApplyRate;             // default 5.0 (%/100ms)
+    float epcBaseDuty;              // default 50.0%
+    float epcShiftBoost;            // default 80.0%
+    uint16_t shiftTimeMs;           // default 500
+    float maxTftTempF;              // default 275.0
 };
 
 class Config {

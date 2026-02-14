@@ -12,6 +12,7 @@ class AlternatorControl;
 class SensorManager;
 class CJ125Controller;
 class ADS1115Reader;
+class TransmissionManager;
 struct ProjectInfo;
 
 struct EngineState {
@@ -55,6 +56,7 @@ public:
     AlternatorControl* getAlternator() { return _alternator; }
     SensorManager* getSensorManager() { return _sensors; }
     CJ125Controller* getCJ125() { return _cj125; }
+    TransmissionManager* getTransmission() { return _trans; }
 
 private:
     Scheduler* _ts;
@@ -70,7 +72,9 @@ private:
     SensorManager* _sensors;
     CJ125Controller* _cj125;
     ADS1115Reader* _ads1115;
+    TransmissionManager* _trans;
     bool _cj125Enabled;
+    uint8_t _transType;
 
     uint8_t _firingOrder[12];
     uint8_t _crankTeeth;

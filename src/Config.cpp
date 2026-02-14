@@ -211,6 +211,22 @@ bool Config::loadConfig(const char* filename, ProjectInfo& proj) {
     proj.closedLoopMaxMapKpa = doc["o2"]["closedLoopMaxMapKpa"] | 80.0f;
     proj.cj125Enabled = doc["engine"]["cj125Enabled"] | false;
 
+    // Transmission
+    proj.transType = doc["transmission"]["type"] | 0;
+    proj.upshift12Rpm = doc["transmission"]["upshift12Rpm"] | 1500;
+    proj.upshift23Rpm = doc["transmission"]["upshift23Rpm"] | 2500;
+    proj.upshift34Rpm = doc["transmission"]["upshift34Rpm"] | 3000;
+    proj.downshift21Rpm = doc["transmission"]["downshift21Rpm"] | 1200;
+    proj.downshift32Rpm = doc["transmission"]["downshift32Rpm"] | 1800;
+    proj.downshift43Rpm = doc["transmission"]["downshift43Rpm"] | 2200;
+    proj.tccLockRpm = doc["transmission"]["tccLockRpm"] | 1500;
+    proj.tccLockGear = doc["transmission"]["tccLockGear"] | 3;
+    proj.tccApplyRate = doc["transmission"]["tccApplyRate"] | 5.0f;
+    proj.epcBaseDuty = doc["transmission"]["epcBaseDuty"] | 50.0f;
+    proj.epcShiftBoost = doc["transmission"]["epcShiftBoost"] | 80.0f;
+    proj.shiftTimeMs = doc["transmission"]["shiftTimeMs"] | 500;
+    proj.maxTftTempF = doc["transmission"]["maxTftTempF"] | 275.0f;
+
     Serial.printf("Config loaded: %d cyl, %d-%d trigger\n", proj.cylinders, proj.crankTeeth, proj.crankMissing);
     return true;
 }
@@ -284,6 +300,22 @@ bool Config::saveConfig(const char* filename, ProjectInfo& proj) {
     o2["closedLoopMaxRpm"] = proj.closedLoopMaxRpm;
     o2["closedLoopMaxMapKpa"] = proj.closedLoopMaxMapKpa;
 
+    JsonObject trans = doc["transmission"].to<JsonObject>();
+    trans["type"] = proj.transType;
+    trans["upshift12Rpm"] = proj.upshift12Rpm;
+    trans["upshift23Rpm"] = proj.upshift23Rpm;
+    trans["upshift34Rpm"] = proj.upshift34Rpm;
+    trans["downshift21Rpm"] = proj.downshift21Rpm;
+    trans["downshift32Rpm"] = proj.downshift32Rpm;
+    trans["downshift43Rpm"] = proj.downshift43Rpm;
+    trans["tccLockRpm"] = proj.tccLockRpm;
+    trans["tccLockGear"] = proj.tccLockGear;
+    trans["tccApplyRate"] = proj.tccApplyRate;
+    trans["epcBaseDuty"] = proj.epcBaseDuty;
+    trans["epcShiftBoost"] = proj.epcShiftBoost;
+    trans["shiftTimeMs"] = proj.shiftTimeMs;
+    trans["maxTftTempF"] = proj.maxTftTempF;
+
     serializeJson(doc, file);
     file.close();
     return true;
@@ -347,6 +379,21 @@ bool Config::updateConfig(const char* filename, ProjectInfo& proj) {
     doc["o2"]["closedLoopMinRpm"] = proj.closedLoopMinRpm;
     doc["o2"]["closedLoopMaxRpm"] = proj.closedLoopMaxRpm;
     doc["o2"]["closedLoopMaxMapKpa"] = proj.closedLoopMaxMapKpa;
+
+    doc["transmission"]["type"] = proj.transType;
+    doc["transmission"]["upshift12Rpm"] = proj.upshift12Rpm;
+    doc["transmission"]["upshift23Rpm"] = proj.upshift23Rpm;
+    doc["transmission"]["upshift34Rpm"] = proj.upshift34Rpm;
+    doc["transmission"]["downshift21Rpm"] = proj.downshift21Rpm;
+    doc["transmission"]["downshift32Rpm"] = proj.downshift32Rpm;
+    doc["transmission"]["downshift43Rpm"] = proj.downshift43Rpm;
+    doc["transmission"]["tccLockRpm"] = proj.tccLockRpm;
+    doc["transmission"]["tccLockGear"] = proj.tccLockGear;
+    doc["transmission"]["tccApplyRate"] = proj.tccApplyRate;
+    doc["transmission"]["epcBaseDuty"] = proj.epcBaseDuty;
+    doc["transmission"]["epcShiftBoost"] = proj.epcShiftBoost;
+    doc["transmission"]["shiftTimeMs"] = proj.shiftTimeMs;
+    doc["transmission"]["maxTftTempF"] = proj.maxTftTempF;
 
     file = SD.open(filename, FILE_WRITE);
     if (!file) return false;

@@ -4,7 +4,7 @@
 #include <Adafruit_MCP23X17.h>
 #include <esp_log.h>
 
-static Adafruit_MCP23X17* _mcp = nullptr;
+static Adafruit_MCP23X17* _mcp[PCF_MAX_EXPANDERS] = {nullptr, nullptr};
 
 PinExpander& PinExpander::instance() {
     static PinExpander inst;
@@ -12,11 +12,20 @@ PinExpander& PinExpander::instance() {
 }
 
 bool PinExpander::begin(uint8_t sda, uint8_t scl, uint8_t addr) {
+    return begin(0, sda, scl, addr);
+}
+
+bool PinExpander::begin(uint8_t index, uint8_t sda, uint8_t scl, uint8_t addr) {
+    if (index >= PCF_MAX_EXPANDERS) return false;
+
     _sda = sda;
     _scl = scl;
-    _addr = addr;
+    _addr[index] = addr;
 
-    Wire.begin(sda, scl);
+    if (!_wireInitialized) {
+        Wire.begin(sda, scl);
+        _wireInitialized = true;
+    }
 
     // Suppress Wire I2C error spam during probe
     esp_log_level_set("Wire", ESP_LOG_NONE);
@@ -27,55 +36,60 @@ bool PinExpander::begin(uint8_t sda, uint8_t scl, uint8_t addr) {
 
     if (probeErr != 0) {
         esp_log_level_set("Wire", ESP_LOG_ERROR);
-        Log.warn("MCP", "MCP23017 not found at 0x%02X — expander disabled", addr);
-        _ready = false;
+        Log.warn("MCP", "MCP23017 #%d not found at 0x%02X — expander disabled", index, addr);
+        _ready[index] = false;
         return false;
     }
 
-    // Device responded — full initialization (keep Wire logging suppressed
-    // in case of transient errors during multi-register setup)
-    _mcp = new Adafruit_MCP23X17();
-    bool ok = _mcp->begin_I2C(addr, &Wire);
+    // Device responded — full initialization
+    _mcp[index] = new Adafruit_MCP23X17();
+    bool ok = _mcp[index]->begin_I2C(addr, &Wire);
 
     // Restore Wire logging
     esp_log_level_set("Wire", ESP_LOG_ERROR);
 
     if (!ok) {
-        Log.error("MCP", "MCP23017 init failed at 0x%02X", addr);
-        delete _mcp;
-        _mcp = nullptr;
-        _ready = false;
+        Log.error("MCP", "MCP23017 #%d init failed at 0x%02X", index, addr);
+        delete _mcp[index];
+        _mcp[index] = nullptr;
+        _ready[index] = false;
         return false;
     }
 
     // Default all pins to INPUT (high-impedance)
     for (uint8_t i = 0; i < 16; i++) {
-        _mcp->pinMode(i, INPUT);
+        _mcp[index]->pinMode(i, INPUT);
     }
 
-    _ready = true;
-    Log.info("MCP", "MCP23017 initialized at 0x%02X (SDA=%d, SCL=%d)", addr, sda, scl);
+    _ready[index] = true;
+    Log.info("MCP", "MCP23017 #%d initialized at 0x%02X (SDA=%d, SCL=%d)", index, addr, sda, scl);
     return true;
 }
 
 void PinExpander::pinModeExp(uint8_t expPin, uint8_t mode) {
-    if (!_mcp || expPin >= PCF_PIN_COUNT) return;
-    _mcp->pinMode(expPin, mode);
+    uint8_t idx = expPin / PCF_PIN_COUNT;
+    uint8_t localPin = expPin % PCF_PIN_COUNT;
+    if (idx >= PCF_MAX_EXPANDERS || !_mcp[idx]) return;
+    _mcp[idx]->pinMode(localPin, mode);
 }
 
 void PinExpander::writePin(uint8_t expPin, uint8_t val) {
-    if (!_mcp || expPin >= PCF_PIN_COUNT) return;
-    _mcp->digitalWrite(expPin, val);
+    uint8_t idx = expPin / PCF_PIN_COUNT;
+    uint8_t localPin = expPin % PCF_PIN_COUNT;
+    if (idx >= PCF_MAX_EXPANDERS || !_mcp[idx]) return;
+    _mcp[idx]->digitalWrite(localPin, val);
 }
 
 uint8_t PinExpander::readPin(uint8_t expPin) {
-    if (!_mcp || expPin >= PCF_PIN_COUNT) return LOW;
-    return _mcp->digitalRead(expPin);
+    uint8_t idx = expPin / PCF_PIN_COUNT;
+    uint8_t localPin = expPin % PCF_PIN_COUNT;
+    if (idx >= PCF_MAX_EXPANDERS || !_mcp[idx]) return LOW;
+    return _mcp[idx]->digitalRead(localPin);
 }
 
-uint16_t PinExpander::readAll() {
-    if (!_mcp) return 0x0000;
-    return _mcp->readGPIOAB();
+uint16_t PinExpander::readAll(uint8_t index) {
+    if (index >= PCF_MAX_EXPANDERS || !_mcp[index]) return 0x0000;
+    return _mcp[index]->readGPIOAB();
 }
 
 // --- Global helpers ---
