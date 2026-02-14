@@ -11,7 +11,7 @@ ESP32-S3 Engine Control Unit for gas engines. Controls coil-over-plug ignition (
 - **3D tune tables** -- 16x16 RPM x MAP interpolated lookup tables for spark advance, volumetric efficiency, and AFR targets. Editable via web UI
 - **Alternator field control** -- PID-regulated PWM output for alternator voltage regulation
 - **Crank/cam decoding** -- 36-1 trigger wheel with cam phase detection for sequential mode
-- **Automatic transmission control** -- Ford 4R70W and 4R100 shift solenoid control, TCC PWM lockup, EPC line pressure, OSS/TSS speed sensing, TFT temp monitoring, and MLPS gear range detection via second MCP23017 I2C expander (5V via PCA9306 level shifter)
+- **Automatic transmission control** -- Ford 4R70W and 4R100 shift solenoid control, TCC PWM lockup, EPC line pressure, TFT temp monitoring, and MLPS gear range detection via second MCP23017 I2C expander (5V via PCA9306 level shifter). OSS/TSS speed sensors disabled (no free native GPIO)
 - **Remote access** -- REST API, WebSocket, and MQTT for monitoring and tuning
 - **Live dashboard** -- Real-time gauges and status at `/dashboard`
 - **Web-based tuning** -- 16x16 table editor with live cursor at `/tune`
@@ -60,6 +60,8 @@ Cores communicate via shared `EngineState` struct with volatile fields.
 | `src/SensorManager.cpp` | ADC reads: O2, MAP, TPS, CLT, IAT, VBAT |
 | `src/CJ125Controller.cpp` | Dual-bank CJ125 wideband O2 controller (SPI + heater PID) |
 | `src/ADS1115Reader.cpp` | ADS1115 I2C ADC wrapper for CJ125 Nernst cell temp |
+| `src/TransmissionManager.cpp` | Ford 4R70W/4R100 automatic transmission controller |
+| `src/PinExpander.cpp` | Multi-device MCP23017 I2C GPIO expander manager |
 | `src/Config.cpp` | SD card and JSON configuration |
 | `src/Logger.cpp` | Multi-output logging with tar.gz rotation |
 | `src/WebHandler.cpp` | Web server and REST API |
@@ -83,9 +85,11 @@ Cores communicate via shared `EngineState` struct with volatile fields.
 | CJ125_UA Bank 2 | 4 | ADC -- wideband O2 lambda/pump current |
 | MAP | 5 | ADC -- Manifold Absolute Pressure |
 | TPS | 6 | ADC -- Throttle Position Sensor |
-| CLT | 7 | ADC -- Coolant Temperature |
-| IAT | 8 | ADC -- Intake Air Temperature |
+| CLT | 7 | ADC -- Coolant Temperature (NTC thermistor) |
+| IAT | 8 | ADC -- Intake Air Temperature (NTC thermistor) |
 | VBAT | 9 | ADC -- Battery voltage (47k/10k divider, 5.7:1) |
+| OSS | -- | Output shaft speed (disabled -- no free GPIO) |
+| TSS | -- | Turbine shaft speed (disabled -- no free GPIO) |
 
 **Outputs:**
 
@@ -125,6 +129,26 @@ Cores communicate via shared `EngineState` struct with volatile fields.
 | MCP23017 #0 | 0x20 | GPIO expander -- injectors 4-8, fuel pump, tach, CEL, SPI_SS_1/2 |
 | MCP23017 #1 | 0x21 | GPIO expander -- shift solenoids SS-A/B/C/D (5V via PCA9306) |
 | ADS1115 | 0x48 | 16-bit ADC -- CJ125_UR (CH0/1), TFT temp (CH2), MLPS (CH3) |
+
+**GPIO Allocation Summary:**
+
+All 23 usable native GPIOs (0-21, 38-48) are assigned. GPIO 22-25 do not exist on ESP32-S3. GPIO 26-32 are reserved for SPI flash. GPIO 33-37 are reserved for OPI PSRAM.
+
+| Range | Assignment |
+|-------|------------|
+| 0 | I2C SDA |
+| 1-2 | Crank + Cam ISR inputs |
+| 3-4 | CJ125 wideband O2 ADC |
+| 5-9 | Sensor ADC (MAP, TPS, CLT, IAT, VBAT) |
+| 10-17 | Coil outputs (COP ignition) |
+| 18, 21, 40 | Injector outputs (native GPIO) |
+| 19-20 | CJ125 heater PWM |
+| 38-39 | SD card SPI (MOSI, CS) |
+| 41 | Alternator field PWM |
+| 42 | I2C SCL |
+| 43-44 | UART TX/RX (Serial) |
+| 45-46 | TCC/EPC PWM (strapping pins, OK after boot) |
+| 47-48 | SD card SPI (CLK, MISO) |
 
 ## CJ125 Wideband O2 Controller
 
@@ -169,6 +193,7 @@ All pages served from SD card `/www/` directory.
 | `/` | Landing page with nav cards |
 | `/dashboard` | Live ECU gauges and status |
 | `/tune` | 16x16 table editor with live cursor |
+| `/pins` | GPIO pin map with live state |
 | `/config` | WiFi/MQTT/engine/alternator/sensor settings |
 | `/update` | OTA firmware upload |
 | `/log/view` | Log viewer |

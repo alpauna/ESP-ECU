@@ -896,14 +896,14 @@ void WebHandler::setupRoutes() {
                 // Speed sensor inputs (disabled when pin is 0xFF)
                 {
                     JsonObject o = inputs.add<JsonObject>();
-                    o["pin"] = 5; o["name"] = "OSS"; o["type"] = "digital"; o["mode"] = "ISR RISING";
-                    o["desc"] = "Output shaft speed (8 pulses/rev)";
+                    o["pin"] = "--"; o["name"] = "OSS"; o["type"] = "digital"; o["mode"] = "DISABLED";
+                    o["desc"] = "Output shaft speed — no free GPIO (all native pins assigned)";
                     o["rpm"] = ts.ossRpm;
                 }
                 {
                     JsonObject o = inputs.add<JsonObject>();
-                    o["pin"] = 6; o["name"] = "TSS"; o["type"] = "digital"; o["mode"] = "ISR RISING";
-                    o["desc"] = "Turbine shaft speed (8 pulses/rev)";
+                    o["pin"] = "--"; o["name"] = "TSS"; o["type"] = "digital"; o["mode"] = "DISABLED";
+                    o["desc"] = "Turbine shaft speed — no free GPIO (all native pins assigned)";
                     o["rpm"] = ts.tssRpm;
                 }
             }
