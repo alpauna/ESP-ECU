@@ -1,0 +1,34 @@
+{
+  "Ford 4R70W": {
+    "transType": 1,
+    "upshift12Rpm": 1500,
+    "upshift23Rpm": 2500,
+    "upshift34Rpm": 3000,
+    "downshift21Rpm": 1200,
+    "downshift32Rpm": 1800,
+    "downshift43Rpm": 2200,
+    "tccLockRpm": 1500,
+    "tccLockGear": 3,
+    "tccApplyRate": 5.0,
+    "shiftTimeMs": 500,
+    "epcBaseDuty": 50,
+    "epcShiftBoost": 80,
+    "maxTftTempF": 275
+  },
+  "Ford 4R100": {
+    "transType": 2,
+    "upshift12Rpm": 1800,
+    "upshift23Rpm": 2800,
+    "upshift34Rpm": 3200,
+    "downshift21Rpm": 1400,
+    "downshift32Rpm": 2000,
+    "downshift43Rpm": 2500,
+    "tccLockRpm": 1600,
+    "tccLockGear": 3,
+    "tccApplyRate": 3.0,
+    "shiftTimeMs": 600,
+    "epcBaseDuty": 40,
+    "epcShiftBoost": 85,
+    "maxTftTempF": 275
+  }
+}
