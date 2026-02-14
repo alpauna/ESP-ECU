@@ -11,6 +11,7 @@ ESP32-S3 Engine Control Unit for gas engines. Controls coil-over-plug ignition (
 - **3D tune tables** -- 16x16 RPM x MAP interpolated lookup tables for spark advance, volumetric efficiency, and AFR targets. Editable via web UI
 - **Alternator field control** -- PID-regulated PWM output for alternator voltage regulation
 - **Crank/cam decoding** -- 36-1 trigger wheel with cam phase detection for sequential mode
+- **Automatic transmission control** -- Ford 4R70W and 4R100 shift solenoid control, TCC PWM lockup, EPC line pressure, OSS/TSS speed sensing, TFT temp monitoring, and MLPS gear range detection via second MCP23017 I2C expander (5V via PCA9306 level shifter)
 - **Remote access** -- REST API, WebSocket, and MQTT for monitoring and tuning
 - **Live dashboard** -- Real-time gauges and status at `/dashboard`
 - **Web-based tuning** -- 16x16 table editor with live cursor at `/tune`
