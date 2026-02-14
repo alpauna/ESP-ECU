@@ -29,6 +29,22 @@ nav .brand{font-weight:bold;font-size:16px;margin-right:auto;color:#fff;}
 .trim-bar .bar-fill{height:100%;background:#4CAF50;border-radius:4px;transition:width 0.3s;}
 .trim-bar .pct{width:35px;text-align:right;font-weight:bold;color:var(--text);}
 .dual-gauge{display:flex;gap:15px;justify-content:center;}
+.gear-strip{display:flex;justify-content:center;gap:4px;margin:8px 0 12px;}
+.gear-pos{width:36px;height:36px;display:flex;align-items:center;justify-content:center;border-radius:6px;font-size:16px;font-weight:bold;color:var(--text-muted);background:var(--border);transition:all 0.3s;}
+.gear-pos.active{background:#4CAF50;color:#fff;box-shadow:0 0 8px rgba(76,175,80,0.5);}
+.gear-pos.shifting{background:#ff9800;color:#fff;box-shadow:0 0 8px rgba(255,152,0,0.5);animation:pulse 0.6s infinite alternate;}
+.gear-pos.target{border:2px solid #ff9800;background:var(--border);}
+@keyframes pulse{from{opacity:1}to{opacity:0.6}}
+.gear-main{text-align:center;margin-bottom:8px;}
+.gear-main .big{font-size:56px;font-weight:bold;color:var(--text);line-height:1;}
+.gear-main .sub{font-size:12px;color:var(--text-secondary);margin-top:2px;}
+.gear-main .shift-arrow{font-size:24px;color:#ff9800;font-weight:bold;vertical-align:middle;margin:0 6px;}
+.trans-cols{display:flex;gap:15px;flex-wrap:wrap;}
+.trans-col{flex:1;min-width:160px;}
+.sol-grid{display:flex;gap:6px;flex-wrap:wrap;margin-top:4px;}
+.sol-pill{padding:3px 10px;border-radius:12px;font-size:12px;font-weight:bold;}
+.sol-on{background:#4CAF50;color:#fff;}
+.sol-off{background:var(--border);color:var(--text-muted);}
 .footer{text-align:center;color:var(--text-muted);font-size:11px;margin-top:8px;}
 </style></head><body>
 <nav><span class='brand'>ESP-ECU</span>
@@ -123,22 +139,35 @@ nav .brand{font-weight:bold;font-size:16px;margin-right:auto;color:#fff;}
 
 <!-- Transmission (hidden if not enabled) -->
 <div class='card' id='transCard' style='display:none;grid-column:span 2;'>
-<h3>Transmission</h3>
-<div style='display:flex;gap:15px;flex-wrap:wrap;'>
-<div style='flex:1;min-width:140px;'>
-<div class='gauge'><div class='val' id='transGear' style='font-size:48px;'>P</div><div class='unit'>Gear</div></div>
+<h3 id='transTitle'>Transmission</h3>
+<!-- Gear selector strip: P R N OD D 2 1 -->
+<div class='gear-strip' id='gearStrip'></div>
+<!-- Big gear + shift indicator -->
+<div class='gear-main'>
+<span class='big' id='transGear'>P</span>
+<span class='shift-arrow' id='shiftArrow' style='display:none'></span>
+<span class='big' id='transTarget' style='display:none'></span>
+<div class='sub' id='transGearLabel'>Park</div>
 </div>
-<div style='flex:2;min-width:200px;'>
-<div class='row'><span class='lbl'>MLPS</span><span class='val' id='transMlps'>--</span></div>
-<div class='row'><span class='lbl'>OSS</span><span class='val' id='transOss'>--</span></div>
-<div class='row'><span class='lbl'>TSS</span><span class='val' id='transTss'>--</span></div>
-<div class='row'><span class='lbl'>Slip RPM</span><span class='val' id='transSlip'>--</span></div>
+<!-- Two-column data -->
+<div class='trans-cols'>
+<div class='trans-col'>
+<div class='row'><span class='lbl'>Selector</span><span class='val' id='transMlps'>--</span></div>
+<div class='row'><span class='lbl'>Output Shaft</span><span class='val' id='transOss'>--</span></div>
+<div class='row'><span class='lbl'>Turbine Shaft</span><span class='val' id='transTss'>--</span></div>
+<div class='row'><span class='lbl'>Slip</span><span class='val' id='transSlip'>--</span></div>
+</div>
+<div class='trans-col'>
 <div class='row'><span class='lbl'>TFT Temp</span><span class='val' id='transTft'>--</span></div>
-<div class='row'><span class='lbl'>TCC Duty</span><span class='val' id='transTcc'>--</span></div>
-<div class='row'><span class='lbl'>EPC Duty</span><span class='val' id='transEpc'>--</span></div>
-<div class='row'><span class='lbl'>Solenoids</span><span class='val' id='transSol'>--</span></div>
+<div class='row'><span class='lbl'>TCC</span><span class='val' id='transTcc'>--</span></div>
+<div class='row'><span class='lbl'>EPC</span><span class='val' id='transEpc'>--</span></div>
 <div class='row'><span class='lbl'>Status</span><span class='val' id='transStatus'>--</span></div>
 </div>
+</div>
+<!-- Solenoid pills -->
+<div style='margin-top:8px;'>
+<span style='font-size:11px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.5px;'>Solenoids</span>
+<div class='sol-grid' id='transSol'></div>
 </div>
 </div>
 </div>
@@ -225,25 +254,70 @@ function poll(){
     var tr=d.transmission;
     if(tr&&tr.enabled){
       document.getElementById('transCard').style.display='';
-      document.getElementById('transGear').textContent=tr.gear||'P';
-      document.getElementById('transMlps').textContent=tr.mlps||'--';
+      document.getElementById('transTitle').textContent='Transmission'+(tr.type?' ('+tr.type+')':'');
+      var gear=tr.gear||'P';
+      var target=tr.targetGear||gear;
+      var mlps=tr.mlps||'--';
+      var shifting=tr.shifting;
+
+      // Gear selector strip — MLPS positions
+      var positions=['P','R','N','OD','D','2','1'];
+      var stripH='';
+      for(var i=0;i<positions.length;i++){
+        var p=positions[i];
+        var cls='gear-pos';
+        if(p===mlps)cls+=' active';
+        if(shifting&&p===target&&p!==gear)cls+=' target';
+        stripH+="<div class='"+cls+"'>"+p+"</div>";
+      }
+      document.getElementById('gearStrip').innerHTML=stripH;
+
+      // Big gear display with shift arrow
+      document.getElementById('transGear').textContent=gear;
+      var arrowEl=document.getElementById('shiftArrow');
+      var targetEl=document.getElementById('transTarget');
+      if(shifting&&target!==gear){
+        arrowEl.style.display='';arrowEl.innerHTML='&#9654;';
+        targetEl.style.display='';targetEl.textContent=target;
+        document.getElementById('transGear').style.color='#ff9800';
+        targetEl.style.color='#4CAF50';
+      }else{
+        arrowEl.style.display='none';targetEl.style.display='none';
+        document.getElementById('transGear').style.color='';
+      }
+      var gearNames={P:'Park',R:'Reverse',N:'Neutral','1':'1st','2':'2nd','3':'3rd','4':'4th (OD)'};
+      document.getElementById('transGearLabel').textContent=shifting?'Shifting...':(gearNames[gear]||gear);
+
+      // Data rows
+      document.getElementById('transMlps').textContent=mlps;
       document.getElementById('transOss').textContent=(tr.ossRpm||0)+' RPM';
       document.getElementById('transTss').textContent=(tr.tssRpm||0)+' RPM';
       document.getElementById('transSlip').textContent=(tr.slipRpm||0)+' RPM';
       var tftEl=document.getElementById('transTft');
       tftEl.textContent=(tr.tftTempF||0).toFixed(0)+' F';
       tftEl.style.color=tr.overTemp?'#f44336':'';
-      document.getElementById('transTcc').textContent=(tr.tccDuty||0).toFixed(0)+'%'+(tr.tccLocked?' LOCKED':'');
+      var tccTxt=(tr.tccDuty||0).toFixed(0)+'%';
+      if(tr.tccLocked)tccTxt+=' LOCKED';
+      document.getElementById('transTcc').textContent=tccTxt;
       document.getElementById('transEpc').textContent=(tr.epcDuty||0).toFixed(0)+'%';
-      var sol='A:'+(tr.ssA?'ON':'off')+' B:'+(tr.ssB?'ON':'off');
-      if(tr.ssC!==undefined)sol+=' C:'+(tr.ssC?'ON':'off');
-      if(tr.ssD!==undefined)sol+=' D:'+(tr.ssD?'ON':'off');
-      document.getElementById('transSol').textContent=sol;
+
+      // Status
       var status=[];
-      if(tr.shifting)status.push('SHIFTING');
+      if(shifting)status.push('SHIFTING');
       if(tr.overTemp)status.push('OVER TEMP');
       if(tr.tccLocked)status.push('TCC LOCKED');
       document.getElementById('transStatus').textContent=status.length?status.join(', '):'Normal';
+      document.getElementById('transStatus').style.color=tr.overTemp?'#f44336':(shifting?'#ff9800':'');
+
+      // Solenoid pills
+      var solH='';
+      var sols=[{n:'SS-A',v:tr.ssA},{n:'SS-B',v:tr.ssB}];
+      if(tr.ssC!==undefined)sols.push({n:'SS-C',v:tr.ssC});
+      if(tr.ssD!==undefined)sols.push({n:'SS-D',v:tr.ssD});
+      for(var i=0;i<sols.length;i++){
+        solH+="<span class='sol-pill "+(sols[i].v?'sol-on':'sol-off')+"'>"+sols[i].n+"</span>";
+      }
+      document.getElementById('transSol').innerHTML=solH;
     }else{
       document.getElementById('transCard').style.display='none';
     }

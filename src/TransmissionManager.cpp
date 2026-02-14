@@ -60,27 +60,40 @@ void TransmissionManager::begin(uint8_t ssAPin, uint8_t ssBPin, uint8_t ssCPin, 
         xDigitalWrite(_ssDPin, LOW);
     }
 
-    // TCC PWM — 200Hz, 8-bit
-    ledcSetup(TCC_LEDC_CH, 200, 8);
-    ledcAttachPin(_tccPin, TCC_LEDC_CH);
-    ledcWrite(TCC_LEDC_CH, 0);
+    // TCC PWM — 200Hz, 8-bit (skip if pin is 0xFF / disabled)
+    if (_tccPin != 0xFF) {
+        ledcSetup(TCC_LEDC_CH, 200, 8);
+        ledcAttachPin(_tccPin, TCC_LEDC_CH);
+        ledcWrite(TCC_LEDC_CH, 0);
+        _tccEnabled = true;
+    }
 
-    // EPC PWM — 5kHz, 8-bit
-    ledcSetup(EPC_LEDC_CH, 5000, 8);
-    ledcAttachPin(_epcPin, EPC_LEDC_CH);
-    ledcWrite(EPC_LEDC_CH, 0);
+    // EPC PWM — 5kHz, 8-bit (skip if pin is 0xFF / disabled)
+    if (_epcPin != 0xFF) {
+        ledcSetup(EPC_LEDC_CH, 5000, 8);
+        ledcAttachPin(_epcPin, EPC_LEDC_CH);
+        ledcWrite(EPC_LEDC_CH, 0);
+        _epcEnabled = true;
+    }
 
-    // Speed sensor ISRs
-    _isrInstance = this;
-    pinMode(_ossPin, INPUT_PULLUP);
-    attachInterrupt(digitalPinToInterrupt(_ossPin), ossISR, RISING);
-    pinMode(_tssPin, INPUT_PULLUP);
-    attachInterrupt(digitalPinToInterrupt(_tssPin), tssISR, RISING);
+    // Speed sensor ISRs (skip if pins are 0xFF / disabled)
+    if (_ossPin != 0xFF && _tssPin != 0xFF) {
+        _isrInstance = this;
+        pinMode(_ossPin, INPUT_PULLUP);
+        attachInterrupt(digitalPinToInterrupt(_ossPin), ossISR, RISING);
+        pinMode(_tssPin, INPUT_PULLUP);
+        attachInterrupt(digitalPinToInterrupt(_tssPin), tssISR, RISING);
+        _speedSensorsEnabled = true;
+    }
 
     _lastSpeedCalcMs = millis();
 
-    Log.info("TRANS", "Started: SS_A=%d SS_B=%d TCC=%d EPC=%d OSS=%d TSS=%d",
-             _ssAPin, _ssBPin, _tccPin, _epcPin, _ossPin, _tssPin);
+    Log.info("TRANS", "Started: SS_A=%d SS_B=%d TCC=%s EPC=%s OSS=%s TSS=%s",
+             _ssAPin, _ssBPin,
+             _tccEnabled ? String(_tccPin).c_str() : "OFF",
+             _epcEnabled ? String(_epcPin).c_str() : "OFF",
+             _speedSensorsEnabled ? String(_ossPin).c_str() : "OFF",
+             _speedSensorsEnabled ? String(_tssPin).c_str() : "OFF");
 }
 
 void TransmissionManager::onOssPulse() {
@@ -95,7 +108,7 @@ void TransmissionManager::update(uint16_t engineRpm, float tps, float vbat) {
     _updateCounter++;
 
     // Speed sensors every 100ms (10 × 10ms update cycle)
-    if (_updateCounter % 10 == 0) {
+    if (_speedSensorsEnabled && _updateCounter % 10 == 0) {
         calcSpeedSensors();
     }
 
@@ -119,8 +132,8 @@ void TransmissionManager::update(uint16_t engineRpm, float tps, float vbat) {
             setSolenoid(_ssCPin, false);
             setSolenoid(_ssDPin, false);
         }
-        ledcWrite(TCC_LEDC_CH, 0);
-        ledcWrite(EPC_LEDC_CH, 0);
+        if (_tccEnabled) ledcWrite(TCC_LEDC_CH, 0);
+        if (_epcEnabled) ledcWrite(EPC_LEDC_CH, 0);
         _state.ssA = _state.ssB = _state.ssC = _state.ssD = false;
         return;
     }
@@ -325,8 +338,10 @@ void TransmissionManager::updateTCC(uint16_t engineRpm) {
     }
 
     _state.tccLocked = (_state.tccDuty >= 95.0f);
-    uint8_t pwm = (uint8_t)(_state.tccDuty * 255.0f / 100.0f);
-    ledcWrite(TCC_LEDC_CH, pwm);
+    if (_tccEnabled) {
+        uint8_t pwm = (uint8_t)(_state.tccDuty * 255.0f / 100.0f);
+        ledcWrite(TCC_LEDC_CH, pwm);
+    }
 }
 
 void TransmissionManager::updateEPC(float tps) {
@@ -344,8 +359,10 @@ void TransmissionManager::updateEPC(float tps) {
     if (duty > 95.0f) duty = 95.0f;
 
     _state.epcDuty = duty;
-    uint8_t pwm = (uint8_t)(duty * 255.0f / 100.0f);
-    ledcWrite(EPC_LEDC_CH, pwm);
+    if (_epcEnabled) {
+        uint8_t pwm = (uint8_t)(duty * 255.0f / 100.0f);
+        ledcWrite(EPC_LEDC_CH, pwm);
+    }
 }
 
 void TransmissionManager::setSolenoid(uint8_t pin, bool on) {

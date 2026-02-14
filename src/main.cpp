@@ -12,6 +12,7 @@
 #include "ECU.h"
 #include "FuelManager.h"
 #include "TuneTable.h"
+#include <esp_log.h>
 
 #ifndef AP_PASSWORD
 #error "AP_PASSWORD not defined — create secrets.ini with: -D AP_PASSWORD=\\\"yourpassword\\\""
@@ -25,7 +26,7 @@
 extern const char compile_date[] = __DATE__ " " __TIME__;
 
 // SD card SPI pins (ESP32-S3)
-// GPIO45 is strapping pin (VDD_SPI), GPIO46 is input-only — avoid both
+// GPIO45/46 are strapping pins, OK after boot. GPIO33-37 reserved by OPI PSRAM
 static const uint8_t SD_CLK  = 47;
 static const uint8_t SD_MISO = 48;
 static const uint8_t SD_MOSI = 38;
@@ -329,6 +330,9 @@ void setup() {
     }
 
     ecu.begin();
+
+    // Suppress Wire I2C error spam globally — non-present I2C devices generate noise
+    esp_log_level_set("Wire", ESP_LOG_NONE);
 
     // Enable tasks
     tPublishState.enable();

@@ -883,27 +883,27 @@ void WebHandler::setupRoutes() {
                 const TransmissionState& ts = _ecu->getTransmission()->getState();
                 {
                     JsonObject o = outputs.add<JsonObject>();
-                    o["pin"] = 35; o["name"] = "TCC_PWM"; o["type"] = "pwm";
+                    o["pin"] = 45; o["name"] = "TCC_PWM"; o["type"] = "pwm";
                     o["mode"] = "LEDC 200Hz"; o["desc"] = "Torque converter clutch PWM via MOSFET driver";
                     o["percent"] = ts.tccDuty;
                 }
                 {
                     JsonObject o = outputs.add<JsonObject>();
-                    o["pin"] = 36; o["name"] = "EPC_PWM"; o["type"] = "pwm";
+                    o["pin"] = 46; o["name"] = "EPC_PWM"; o["type"] = "pwm";
                     o["mode"] = "LEDC 5kHz"; o["desc"] = "Electronic pressure control PWM via MOSFET driver";
                     o["percent"] = ts.epcDuty;
                 }
-                // Speed sensor inputs
+                // Speed sensor inputs (disabled when pin is 0xFF)
                 {
                     JsonObject o = inputs.add<JsonObject>();
-                    o["pin"] = 33; o["name"] = "OSS"; o["type"] = "digital"; o["mode"] = "ISR RISING";
-                    o["desc"] = "Output shaft speed, 8 pulses/rev";
+                    o["pin"] = "--"; o["name"] = "OSS"; o["type"] = "digital"; o["mode"] = "DISABLED";
+                    o["desc"] = "Output shaft speed (no free GPIO — PSRAM uses 33-37)";
                     o["rpm"] = ts.ossRpm;
                 }
                 {
                     JsonObject o = inputs.add<JsonObject>();
-                    o["pin"] = 34; o["name"] = "TSS"; o["type"] = "digital"; o["mode"] = "ISR RISING";
-                    o["desc"] = "Turbine shaft speed, 8 pulses/rev";
+                    o["pin"] = "--"; o["name"] = "TSS"; o["type"] = "digital"; o["mode"] = "DISABLED";
+                    o["desc"] = "Turbine shaft speed (no free GPIO — PSRAM uses 33-37)";
                     o["rpm"] = ts.tssRpm;
                 }
             }

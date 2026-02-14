@@ -35,7 +35,7 @@ bool PinExpander::begin(uint8_t index, uint8_t sda, uint8_t scl, uint8_t addr) {
     uint8_t probeErr = Wire.endTransmission();
 
     if (probeErr != 0) {
-        esp_log_level_set("Wire", ESP_LOG_ERROR);
+        // Keep Wire logging suppressed — other I2C devices may be on the bus
         Log.warn("MCP", "MCP23017 #%d not found at 0x%02X — expander disabled", index, addr);
         _ready[index] = false;
         return false;
@@ -44,9 +44,6 @@ bool PinExpander::begin(uint8_t index, uint8_t sda, uint8_t scl, uint8_t addr) {
     // Device responded — full initialization
     _mcp[index] = new Adafruit_MCP23X17();
     bool ok = _mcp[index]->begin_I2C(addr, &Wire);
-
-    // Restore Wire logging
-    esp_log_level_set("Wire", ESP_LOG_ERROR);
 
     if (!ok) {
         Log.error("MCP", "MCP23017 #%d init failed at 0x%02X", index, addr);

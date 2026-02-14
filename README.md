@@ -97,9 +97,15 @@ Cores communicate via shared `EngineState` struct with volatile fields.
 | HEATER_OUT_1 | 19 | LEDC ch1 100Hz -- CJ125 heater bank 1 via BTS3134 |
 | HEATER_OUT_2 | 20 | LEDC ch2 100Hz -- CJ125 heater bank 2 via BTS3134 |
 | Alternator field | 41 | LEDC 25kHz PWM |
+| TCC_PWM | 45 | LEDC ch4 200Hz -- Torque converter clutch (strapping pin, OK after boot) |
+| EPC_PWM | 46 | LEDC ch6 5kHz -- Electronic pressure control (strapping pin, OK after boot) |
 | Fuel pump relay | MCP23017 P0 | I2C expander |
 | Tachometer output | MCP23017 P1 | I2C expander |
 | Check engine light | MCP23017 P2 | I2C expander |
+| SS_A | MCP23017 #1 P0 | Shift Solenoid A (5V via PCA9306) |
+| SS_B | MCP23017 #1 P1 | Shift Solenoid B (5V via PCA9306) |
+| SS_C | MCP23017 #1 P2 | Shift Solenoid C -- 4R100 only (5V via PCA9306) |
+| SS_D | MCP23017 #1 P3 | Coast Clutch -- 4R100 only (5V via PCA9306) |
 
 **SPI Bus (VSPI, shared SD + CJ125):**
 
@@ -116,8 +122,9 @@ Cores communicate via shared `EngineState` struct with volatile fields.
 
 | Device | Address | Description |
 |--------|---------|-------------|
-| MCP23017 | 0x20 | GPIO expander -- injectors 4-8, fuel pump, tach, CEL, SPI_SS_1/2 |
-| ADS1115 | 0x48 | 16-bit ADC -- CJ125_UR Nernst cell temp (CH0=Bank 1, CH1=Bank 2) |
+| MCP23017 #0 | 0x20 | GPIO expander -- injectors 4-8, fuel pump, tach, CEL, SPI_SS_1/2 |
+| MCP23017 #1 | 0x21 | GPIO expander -- shift solenoids SS-A/B/C/D (5V via PCA9306) |
+| ADS1115 | 0x48 | 16-bit ADC -- CJ125_UR (CH0/1), TFT temp (CH2), MLPS (CH3) |
 
 ## CJ125 Wideband O2 Controller
 

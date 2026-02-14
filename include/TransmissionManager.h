@@ -116,6 +116,9 @@ private:
     uint8_t _updateCounter = 0;
 
     ADS1115Reader* _ads = nullptr;
+    bool _tccEnabled = false;
+    bool _epcEnabled = false;
+    bool _speedSensorsEnabled = false;
 
     // Internal methods
     void calcSpeedSensors();

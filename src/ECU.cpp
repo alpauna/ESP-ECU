@@ -42,10 +42,13 @@ static const uint8_t PIN_SS_A        = 116; // MCP23017 #1 P0 — Shift Solenoid
 static const uint8_t PIN_SS_B        = 117; // MCP23017 #1 P1 — Shift Solenoid B
 static const uint8_t PIN_SS_C        = 118; // MCP23017 #1 P2 — Shift Solenoid C (4R100 only)
 static const uint8_t PIN_SS_D        = 119; // MCP23017 #1 P3 — Coast Clutch (4R100 only)
-static const uint8_t PIN_TCC_PWM     = 35;  // LEDC ch4 — Torque converter clutch
-static const uint8_t PIN_EPC_PWM     = 36;  // LEDC ch6 — Electronic pressure control
-static const uint8_t PIN_OSS         = 33;  // ISR — Output shaft speed
-static const uint8_t PIN_TSS         = 34;  // ISR — Turbine shaft speed
+static const uint8_t PIN_TCC_PWM     = 45;  // LEDC ch4 — Torque converter clutch (strapping pin, OK after boot)
+static const uint8_t PIN_EPC_PWM     = 46;  // LEDC ch6 — Electronic pressure control (strapping pin, OK after boot)
+// NOTE: GPIO 33-37 are reserved by OPI PSRAM — cannot be used
+// OSS/TSS speed sensors disabled (0xFF) — no free GPIO for ISR inputs
+// To enable, repurpose unused coil pins (e.g., GPIO 14-17 if < 8 cylinders)
+static const uint8_t PIN_OSS         = 0xFF;  // Disabled — Output shaft speed
+static const uint8_t PIN_TSS         = 0xFF;  // Disabled — Turbine shaft speed
 
 static const uint8_t COIL_PINS[]     = {10, 11, 12, 13, 14, 15, 16, 17};
 // INJ 1-3: native GPIO for best timing; INJ 4-8: PCF8575 P3-P7
@@ -167,7 +170,7 @@ void ECU::configure(const ProjectInfo& proj) {
 }
 
 void ECU::begin() {
-    // Initialize PCF8575 I2C expander before subsystem init
+    // Initialize MCP23017 I2C expander before subsystem init
     PinExpander::instance().begin(I2C_SDA, I2C_SCL, 0x20);
 
     // Initialize subsystems
