@@ -307,6 +307,10 @@ void WebHandler::setupRoutes() {
                 transObj["overTemp"] = ts.overTemp;
             }
         }
+        if (_ecu) {
+            doc["limpMode"] = _ecu->isLimpActive();
+            doc["limpFaults"] = _ecu->getLimpFaults();
+        }
         doc["cpuLoad0"] = getCpuLoadCore0();
         doc["cpuLoad1"] = getCpuLoadCore1();
         doc["freeHeap"] = ESP.getFreeHeap();
@@ -566,6 +570,18 @@ void WebHandler::setupRoutes() {
             doc["bootCount"] = _bootCountExposed;
             doc["resetReason"] = _resetReasonStr;
 
+            // Limp mode
+            doc["limpRevLimit"] = proj->limpRevLimit;
+            doc["limpAdvanceCap"] = proj->limpAdvanceCap;
+            doc["limpRecoverySec"] = proj->limpRecoveryMs / 1000;
+            doc["limpMapMin"] = proj->limpMapMin;
+            doc["limpMapMax"] = proj->limpMapMax;
+            doc["limpTpsMin"] = proj->limpTpsMin;
+            doc["limpTpsMax"] = proj->limpTpsMax;
+            doc["limpCltMax"] = proj->limpCltMax;
+            doc["limpIatMax"] = proj->limpIatMax;
+            doc["limpVbatMin"] = proj->limpVbatMin;
+
             String json;
             serializeJson(doc, json);
             request->send(200, "application/json", json);
@@ -729,6 +745,27 @@ void WebHandler::setupRoutes() {
             for (int i = 0; i < 20; i++) {
                 if (pins[i] != *cur[i]) { *cur[i] = pins[i]; needsReboot = true; }
             }
+        }
+
+        // Limp mode (live — no reboot needed)
+        proj->limpRevLimit = data["limpRevLimit"] | proj->limpRevLimit;
+        proj->limpAdvanceCap = data["limpAdvanceCap"] | proj->limpAdvanceCap;
+        {
+            uint32_t recSec = data["limpRecoverySec"] | (proj->limpRecoveryMs / 1000);
+            proj->limpRecoveryMs = recSec * 1000;
+        }
+        proj->limpMapMin = data["limpMapMin"] | proj->limpMapMin;
+        proj->limpMapMax = data["limpMapMax"] | proj->limpMapMax;
+        proj->limpTpsMin = data["limpTpsMin"] | proj->limpTpsMin;
+        proj->limpTpsMax = data["limpTpsMax"] | proj->limpTpsMax;
+        proj->limpCltMax = data["limpCltMax"] | proj->limpCltMax;
+        proj->limpIatMax = data["limpIatMax"] | proj->limpIatMax;
+        proj->limpVbatMin = data["limpVbatMin"] | proj->limpVbatMin;
+        // Apply live to sensor manager
+        if (_ecu && _ecu->getSensorManager()) {
+            _ecu->getSensorManager()->setLimpThresholds(
+                proj->limpMapMin, proj->limpMapMax, proj->limpTpsMin, proj->limpTpsMax,
+                proj->limpCltMax, proj->limpIatMax, proj->limpVbatMin);
         }
 
         bool saved = _config->updateConfig("/config.txt", *proj);

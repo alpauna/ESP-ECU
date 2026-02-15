@@ -441,6 +441,10 @@ void setup() {
             }
         }
 
+        ecu.setFaultCallback([](const char* fault, const char* msg, bool active) {
+            mqttHandler.publishFault(fault, msg, active);
+        });
+
         ecu.begin();
 
         // Suppress Wire I2C error spam globally — non-present I2C devices generate noise

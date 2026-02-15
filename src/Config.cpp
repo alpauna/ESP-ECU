@@ -260,6 +260,18 @@ bool Config::loadConfig(const char* filename, ProjectInfo& proj) {
     proj.shiftTimeMs = doc["transmission"]["shiftTimeMs"] | 500;
     proj.maxTftTempF = doc["transmission"]["maxTftTempF"] | 275.0f;
 
+    // Limp mode
+    proj.limpRevLimit = doc["limp"]["revLimit"] | 3000;
+    proj.limpAdvanceCap = doc["limp"]["advanceCap"] | 10.0f;
+    proj.limpRecoveryMs = doc["limp"]["recoveryMs"] | 5000;
+    proj.limpMapMin = doc["limp"]["mapMin"] | 5.0f;
+    proj.limpMapMax = doc["limp"]["mapMax"] | 120.0f;
+    proj.limpTpsMin = doc["limp"]["tpsMin"] | (-5.0f);
+    proj.limpTpsMax = doc["limp"]["tpsMax"] | 105.0f;
+    proj.limpCltMax = doc["limp"]["cltMax"] | 280.0f;
+    proj.limpIatMax = doc["limp"]["iatMax"] | 200.0f;
+    proj.limpVbatMin = doc["limp"]["vbatMin"] | 10.0f;
+
     Serial.printf("Config loaded: %d cyl, %d-%d trigger\n", proj.cylinders, proj.crankTeeth, proj.crankMissing);
     return true;
 }
@@ -503,6 +515,18 @@ bool Config::updateConfig(const char* filename, ProjectInfo& proj) {
     doc["peripherals"]["exp3"] = proj.expander3Enabled;
     doc["peripherals"]["spiExp0"] = proj.spiExp0Enabled;
     doc["peripherals"]["spiExp1"] = proj.spiExp1Enabled;
+
+    // Limp mode
+    doc["limp"]["revLimit"] = proj.limpRevLimit;
+    doc["limp"]["advanceCap"] = proj.limpAdvanceCap;
+    doc["limp"]["recoveryMs"] = proj.limpRecoveryMs;
+    doc["limp"]["mapMin"] = proj.limpMapMin;
+    doc["limp"]["mapMax"] = proj.limpMapMax;
+    doc["limp"]["tpsMin"] = proj.limpTpsMin;
+    doc["limp"]["tpsMax"] = proj.limpTpsMax;
+    doc["limp"]["cltMax"] = proj.limpCltMax;
+    doc["limp"]["iatMax"] = proj.limpIatMax;
+    doc["limp"]["vbatMin"] = proj.limpVbatMin;
 
     file = SD.open(filename, FILE_WRITE);
     if (!file) return false;

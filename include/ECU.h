@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Arduino.h>
+#include <functional>
 #include <TaskSchedulerDeclarations.h>
 
 class CrankSensor;
@@ -35,6 +36,8 @@ struct EngineState {
     volatile float lambda[2];
     volatile float oxygenPct[2];
     volatile bool  cj125Ready[2];
+    volatile bool  limpMode;
+    volatile uint8_t limpFaults;
 };
 
 class ECU {
@@ -64,6 +67,11 @@ public:
     MCP3204Reader* getMCP3204() { return _mcp3204; }
     uint32_t getUpdateTimeUs() const { return _updateTimeUs; }
     uint32_t getSensorTimeUs() const { return _sensorTimeUs; }
+    bool isLimpActive() const { return _limpActive; }
+    uint8_t getLimpFaults() const { return _limpFaults; }
+
+    typedef std::function<void(const char* fault, const char* message, bool active)> FaultCallback;
+    void setFaultCallback(FaultCallback cb) { _faultCb = cb; }
 
 private:
     Scheduler* _ts;
@@ -120,6 +128,17 @@ private:
 
     volatile uint32_t _updateTimeUs = 0;
     volatile uint32_t _sensorTimeUs = 0;
+
+    // Limp mode
+    bool _limpActive = false;
+    uint8_t _limpFaults = 0;
+    uint16_t _limpRevLimit = 3000;
+    float _limpAdvanceCap = 10.0f;
+    uint32_t _limpRecoveryMs = 5000;
+    uint32_t _limpRecoveryStart = 0;
+    uint16_t _normalRevLimit = 6000;
+    void checkLimpMode();
+    FaultCallback _faultCb;
 
     TaskHandle_t _realtimeTaskHandle;
     static void realtimeTask(void* param);

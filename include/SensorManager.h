@@ -18,6 +18,13 @@ public:
     static constexpr float NTC_PULLUP_OHMS = 2490.0f;
     static constexpr float NTC_BETA = 3380.0f;
 
+    // Limp fault bitmask
+    static constexpr uint8_t FAULT_MAP  = 0x01;
+    static constexpr uint8_t FAULT_TPS  = 0x02;
+    static constexpr uint8_t FAULT_CLT  = 0x04;
+    static constexpr uint8_t FAULT_IAT  = 0x08;
+    static constexpr uint8_t FAULT_VBAT = 0x10;
+
     struct AdcCalibration {
         float mapVMin, mapVMax, mapPMin, mapPMax;
         float o2AfrAt0v, o2AfrAt5v;
@@ -60,6 +67,11 @@ public:
     bool hasMapTpsMCP3204() const { return _mapTpsMcp != nullptr; }
     bool hasExternalMapTps() const { return _mapTpsAds != nullptr || _mapTpsMcp != nullptr; }
 
+    // Limp mode sensor validation
+    uint8_t getLimpFaults() const { return _limpFaults; }
+    void setLimpThresholds(float mapMin, float mapMax, float tpsMin, float tpsMax,
+                           float cltMax, float iatMax, float vbatMin);
+
 private:
     CJ125Controller* _cj125 = nullptr;
     ADS1115Reader* _mapTpsAds = nullptr;
@@ -76,6 +88,15 @@ private:
     float _batteryVoltage;
 
     uint8_t _channelPins[NUM_CHANNELS];
+
+    // Limp fault state and thresholds
+    uint8_t _limpFaults = 0;
+    float _limpMapMin = 5.0f, _limpMapMax = 120.0f;
+    float _limpTpsMin = -5.0f, _limpTpsMax = 105.0f;
+    float _limpCltMax = 280.0f;
+    float _limpIatMax = 200.0f;
+    float _limpVbatMin = 10.0f;
+    void validateSensors();
 
     float adcToVoltage(uint16_t raw) const;
     float voltageToMapKpa(float voltage) const;

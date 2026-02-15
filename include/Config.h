@@ -91,6 +91,17 @@ struct ProjectInfo {
     float epcShiftBoost;            // default 80.0%
     uint16_t shiftTimeMs;           // default 500
     float maxTftTempF;              // default 275.0
+    // Limp mode
+    uint16_t limpRevLimit;          // Rev limit in limp (default 3000)
+    float limpAdvanceCap;           // Max advance in limp deg (default 10.0)
+    uint32_t limpRecoveryMs;        // Recovery delay ms (default 5000)
+    float limpMapMin;               // MAP fault min kPa (default 5.0)
+    float limpMapMax;               // MAP fault max kPa (default 120.0)
+    float limpTpsMin;               // TPS fault min % (default -5.0)
+    float limpTpsMax;               // TPS fault max % (default 105.0)
+    float limpCltMax;               // CLT fault max F (default 280.0)
+    float limpIatMax;               // IAT fault max F (default 200.0)
+    float limpVbatMin;              // VBAT fault min V (default 10.0)
 };
 
 class Config {

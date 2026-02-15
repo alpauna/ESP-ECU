@@ -96,6 +96,10 @@ void TransmissionManager::begin(uint8_t ssAPin, uint8_t ssBPin, uint8_t ssCPin, 
              _speedSensorsEnabled ? String(_tssPin).c_str() : "OFF");
 }
 
+void TransmissionManager::setLimpMode(bool active) {
+    _limpMode = active;
+}
+
 void TransmissionManager::onOssPulse() {
     _ossPulseCount++;
 }
@@ -208,6 +212,9 @@ void TransmissionManager::updateGearLogic(uint16_t engineRpm, float tps) {
         _state.shifting = false;
         return;
     }
+
+    // Limp mode: lock in current gear, skip all shift logic
+    if (_limpMode) return;
 
     // Shift in progress — wait for shift timer
     if (_state.shifting) {
@@ -325,6 +332,9 @@ void TransmissionManager::updateTCC(uint16_t engineRpm) {
 
     // Over-temp: force unlock to reduce heat
     if (_state.overTemp) shouldLock = false;
+
+    // Limp mode: force unlock
+    if (_limpMode) shouldLock = false;
 
     _tccTargetDuty = shouldLock ? 100.0f : 0.0f;
 

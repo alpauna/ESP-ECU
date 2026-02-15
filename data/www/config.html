@@ -196,6 +196,34 @@ button:hover{background:#45a049;}
 </div>
 </fieldset>
 
+<fieldset><legend>Limp Mode</legend>
+<div class='row2'>
+<div><label>Rev Limit (RPM)</label><input type='number' id='limpRevLimit' min='1000' max='8000' step='100'></div>
+<div><label>Advance Cap (&deg;)</label><input type='number' id='limpAdvanceCap' min='0' max='30' step='1'></div>
+</div>
+<div class='row2'>
+<div><label>Recovery Delay (sec)</label><input type='number' id='limpRecoverySec' min='1' max='30' step='1'></div>
+<div></div>
+</div>
+<label style='font-weight:bold;color:var(--text);font-size:13px;margin:10px 0 4px'>Fault Thresholds</label>
+<div class='row2'>
+<div><label>MAP Min (kPa)</label><input type='number' id='limpMapMin' min='0' max='50' step='1'></div>
+<div><label>MAP Max (kPa)</label><input type='number' id='limpMapMax' min='80' max='300' step='1'></div>
+</div>
+<div class='row2'>
+<div><label>TPS Min (%)</label><input type='number' id='limpTpsMin' min='-20' max='0' step='1'></div>
+<div><label>TPS Max (%)</label><input type='number' id='limpTpsMax' min='100' max='120' step='1'></div>
+</div>
+<div class='row2'>
+<div><label>CLT Max (&deg;F)</label><input type='number' id='limpCltMax' min='200' max='350' step='5'></div>
+<div><label>IAT Max (&deg;F)</label><input type='number' id='limpIatMax' min='150' max='300' step='5'></div>
+</div>
+<div class='row2'>
+<div><label>VBAT Min (V)</label><input type='number' id='limpVbatMin' min='6' max='14' step='0.5'></div>
+<div></div>
+</div>
+</fieldset>
+
 <fieldset><legend>Peripherals &amp; Safe Mode</legend>
 <label style='margin-top:2px'><input type='checkbox' id='forceSafeMode' style='width:auto;margin-right:6px'>Force safe mode on next reboot</label>
 <label style='font-weight:bold;color:var(--text);font-size:13px;margin:10px 0 4px'>Bus Control (requires reboot)</label>
@@ -376,6 +404,18 @@ function load(){
     document.getElementById('spiExp0Enabled').checked=d.spiExp0Enabled!==false;
     document.getElementById('spiExp1Enabled').checked=d.spiExp1Enabled!==false;
     togglePeriphDeps();
+
+    // Limp mode
+    document.getElementById('limpRevLimit').value=d.limpRevLimit!=null?d.limpRevLimit:3000;
+    document.getElementById('limpAdvanceCap').value=d.limpAdvanceCap!=null?d.limpAdvanceCap:10;
+    document.getElementById('limpRecoverySec').value=d.limpRecoverySec!=null?d.limpRecoverySec:5;
+    document.getElementById('limpMapMin').value=d.limpMapMin!=null?d.limpMapMin:5;
+    document.getElementById('limpMapMax').value=d.limpMapMax!=null?d.limpMapMax:120;
+    document.getElementById('limpTpsMin').value=d.limpTpsMin!=null?d.limpTpsMin:-5;
+    document.getElementById('limpTpsMax').value=d.limpTpsMax!=null?d.limpTpsMax:105;
+    document.getElementById('limpCltMax').value=d.limpCltMax!=null?d.limpCltMax:280;
+    document.getElementById('limpIatMax').value=d.limpIatMax!=null?d.limpIatMax:200;
+    document.getElementById('limpVbatMin').value=d.limpVbatMin!=null?d.limpVbatMin:10;
     if(d.safeMode){
       document.getElementById('safeBanner').style.display='block';
       document.getElementById('safeBannerInfo').textContent='Boot count: '+(d.bootCount||'?')+', last reset: '+(d.resetReason||'?');
@@ -579,7 +619,17 @@ function save(e){
     expander2Enabled:document.getElementById('expander2Enabled').checked,
     expander3Enabled:document.getElementById('expander3Enabled').checked,
     spiExp0Enabled:document.getElementById('spiExp0Enabled').checked,
-    spiExp1Enabled:document.getElementById('spiExp1Enabled').checked
+    spiExp1Enabled:document.getElementById('spiExp1Enabled').checked,
+    limpRevLimit:parseInt(document.getElementById('limpRevLimit').value),
+    limpAdvanceCap:parseFloat(document.getElementById('limpAdvanceCap').value),
+    limpRecoverySec:parseInt(document.getElementById('limpRecoverySec').value),
+    limpMapMin:parseFloat(document.getElementById('limpMapMin').value),
+    limpMapMax:parseFloat(document.getElementById('limpMapMax').value),
+    limpTpsMin:parseFloat(document.getElementById('limpTpsMin').value),
+    limpTpsMax:parseFloat(document.getElementById('limpTpsMax').value),
+    limpCltMax:parseFloat(document.getElementById('limpCltMax').value),
+    limpIatMax:parseFloat(document.getElementById('limpIatMax').value),
+    limpVbatMin:parseFloat(document.getElementById('limpVbatMin').value)
   };
   _pinFields.forEach(function(id){data[id]=parseInt(document.getElementById(id).value);});
   var pw=document.getElementById('wifiPassword').value;if(pw) data.wifiPassword=pw;

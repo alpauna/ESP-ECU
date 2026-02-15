@@ -141,6 +141,13 @@ void ECU::configure(const ProjectInfo& proj) {
         _trans->configure(proj);
     }
 
+    // Limp mode
+    _limpRevLimit = proj.limpRevLimit;
+    _limpAdvanceCap = proj.limpAdvanceCap;
+    _limpRecoveryMs = proj.limpRecoveryMs;
+    _sensors->setLimpThresholds(proj.limpMapMin, proj.limpMapMax,
+        proj.limpTpsMin, proj.limpTpsMax, proj.limpCltMax, proj.limpIatMax, proj.limpVbatMin);
+
     // Create 16x16 tune tables with defaults
     static const float defaultRpmAxis[16] = {
         500, 1000, 1500, 2000, 2500, 3000, 3500, 4000,
@@ -376,8 +383,16 @@ void ECU::update() {
     _state.engineRunning = (_state.rpm >= 400);
     _state.sequentialMode = _cam->hasCamSignal();
 
+    // Limp mode check (before fuel calc to set rev limit)
+    checkLimpMode();
+
     // Run fuel calculation (updates sparkAdvanceDeg, injPulseWidthUs, targetAfr)
     _fuel->update(_state);
+
+    // Cap advance if limp active
+    if (_limpActive) {
+        _state.sparkAdvanceDeg = constrain(_state.sparkAdvanceDeg, -10.0f, _limpAdvanceCap);
+    }
 
     // Push calculated values to ignition and injection
     _ignition->setAdvance(_state.sparkAdvanceDeg);
@@ -398,6 +413,49 @@ void ECU::update() {
     uint32_t t2 = micros();
     _updateTimeUs = t2 - t0;
     _sensorTimeUs = t1 - t0;
+}
+
+void ECU::checkLimpMode() {
+    uint8_t faults = _sensors->getLimpFaults();
+
+    if (faults != 0) {
+        _limpRecoveryStart = 0;  // reset recovery timer
+        if (!_limpActive) {
+            // Enter limp
+            _limpActive = true;
+            _normalRevLimit = _ignition->getRevLimit();
+            _ignition->setRevLimit(_limpRevLimit);
+            if (_i2cEnabled && _expander0Enabled)
+                xDigitalWrite(PIN_CEL, HIGH);
+            if (_trans) _trans->setLimpMode(true);
+            Log.warn("ECU", "LIMP MODE: faults=0x%02X", faults);
+            if (_faultCb) {
+                char msg[64];
+                snprintf(msg, sizeof(msg), "Sensor fault 0x%02X", faults);
+                _faultCb("LIMP", msg, true);
+            }
+        }
+        _limpFaults = faults;
+    } else if (_limpActive) {
+        // All faults clear — run recovery timer
+        if (_limpRecoveryStart == 0) {
+            _limpRecoveryStart = millis();
+        } else if (millis() - _limpRecoveryStart >= _limpRecoveryMs) {
+            // Recovery complete
+            _limpActive = false;
+            _limpFaults = 0;
+            _ignition->setRevLimit(_normalRevLimit);
+            if (_i2cEnabled && _expander0Enabled)
+                xDigitalWrite(PIN_CEL, LOW);
+            if (_trans) _trans->setLimpMode(false);
+            Log.info("ECU", "LIMP MODE cleared — sensors recovered");
+            if (_faultCb) _faultCb("LIMP", "All sensors recovered", false);
+        }
+    }
+
+    // Update shared state
+    _state.limpMode = _limpActive;
+    _state.limpFaults = _limpFaults;
 }
 
 void ECU::realtimeTask(void* param) {

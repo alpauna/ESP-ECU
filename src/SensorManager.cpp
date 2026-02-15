@@ -100,6 +100,8 @@ void SensorManager::update() {
     _coolantTempF    = voltageToNtcTempF(vClt);
     _iatTempF        = voltageToNtcTempF(vIat);
     _batteryVoltage  = voltageToBatteryV(vBat);
+
+    validateSensors();
 }
 
 float SensorManager::getO2Afr(uint8_t bank) const {
@@ -178,4 +180,25 @@ float SensorManager::voltageToNtcTempF(float voltage) const {
 
 float SensorManager::voltageToBatteryV(float voltage) const {
     return voltage * _cal.vbatDividerRatio;
+}
+
+void SensorManager::validateSensors() {
+    uint8_t f = 0;
+    if (_mapKpa < _limpMapMin || _mapKpa > _limpMapMax) f |= FAULT_MAP;
+    if (_tpsPercent < _limpTpsMin || _tpsPercent > _limpTpsMax) f |= FAULT_TPS;
+    if (_coolantTempF > _limpCltMax) f |= FAULT_CLT;
+    if (_iatTempF > _limpIatMax) f |= FAULT_IAT;
+    if (_batteryVoltage < _limpVbatMin && _batteryVoltage > 0.5f) f |= FAULT_VBAT;
+    _limpFaults = f;
+}
+
+void SensorManager::setLimpThresholds(float mapMin, float mapMax, float tpsMin, float tpsMax,
+                                       float cltMax, float iatMax, float vbatMin) {
+    _limpMapMin = mapMin;
+    _limpMapMax = mapMax;
+    _limpTpsMin = tpsMin;
+    _limpTpsMax = tpsMax;
+    _limpCltMax = cltMax;
+    _limpIatMax = iatMax;
+    _limpVbatMin = vbatMin;
 }
