@@ -1029,11 +1029,13 @@ void WebHandler::setupRoutes() {
             addSpi(pHspiMiso, "HSPI_MISO", "HSPI \xe2\x80\x94 MCP23S17 10MHz", "5V");
             addSpi(pHspiCsCoils, "HSPI_CS0", "HSPI \xe2\x80\x94 MCP23S17 #0 (coils)", "5V");
             addSpi(pHspiCsInj, "HSPI_CS1", "HSPI \xe2\x80\x94 MCP23S17 #1 (injectors)", "5V");
-            // MCP3204 CS pin (only show in bus list if detected or configured)
+            // MCP3204 CS pin (show if configured, even in safe mode)
             {
                 uint8_t pMcp3204Cs = proj ? proj->pinMcp3204Cs : 15;
                 MCP3204Reader* mcp = _ecu ? _ecu->getMCP3204() : nullptr;
-                if (mcp && mcp->isReady()) {
+                bool mcpReady = mcp && mcp->isReady();
+                bool spiEnabled = proj && proj->spiExpandersEnabled;
+                if (mcpReady || spiEnabled) {
                     addSpi(pMcp3204Cs, "HSPI_CS2", "HSPI \xe2\x80\x94 MCP3204 ADC 1MHz", "5V");
                 }
             }
@@ -1270,24 +1272,31 @@ void WebHandler::setupRoutes() {
                 }
             }
             // MCP3204 SPI ADC (MAP/TPS, alternative to ADS1115 @ 0x49)
-            if (_ecu && _ecu->getMCP3204()) {
-                MCP3204Reader* mcp = _ecu->getMCP3204();
-                JsonObject mcpExp = expanders.add<JsonObject>();
-                mcpExp["index"] = 8;
-                mcpExp["type"] = "MCP3204";
-                mcpExp["bus"] = "HSPI 1MHz";
-                mcpExp["cs"] = mcp->getCsPin();
-                mcpExp["ready"] = mcp->isReady();
-                char vrefStr[8]; snprintf(vrefStr, sizeof(vrefStr), "%.1fV", mcp->getVRef());
-                mcpExp["vRef"] = vrefStr;
-                if (mcp->isReady()) {
-                    const char* chNames[] = {"MAP", "TPS", "SPARE", "SPARE"};
-                    JsonArray channels = mcpExp["channels"].to<JsonArray>();
-                    for (uint8_t i = 0; i < 4; i++) {
-                        JsonObject ch = channels.add<JsonObject>();
-                        ch["ch"] = i;
-                        ch["name"] = chNames[i];
-                        ch["mV"] = serialized(String(mcp->readMillivolts(i), 1));
+            {
+                MCP3204Reader* mcp = _ecu ? _ecu->getMCP3204() : nullptr;
+                bool spiEnabled = proj && proj->spiExpandersEnabled;
+                if (mcp || spiEnabled) {
+                    JsonObject mcpExp = expanders.add<JsonObject>();
+                    mcpExp["index"] = 8;
+                    mcpExp["type"] = "MCP3204";
+                    mcpExp["bus"] = "HSPI 1MHz";
+                    mcpExp["cs"] = mcp ? (int)mcp->getCsPin() : (proj ? (int)proj->pinMcp3204Cs : 15);
+                    mcpExp["ready"] = mcp ? mcp->isReady() : false;
+                    if (mcp) {
+                        char vrefStr[8]; snprintf(vrefStr, sizeof(vrefStr), "%.1fV", mcp->getVRef());
+                        mcpExp["vRef"] = vrefStr;
+                    } else {
+                        mcpExp["vRef"] = "5.0V";
+                    }
+                    if (mcp && mcp->isReady()) {
+                        const char* chNames[] = {"MAP", "TPS", "SPARE", "SPARE"};
+                        JsonArray channels = mcpExp["channels"].to<JsonArray>();
+                        for (uint8_t i = 0; i < 4; i++) {
+                            JsonObject ch = channels.add<JsonObject>();
+                            ch["ch"] = i;
+                            ch["name"] = chNames[i];
+                            ch["mV"] = serialized(String(mcp->readMillivolts(i), 1));
+                        }
                     }
                 }
             }
@@ -1295,7 +1304,8 @@ void WebHandler::setupRoutes() {
             // Freed GPIO (available for future use)
             {
                 uint8_t pMcp3204Cs = proj ? proj->pinMcp3204Cs : 15;
-                bool mcpActive = _ecu && _ecu->getMCP3204() && _ecu->getMCP3204()->isReady();
+                MCP3204Reader* mcpR = _ecu ? _ecu->getMCP3204() : nullptr;
+                bool mcpActive = (mcpR && mcpR->isReady()) || (proj && proj->spiExpandersEnabled);
                 const uint8_t freedPins[] = {15, 16, 17, 18, 21, 40};
                 for (uint8_t i = 0; i < 6; i++) {
                     if (mcpActive && freedPins[i] == pMcp3204Cs) continue;  // CS in use
