@@ -9,6 +9,7 @@
 #include "SensorManager.h"
 #include "CJ125Controller.h"
 #include "ADS1115Reader.h"
+#include "MCP3204Reader.h"
 #include "TransmissionManager.h"
 #include "TuneTable.h"
 #include "Config.h"
@@ -43,13 +44,13 @@ static const uint8_t INJECTOR_PINS[] = {216, 217, 218, 219, 220, 221, 222, 223};
 ECU::ECU(Scheduler* ts)
     : _ts(ts), _tUpdate(nullptr), _crankTeeth(36), _crankMissing(1),
       _realtimeTaskHandle(nullptr), _cj125(nullptr), _ads1115(nullptr),
-      _ads1115_2(nullptr), _trans(nullptr), _cj125Enabled(false), _transType(0),
+      _ads1115_2(nullptr), _mcp3204(nullptr), _trans(nullptr), _cj125Enabled(false), _transType(0),
       _pinAlternator(41), _pinI2cSda(0), _pinI2cScl(42),
       _pinHeater1(19), _pinHeater2(20), _pinCj125Ua1(3), _pinCj125Ua2(4),
       _pinCj125Ss1(108), _pinCj125Ss2(109),
       _pinTcc(45), _pinEpc(46),
       _pinHspiSck(10), _pinHspiMosi(11), _pinHspiMiso(12),
-      _pinHspiCsCoils(13), _pinHspiCsInj(14) {
+      _pinHspiCsCoils(13), _pinHspiCsInj(14), _pinMcp3204Cs(15) {
     memset(&_state, 0, sizeof(_state));
     memset(_firingOrder, 0, sizeof(_firingOrder));
     // Default SBC V8 firing order
@@ -77,6 +78,7 @@ ECU::~ECU() {
     delete _cj125;
     delete _ads1115;
     delete _ads1115_2;
+    delete _mcp3204;
     delete _trans;
 }
 
@@ -123,6 +125,7 @@ void ECU::configure(const ProjectInfo& proj) {
     _pinHspiMiso = proj.pinHspiMiso;
     _pinHspiCsCoils = proj.pinHspiCsCoils;
     _pinHspiCsInj = proj.pinHspiCsInj;
+    _pinMcp3204Cs = proj.pinMcp3204Cs;
 
     // Configure sensor pin assignments
     _sensors->setPins(proj.pinO2Bank1, proj.pinO2Bank2, proj.pinMap, proj.pinTps,
@@ -241,8 +244,20 @@ void ECU::begin() {
     _fuel->begin();
     _alternator->begin(_pinAlternator);
 
-    // Probe second ADS1115 at 0x49 for MAP/TPS — frees MAP/TPS pins for OSS/TSS
-    if (_i2cEnabled) {
+    // Probe MCP3204 SPI ADC for MAP/TPS (priority over ADS1115 @ 0x49)
+    if (_spiExpandersEnabled) {
+        _mcp3204 = new MCP3204Reader();
+        if (_mcp3204->begin(&hspi, _pinMcp3204Cs, 5.0f)) {
+            _sensors->setMapTpsMCP3204(_mcp3204);
+            Log.info("ECU", "MCP3204 @ SPI CS=%d found — MAP/TPS via SPI, GPIO %d/%d freed for OSS/TSS",
+                     _pinMcp3204Cs, _sensors->getPin(2), _sensors->getPin(3));
+        } else {
+            delete _mcp3204;
+            _mcp3204 = nullptr;
+        }
+    }
+    // Fallback: probe second ADS1115 at 0x49 for MAP/TPS (only if MCP3204 not found)
+    if (!_mcp3204 && _i2cEnabled) {
         _ads1115_2 = new ADS1115Reader();
         if (_ads1115_2->begin(0x49, GAIN_TWOTHIRDS, RATE_ADS1115_860SPS)) {
             _sensors->setMapTpsADS1115(_ads1115_2);
@@ -251,7 +266,7 @@ void ECU::begin() {
         } else {
             delete _ads1115_2;
             _ads1115_2 = nullptr;
-            Log.warn("ECU", "ADS1115 @ 0x49 not found — MAP/TPS on native ADC (GPIO %d/%d), OSS/TSS disabled",
+            Log.warn("ECU", "No external MAP/TPS ADC found — using native ADC (GPIO %d/%d), OSS/TSS disabled",
                      _sensors->getPin(2), _sensors->getPin(3));
         }
     }
@@ -306,9 +321,10 @@ void ECU::begin() {
             _ads1115->begin(0x48);
         }
         _trans->setADS1115(_ads1115);
-        // OSS/TSS: MAP/TPS pins available only if second ADS1115 took over
-        uint8_t ossPin = _ads1115_2 ? _sensors->getPin(2) : 0xFF;
-        uint8_t tssPin = _ads1115_2 ? _sensors->getPin(3) : 0xFF;
+        // OSS/TSS: MAP/TPS pins available only if external ADC (MCP3204 or ADS1115) took over
+        bool extAdc = _sensors->hasExternalMapTps();
+        uint8_t ossPin = extAdc ? _sensors->getPin(2) : 0xFF;
+        uint8_t tssPin = extAdc ? _sensors->getPin(3) : 0xFF;
         _trans->begin(PIN_SS_A, PIN_SS_B, PIN_SS_C, PIN_SS_D,
                       _pinTcc, _pinEpc, ossPin, tssPin);
         Log.info("ECU", "Transmission controller enabled: %s, OSS=%s, TSS=%s",

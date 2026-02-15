@@ -63,6 +63,7 @@ struct ProjectInfo {
     uint8_t pinHspiMiso;            // SPI — HSPI MISO (default 12)
     uint8_t pinHspiCsCoils;         // SPI — MCP23S17 coils CS (default 13)
     uint8_t pinHspiCsInj;           // SPI — MCP23S17 injectors CS (default 14)
+    uint8_t pinMcp3204Cs;           // SPI — MCP3204 ADC CS (default 15)
     uint8_t pinI2cSda;              // I2C — SDA (default 0)
     uint8_t pinI2cScl;              // I2C — SCL (default 42)
     // Safe mode / peripheral control

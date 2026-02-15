@@ -1,6 +1,7 @@
 #include "SensorManager.h"
 #include "CJ125Controller.h"
 #include "ADS1115Reader.h"
+#include "MCP3204Reader.h"
 #include <esp_adc_cal.h>
 #include "Logger.h"
 
@@ -36,25 +37,29 @@ SensorManager::SensorManager()
 SensorManager::~SensorManager() {}
 
 void SensorManager::begin() {
-    // Configure ADC1 pins for analog read (skip MAP/TPS if using external ADS1115)
+    // Configure ADC1 pins for analog read (skip MAP/TPS if using external ADC)
+    bool extMapTps = hasExternalMapTps();
     for (uint8_t i = 0; i < NUM_CHANNELS; i++) {
-        if (_mapTpsAds && (i == 2 || i == 3))  // index 2=MAP, 3=TPS
+        if (extMapTps && (i == 2 || i == 3))  // index 2=MAP, 3=TPS
             continue;
         pinMode(_channelPins[i], INPUT);
         analogSetPinAttenuation(_channelPins[i], ADC_11db);
     }
     analogSetAttenuation(ADC_11db);
     analogReadResolution(12);
-    if (_mapTpsAds)
+    if (_mapTpsMcp)
+        Log.info("SENS", "SensorManager initialized (%d channels, MAP/TPS via MCP3204 SPI)", NUM_CHANNELS);
+    else if (_mapTpsAds)
         Log.info("SENS", "SensorManager initialized (%d channels, MAP/TPS via ADS1115)", NUM_CHANNELS);
     else
         Log.info("SENS", "SensorManager initialized (%d channels)", NUM_CHANNELS);
 }
 
 void SensorManager::update() {
-    // Read ADC channels and apply EMA filter (skip MAP/TPS if using ADS1115)
+    // Read ADC channels and apply EMA filter (skip MAP/TPS if using external ADC)
+    bool extMapTps = hasExternalMapTps();
     for (uint8_t i = 0; i < NUM_CHANNELS; i++) {
-        if (_mapTpsAds && (i == 2 || i == 3))  // index 2=MAP, 3=TPS
+        if (extMapTps && (i == 2 || i == 3))  // index 2=MAP, 3=TPS
             continue;
         _rawAdc[i] = analogRead(_channelPins[i]);
         float raw = (float)_rawAdc[i];
@@ -68,10 +73,12 @@ void SensorManager::update() {
     float vIat  = adcToVoltage((uint16_t)_rawFiltered[5]);
     float vBat  = adcToVoltage((uint16_t)_rawFiltered[6]);
 
-    // MAP/TPS: read from second ADS1115 (CH0=MAP, CH1=TPS) if available, else native ADC
+    // MAP/TPS: MCP3204 (SPI) > ADS1115 @ 0x49 (I2C) > native GPIO ADC
     float vMap, vTps;
-    if (_mapTpsAds && _mapTpsAds->isReady()) {
-        // ADS1115 at GAIN_TWOTHIRDS returns actual voltage (0-6.144V range)
+    if (_mapTpsMcp && _mapTpsMcp->isReady()) {
+        vMap = _mapTpsMcp->readMillivolts(0) / 1000.0f;
+        vTps = _mapTpsMcp->readMillivolts(1) / 1000.0f;
+    } else if (_mapTpsAds && _mapTpsAds->isReady()) {
         vMap = _mapTpsAds->readMillivolts(0) / 1000.0f;
         vTps = _mapTpsAds->readMillivolts(1) / 1000.0f;
     } else {

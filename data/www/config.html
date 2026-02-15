@@ -188,6 +188,7 @@ button:hover{background:#45a049;}
 <div><label>CS Coils</label><select id='pinHspiCsCoils' class='pinSel' onchange='checkPinDups()'></select></div>
 </div>
 <div><label>CS Injectors</label><select id='pinHspiCsInj' class='pinSel' onchange='checkPinDups()'></select></div>
+<div><label>CS MCP3204 ADC</label><select id='pinMcp3204Cs' class='pinSel' onchange='checkPinDups()'></select></div>
 <label style='font-weight:bold;color:var(--text);font-size:13px;margin:12px 0 4px'>I2C Bus</label>
 <div class='row2'>
 <div><label>SDA</label><select id='pinI2cSda' class='pinSel' onchange='checkPinDups()'></select></div>
@@ -269,7 +270,7 @@ var _allGpio=[];
 (function(){for(var i=0;i<=48;i++){if(_reservedPins.indexOf(i)<0)_allGpio.push(i);}})();
 var _pinFields=['pinO2Bank1','pinO2Bank2','pinMap','pinTps','pinClt','pinIat','pinVbat',
   'pinAlternator','pinHeater1','pinHeater2','pinTcc','pinEpc',
-  'pinHspiSck','pinHspiMosi','pinHspiMiso','pinHspiCsCoils','pinHspiCsInj','pinI2cSda','pinI2cScl'];
+  'pinHspiSck','pinHspiMosi','pinHspiMiso','pinHspiCsCoils','pinHspiCsInj','pinMcp3204Cs','pinI2cSda','pinI2cScl'];
 var _adcFields=['pinO2Bank1','pinO2Bank2','pinMap','pinTps','pinClt','pinIat','pinVbat'];
 
 function populatePinSelects(){

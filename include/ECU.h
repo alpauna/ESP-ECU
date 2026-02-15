@@ -12,6 +12,7 @@ class AlternatorControl;
 class SensorManager;
 class CJ125Controller;
 class ADS1115Reader;
+class MCP3204Reader;
 class TransmissionManager;
 struct ProjectInfo;
 
@@ -60,6 +61,7 @@ public:
     TransmissionManager* getTransmission() { return _trans; }
     ADS1115Reader* getADS1115_0() { return _ads1115; }
     ADS1115Reader* getADS1115_1() { return _ads1115_2; }
+    MCP3204Reader* getMCP3204() { return _mcp3204; }
     uint32_t getUpdateTimeUs() const { return _updateTimeUs; }
     uint32_t getSensorTimeUs() const { return _sensorTimeUs; }
 
@@ -78,6 +80,7 @@ private:
     CJ125Controller* _cj125;
     ADS1115Reader* _ads1115;
     ADS1115Reader* _ads1115_2;   // Second ADS1115 at 0x49 for MAP/TPS (frees GPIO 5/6 for OSS/TSS)
+    MCP3204Reader* _mcp3204;     // MCP3204 SPI ADC for MAP/TPS (alternative to ADS1115 @ 0x49)
     TransmissionManager* _trans;
     bool _cj125Enabled;
     uint8_t _transType;
@@ -103,6 +106,7 @@ private:
     uint8_t _pinHspiMiso;
     uint8_t _pinHspiCsCoils;
     uint8_t _pinHspiCsInj;
+    uint8_t _pinMcp3204Cs;
 
     // Peripheral enable flags (from config)
     bool _i2cEnabled = true;

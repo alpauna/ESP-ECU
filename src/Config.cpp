@@ -229,6 +229,7 @@ bool Config::loadConfig(const char* filename, ProjectInfo& proj) {
     proj.pinHspiMiso = doc["pins"]["hspiMiso"] | 12;
     proj.pinHspiCsCoils = doc["pins"]["hspiCsCoils"] | 13;
     proj.pinHspiCsInj = doc["pins"]["hspiCsInj"] | 14;
+    proj.pinMcp3204Cs = doc["pins"]["mcp3204Cs"] | 15;
     proj.pinI2cSda = doc["pins"]["i2cSda"] | 0;
     proj.pinI2cScl = doc["pins"]["i2cScl"] | 42;
 
@@ -350,6 +351,7 @@ bool Config::saveConfig(const char* filename, ProjectInfo& proj) {
     pins["hspiMiso"] = proj.pinHspiMiso;
     pins["hspiCsCoils"] = proj.pinHspiCsCoils;
     pins["hspiCsInj"] = proj.pinHspiCsInj;
+    pins["mcp3204Cs"] = proj.pinMcp3204Cs;
     pins["i2cSda"] = proj.pinI2cSda;
     pins["i2cScl"] = proj.pinI2cScl;
 
@@ -473,6 +475,7 @@ bool Config::updateConfig(const char* filename, ProjectInfo& proj) {
     doc["pins"]["hspiMiso"] = proj.pinHspiMiso;
     doc["pins"]["hspiCsCoils"] = proj.pinHspiCsCoils;
     doc["pins"]["hspiCsInj"] = proj.pinHspiCsInj;
+    doc["pins"]["mcp3204Cs"] = proj.pinMcp3204Cs;
     doc["pins"]["i2cSda"] = proj.pinI2cSda;
     doc["pins"]["i2cScl"] = proj.pinI2cScl;
 

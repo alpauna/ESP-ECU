@@ -147,9 +147,10 @@ function buildExpanders(list){
  for(var e=0;e<list.length;e++){var exp=list[e];
   var isSpi=exp.type==='MCP23S17';
   var isAds=exp.type==='ADS1115';
+  var isMcp3204=exp.type==='MCP3204';
   var note=exp.note?' ('+exp.note+')':'';
   var label=exp.type+' #'+exp.index;
-  if(isSpi) label+=' ['+exp.bus+', CS=GPIO'+exp.cs+']';
+  if(isSpi||isMcp3204) label+=' ['+exp.bus+', CS=GPIO'+exp.cs+']';
   else label+=' @ '+exp.address;
   var vlt='5V';
   h+='<h2>'+label+note+'</h2>';
@@ -157,6 +158,9 @@ function buildExpanders(list){
   if(isSpi){
    h+='<span class="lbl" style="margin-left:12px">CS:</span> <span class="val">GPIO'+exp.cs+'</span>';
    h+='<span class="lbl" style="margin-left:12px">HW Addr:</span> <span class="val">'+exp.hwAddr+'</span>';
+  }else if(isMcp3204){
+   h+='<span class="lbl" style="margin-left:12px">CS:</span> <span class="val">GPIO'+exp.cs+'</span>';
+   h+='<span class="lbl" style="margin-left:12px">VRef:</span> <span class="val">'+exp.vRef+'</span>';
   }else{
    h+='<span class="lbl" style="margin-left:12px">SDA:</span> <span class="val">GPIO'+exp.sda+'</span>';
    h+='<span class="lbl" style="margin-left:12px">SCL:</span> <span class="val">GPIO'+exp.scl+'</span>';
@@ -167,7 +171,7 @@ function buildExpanders(list){
    h+='<span class="lbl" style="margin-left:12px">Rate:</span> <span class="val">'+exp.rate+'</span>';
   }
   h+='</div>';
-  if(isAds&&exp.channels){
+  if((isAds||isMcp3204)&&exp.channels){
    h+='<table><thead><tr><th>Channel</th><th>Name</th><th>mV</th></tr></thead><tbody>';
    for(var i=0;i<exp.channels.length;i++){var c=exp.channels[i];
     h+='<tr><td class="pin">CH'+c.ch+'</td><td>'+c.name+'</td><td>'+c.mV+'</td></tr>';

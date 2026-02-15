@@ -4,6 +4,7 @@
 
 class CJ125Controller;
 class ADS1115Reader;
+class MCP3204Reader;
 
 class SensorManager {
 public:
@@ -55,9 +56,14 @@ public:
     void setMapTpsADS1115(ADS1115Reader* ads) { _mapTpsAds = ads; }
     bool hasMapTpsADS1115() const { return _mapTpsAds != nullptr; }
 
+    void setMapTpsMCP3204(MCP3204Reader* mcp) { _mapTpsMcp = mcp; }
+    bool hasMapTpsMCP3204() const { return _mapTpsMcp != nullptr; }
+    bool hasExternalMapTps() const { return _mapTpsAds != nullptr || _mapTpsMcp != nullptr; }
+
 private:
     CJ125Controller* _cj125 = nullptr;
     ADS1115Reader* _mapTpsAds = nullptr;
+    MCP3204Reader* _mapTpsMcp = nullptr;
     AdcCalibration _cal;
     float _rawFiltered[NUM_CHANNELS];
     uint16_t _rawAdc[NUM_CHANNELS];

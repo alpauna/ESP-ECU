@@ -11,6 +11,7 @@
 #include "TuneTable.h"
 #include "PinExpander.h"
 #include "ADS1115Reader.h"
+#include "MCP3204Reader.h"
 #include "OtaUtils.h"
 
 extern const char compile_date[];
@@ -547,6 +548,7 @@ void WebHandler::setupRoutes() {
             doc["pinHspiMiso"] = proj->pinHspiMiso;
             doc["pinHspiCsCoils"] = proj->pinHspiCsCoils;
             doc["pinHspiCsInj"] = proj->pinHspiCsInj;
+            doc["pinMcp3204Cs"] = proj->pinMcp3204Cs;
             doc["pinI2cSda"] = proj->pinI2cSda;
             doc["pinI2cScl"] = proj->pinI2cScl;
 
@@ -712,6 +714,7 @@ void WebHandler::setupRoutes() {
                 data["pinHspiMiso"] | proj->pinHspiMiso,
                 data["pinHspiCsCoils"] | proj->pinHspiCsCoils,
                 data["pinHspiCsInj"] | proj->pinHspiCsInj,
+                data["pinMcp3204Cs"] | proj->pinMcp3204Cs,
                 data["pinI2cSda"] | proj->pinI2cSda,
                 data["pinI2cScl"] | proj->pinI2cScl
             };
@@ -720,9 +723,10 @@ void WebHandler::setupRoutes() {
                 &proj->pinClt, &proj->pinIat, &proj->pinVbat, &proj->pinAlternator,
                 &proj->pinHeater1, &proj->pinHeater2, &proj->pinTcc, &proj->pinEpc,
                 &proj->pinHspiSck, &proj->pinHspiMosi, &proj->pinHspiMiso,
-                &proj->pinHspiCsCoils, &proj->pinHspiCsInj, &proj->pinI2cSda, &proj->pinI2cScl
+                &proj->pinHspiCsCoils, &proj->pinHspiCsInj, &proj->pinMcp3204Cs,
+                &proj->pinI2cSda, &proj->pinI2cScl
             };
-            for (int i = 0; i < 19; i++) {
+            for (int i = 0; i < 20; i++) {
                 if (pins[i] != *cur[i]) { *cur[i] = pins[i]; needsReboot = true; }
             }
         }
@@ -871,8 +875,18 @@ void WebHandler::setupRoutes() {
                       "10.0-20.0 AFR", "5V\xe2\x86\x92" "3.3V");
             addAnalog(pO2b2, "O2_BANK2", 1, "Wideband O2, 0-5V maps to AFR 10.0-20.0. 12-bit ADC, 0.81mV/step",
                       "10.0-20.0 AFR", "5V\xe2\x86\x92" "3.3V");
+            bool hasMcp = sens && sens->hasMapTpsMCP3204();
             bool hasAds2 = sens && sens->hasMapTpsADS1115();
-            if (hasAds2) {
+            if (hasMcp) {
+                JsonObject oMap = inputs.add<JsonObject>();
+                oMap["pin"] = "MCP3204@SPI CH0"; oMap["name"] = "MAP"; oMap["type"] = "analog"; oMap["mode"] = "SPI ADC";
+                oMap["desc"] = "Manifold pressure via MCP3204, 0.5-4.5V = 10-105 kPa (12-bit, 1MHz SPI)";
+                oMap["raw"] = 0; oMap["mV"] = 0; oMap["range"] = "10-105 kPa"; oMap["voltage"] = "5V";
+                JsonObject oTps = inputs.add<JsonObject>();
+                oTps["pin"] = "MCP3204@SPI CH1"; oTps["name"] = "TPS"; oTps["type"] = "analog"; oTps["mode"] = "SPI ADC";
+                oTps["desc"] = "Throttle position via MCP3204, 0.5V=closed, 4.5V=WOT (12-bit, 1MHz SPI)";
+                oTps["raw"] = 0; oTps["mV"] = 0; oTps["range"] = "0-100%"; oTps["voltage"] = "5V";
+            } else if (hasAds2) {
                 JsonObject oMap = inputs.add<JsonObject>();
                 oMap["pin"] = "ADS1115@0x49 CH0"; oMap["name"] = "MAP"; oMap["type"] = "analog"; oMap["mode"] = "I2C ADC";
                 oMap["desc"] = "Manifold pressure via ADS1115, 0.5-4.5V = 10-105 kPa (GAIN_TWOTHIRDS, 860SPS)";
@@ -978,6 +992,14 @@ void WebHandler::setupRoutes() {
             addSpi(pHspiMiso, "HSPI_MISO", "HSPI \xe2\x80\x94 MCP23S17 10MHz", "5V");
             addSpi(pHspiCsCoils, "HSPI_CS0", "HSPI \xe2\x80\x94 MCP23S17 #0 (coils)", "5V");
             addSpi(pHspiCsInj, "HSPI_CS1", "HSPI \xe2\x80\x94 MCP23S17 #1 (injectors)", "5V");
+            // MCP3204 CS pin (only show in bus list if detected or configured)
+            {
+                uint8_t pMcp3204Cs = proj ? proj->pinMcp3204Cs : 15;
+                MCP3204Reader* mcp = _ecu ? _ecu->getMCP3204() : nullptr;
+                if (mcp && mcp->isReady()) {
+                    addSpi(pMcp3204Cs, "HSPI_CS2", "HSPI \xe2\x80\x94 MCP3204 ADC 1MHz", "5V");
+                }
+            }
 
             // CJ125 heater PWM outputs
             {
@@ -1010,7 +1032,7 @@ void WebHandler::setupRoutes() {
                 o["pin"] = pcf.getSDA(); o["name"] = "I2C_SDA"; o["type"] = "I2C";
                 o["mode"] = "ADS1115 @ 0x48 (CJ125_UR)"; o["voltage"] = "5V";
             }
-            if (sens && sens->hasMapTpsADS1115()) {
+            if (sens && sens->hasMapTpsADS1115() && !sens->hasMapTpsMCP3204()) {
                 JsonObject o = bus.add<JsonObject>();
                 o["pin"] = pcf.getSDA(); o["name"] = "I2C_SDA"; o["type"] = "I2C";
                 o["mode"] = "ADS1115 @ 0x49 (MAP/TPS)"; o["voltage"] = "5V";
@@ -1210,11 +1232,36 @@ void WebHandler::setupRoutes() {
                     }
                 }
             }
+            // MCP3204 SPI ADC (MAP/TPS, alternative to ADS1115 @ 0x49)
+            if (_ecu && _ecu->getMCP3204()) {
+                MCP3204Reader* mcp = _ecu->getMCP3204();
+                JsonObject mcpExp = expanders.add<JsonObject>();
+                mcpExp["index"] = 8;
+                mcpExp["type"] = "MCP3204";
+                mcpExp["bus"] = "HSPI 1MHz";
+                mcpExp["cs"] = mcp->getCsPin();
+                mcpExp["ready"] = mcp->isReady();
+                char vrefStr[8]; snprintf(vrefStr, sizeof(vrefStr), "%.1fV", mcp->getVRef());
+                mcpExp["vRef"] = vrefStr;
+                if (mcp->isReady()) {
+                    const char* chNames[] = {"MAP", "TPS", "SPARE", "SPARE"};
+                    JsonArray channels = mcpExp["channels"].to<JsonArray>();
+                    for (uint8_t i = 0; i < 4; i++) {
+                        JsonObject ch = channels.add<JsonObject>();
+                        ch["ch"] = i;
+                        ch["name"] = chNames[i];
+                        ch["mV"] = serialized(String(mcp->readMillivolts(i), 1));
+                    }
+                }
+            }
 
             // Freed GPIO (available for future use)
             {
+                uint8_t pMcp3204Cs = proj ? proj->pinMcp3204Cs : 15;
+                bool mcpActive = _ecu && _ecu->getMCP3204() && _ecu->getMCP3204()->isReady();
                 const uint8_t freedPins[] = {15, 16, 17, 18, 21, 40};
                 for (uint8_t i = 0; i < 6; i++) {
+                    if (mcpActive && freedPins[i] == pMcp3204Cs) continue;  // CS in use
                     JsonObject o = bus.add<JsonObject>();
                     o["pin"] = freedPins[i]; o["name"] = "FREE"; o["type"] = "GPIO";
                     o["mode"] = "Available — freed by MCP23S17 migration";
@@ -1238,28 +1285,28 @@ void WebHandler::setupRoutes() {
                     o["percent"] = ts.epcDuty;
                     o["range"] = "0-100%"; o["voltage"] = "3.3V";
                 }
-                // Speed sensor inputs — MAP/TPS pins freed when second ADS1115 takes over
+                // Speed sensor inputs — MAP/TPS pins freed when external ADC (MCP3204 or ADS1115) takes over
                 {
-                    bool ossEnabled = sens && sens->hasMapTpsADS1115();
+                    bool ossEnabled = sens && sens->hasExternalMapTps();
                     uint8_t ossPin = ossEnabled ? pMap : 0;
                     JsonObject o = inputs.add<JsonObject>();
                     o["pin"] = (int)ossPin;
                     o["name"] = "OSS"; o["type"] = "digital";
                     o["mode"] = ossEnabled ? "ISR PULSE" : "DISABLED";
                     o["desc"] = ossEnabled ? "Output shaft speed, 8 pulses/rev, ISR counting"
-                                           : "Output shaft speed \xe2\x80\x94 needs ADS1115 @ 0x49 to free GPIO";
+                                           : "Output shaft speed \xe2\x80\x94 needs external ADC to free GPIO";
                     o["rpm"] = ts.ossRpm;
                     o["range"] = "0-65535 RPM"; o["voltage"] = "3.3V";
                 }
                 {
-                    bool tssEnabled = sens && sens->hasMapTpsADS1115();
+                    bool tssEnabled = sens && sens->hasExternalMapTps();
                     uint8_t tssPin = tssEnabled ? pTps : 0;
                     JsonObject o = inputs.add<JsonObject>();
                     o["pin"] = (int)tssPin;
                     o["name"] = "TSS"; o["type"] = "digital";
                     o["mode"] = tssEnabled ? "ISR PULSE" : "DISABLED";
                     o["desc"] = tssEnabled ? "Turbine shaft speed, 8 pulses/rev, ISR counting"
-                                           : "Turbine shaft speed \xe2\x80\x94 needs ADS1115 @ 0x49 to free GPIO";
+                                           : "Turbine shaft speed \xe2\x80\x94 needs external ADC to free GPIO";
                     o["rpm"] = ts.tssRpm;
                     o["range"] = "0-65535 RPM"; o["voltage"] = "3.3V";
                 }
