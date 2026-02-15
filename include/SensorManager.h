@@ -7,13 +7,6 @@ class ADS1115Reader;
 
 class SensorManager {
 public:
-    static const uint8_t O2_BANK1_PIN = 3;
-    static const uint8_t O2_BANK2_PIN = 4;
-    static const uint8_t MAP_PIN = 5;
-    static const uint8_t TPS_PIN = 6;
-    static const uint8_t CLT_PIN = 7;
-    static const uint8_t IAT_PIN = 8;
-    static const uint8_t VBAT_PIN = 9;
     static const uint8_t NUM_CHANNELS = 7;
 
     static const uint16_t ADC_MAX_VALUE = 4095;
@@ -51,6 +44,11 @@ public:
     void setO2Calibration(float afrAt0v, float afrAt5v);
     void setVbatDividerRatio(float ratio);
 
+    void setPins(uint8_t o2b1, uint8_t o2b2, uint8_t map, uint8_t tps,
+                 uint8_t clt, uint8_t iat, uint8_t vbat);
+
+    uint8_t getPin(uint8_t channel) const { return channel < NUM_CHANNELS ? _channelPins[channel] : 0; }
+
     void setCJ125(CJ125Controller* cj125) { _cj125 = cj125; }
     CJ125Controller* getCJ125() const { return _cj125; }
 
@@ -71,7 +69,7 @@ private:
     float _iatTempF;
     float _batteryVoltage;
 
-    static const uint8_t _channelPins[NUM_CHANNELS];
+    uint8_t _channelPins[NUM_CHANNELS];
 
     float adcToVoltage(uint16_t raw) const;
     float voltageToMapKpa(float voltage) const;

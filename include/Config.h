@@ -45,6 +45,36 @@ struct ProjectInfo {
     uint16_t closedLoopMaxRpm;
     float closedLoopMaxMapKpa;
     bool cj125Enabled;
+    // Pin assignments (configurable, requires reboot)
+    uint8_t pinO2Bank1;             // ADC — O2 bank 1 (default 3)
+    uint8_t pinO2Bank2;             // ADC — O2 bank 2 (default 4)
+    uint8_t pinMap;                 // ADC — MAP sensor (default 5)
+    uint8_t pinTps;                 // ADC — TPS sensor (default 6)
+    uint8_t pinClt;                 // ADC — coolant temp (default 7)
+    uint8_t pinIat;                 // ADC — intake air temp (default 8)
+    uint8_t pinVbat;                // ADC — battery voltage (default 9)
+    uint8_t pinAlternator;          // PWM — alternator field (default 41)
+    uint8_t pinHeater1;             // PWM — CJ125 heater bank 1 (default 19)
+    uint8_t pinHeater2;             // PWM — CJ125 heater bank 2 (default 20)
+    uint8_t pinTcc;                 // PWM — torque converter clutch (default 45)
+    uint8_t pinEpc;                 // PWM — electronic pressure control (default 46)
+    uint8_t pinHspiSck;             // SPI — HSPI clock (default 10)
+    uint8_t pinHspiMosi;            // SPI — HSPI MOSI (default 11)
+    uint8_t pinHspiMiso;            // SPI — HSPI MISO (default 12)
+    uint8_t pinHspiCsCoils;         // SPI — MCP23S17 coils CS (default 13)
+    uint8_t pinHspiCsInj;           // SPI — MCP23S17 injectors CS (default 14)
+    uint8_t pinI2cSda;              // I2C — SDA (default 0)
+    uint8_t pinI2cScl;              // I2C — SCL (default 42)
+    // Safe mode / peripheral control
+    bool forceSafeMode;             // One-shot: enter safe mode on next reboot (default false)
+    bool i2cEnabled;                // Master I2C bus enable (default true)
+    bool spiExpandersEnabled;       // HSPI MCP23S17 bus enable (default true)
+    bool expander0Enabled;          // MCP23017 #0 @ 0x20 (default true)
+    bool expander1Enabled;          // MCP23017 #1 @ 0x21 (default true)
+    bool expander2Enabled;          // MCP23017 #2 @ 0x22 (default true)
+    bool expander3Enabled;          // MCP23017 #3 @ 0x23 (default true)
+    bool spiExp0Enabled;            // MCP23S17 #0 — coils (default true)
+    bool spiExp1Enabled;            // MCP23S17 #1 — injectors (default true)
     // Transmission
     uint8_t transType;              // 0=NONE, 1=4R70W, 2=4R100
     uint16_t upshift12Rpm;          // default 1500

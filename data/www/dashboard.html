@@ -62,6 +62,12 @@ nav .brand{font-weight:bold;font-size:16px;margin-right:auto;color:#fff;}
 </div></nav>
 <div class='content'>
 
+<div id='safeBanner' style='display:none;background:#d32f2f;color:#fff;padding:12px 16px;border-radius:6px;margin-bottom:12px;text-align:center;'>
+<div style='font-size:18px;font-weight:bold;margin-bottom:4px'>SAFE MODE</div>
+<div id='safeInfo' style='font-size:13px;margin-bottom:8px'></div>
+<button onclick="if(confirm('Exit safe mode and reboot?')){fetch('/safemode/clear',{method:'POST'}).then(function(){alert('Rebooting...')}).catch(function(){alert('Failed')})}" style='background:#fff;color:#d32f2f;border:none;padding:6px 18px;border-radius:4px;cursor:pointer;font-weight:bold;'>Exit Safe Mode</button>
+</div>
+
 <div class='state-banner state-OFF' id='banner'>OFF</div>
 
 <div class='grid'>
@@ -180,6 +186,13 @@ nav .brand{font-weight:bold;font-size:16px;margin-right:auto;color:#fff;}
 <script>
 function poll(){
   fetch('/state').then(function(r){return r.json();}).then(function(d){
+    // Safe mode banner
+    if(d.safeMode){
+      document.getElementById('safeBanner').style.display='block';
+      document.getElementById('safeInfo').textContent='Boot loop detected ('+d.bootCount+' boots, last reset: '+d.resetReason+'). Peripherals disabled.';
+    }else{
+      document.getElementById('safeBanner').style.display='none';
+    }
     var st=d.state||'OFF';
     var banner=document.getElementById('banner');
     banner.textContent=st;

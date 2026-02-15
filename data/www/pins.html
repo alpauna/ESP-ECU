@@ -8,7 +8,7 @@ nav{background:var(--nav-bg);padding:10px 20px;display:flex;align-items:center;g
 nav a{color:#fff;text-decoration:none;font-size:14px;padding:6px 12px;border-radius:4px;}
 nav a:hover,nav a.active{background:#4CAF50;}
 nav .brand{font-weight:bold;font-size:16px;margin-right:auto;color:#fff;}
-.content{max-width:1100px;margin:10px auto;padding:0 15px;}
+.content{max-width:1200px;margin:10px auto;padding:0 15px;}
 h2{color:var(--text);margin:18px 0 8px;font-size:15px;border-bottom:2px solid #4CAF50;padding-bottom:4px;text-transform:uppercase;letter-spacing:0.5px;}
 .status-bar{display:flex;align-items:center;gap:16px;margin:12px 0;padding:10px 14px;background:var(--surface);border:1px solid var(--border);border-radius:6px;font-size:13px;}
 .status-bar .lbl{color:var(--text-secondary);}
@@ -17,6 +17,9 @@ h2{color:var(--text);margin:18px 0 8px;font-size:15px;border-bottom:2px solid #4
 .sync-LOST{background:#d32f2f;}
 .sync-SYNCING{background:#ff9800;}
 .sync-SYNCED{background:#4CAF50;}
+.col-toggles{display:flex;gap:14px;flex-wrap:wrap;margin:8px 0 4px;padding:6px 10px;background:var(--surface);border:1px solid var(--border);border-radius:4px;font-size:12px;}
+.col-toggles label{color:var(--text-secondary);cursor:pointer;display:flex;align-items:center;gap:4px;}
+.col-toggles input{width:auto;}
 table{width:100%;border-collapse:collapse;margin-bottom:16px;font-size:13px;}
 th{text-align:left;padding:6px 10px;background:var(--surface);color:#4CAF50;border-bottom:2px solid var(--border);font-size:12px;text-transform:uppercase;letter-spacing:0.5px;}
 td{padding:6px 10px;border-bottom:1px solid var(--border-light);color:var(--text);vertical-align:top;}
@@ -36,6 +39,15 @@ tr:hover td{background:var(--hover-bg);}
 .v-mv{color:#ffa726;}
 .v-pct{color:#ce93d8;}
 .desc{color:var(--text-muted);font-size:11px;max-width:300px;}
+.vlt-33{color:#66bb6a;font-weight:bold;font-size:12px;}
+.vlt-5{color:#ff9800;font-weight:bold;font-size:12px;}
+.vlt-div{color:#42a5f5;font-weight:bold;font-size:12px;}
+.range-cell{color:var(--text-secondary);font-size:12px;font-family:monospace;white-space:nowrap;}
+.col-voltage{} .col-range{} .col-mode{} .col-desc{}
+.hide-voltage .col-voltage{display:none!important;}
+.hide-range .col-range{display:none!important;}
+.hide-mode .col-mode{display:none!important;}
+.hide-desc .col-desc{display:none!important;}
 .footer{text-align:center;color:var(--text-muted);font-size:11px;margin-top:8px;}
 </style></head><body>
 <nav><span class='brand'>ESP-ECU</span>
@@ -58,21 +70,29 @@ tr:hover td{background:var(--hover-bg);}
 <span class='lbl' style='margin-left:12px;'>RPM:</span> <span class='val' id='rpm'>0</span>
 </div>
 
+<div class='col-toggles'>
+<span style='color:var(--text);font-weight:bold'>Columns:</span>
+<label><input type='checkbox' id='togVoltage' onchange='toggleCol()' checked> Voltage</label>
+<label><input type='checkbox' id='togRange' onchange='toggleCol()' checked> Range</label>
+<label><input type='checkbox' id='togMode' onchange='toggleCol()' checked> Mode</label>
+<label><input type='checkbox' id='togDesc' onchange='toggleCol()' checked> Description</label>
+</div>
+
 <h2>Inputs</h2>
 <table id='inputTable'>
-<thead><tr><th>GPIO</th><th>Name</th><th>Type</th><th>Mode</th><th>Value</th><th>Description</th></tr></thead>
+<thead><tr><th>GPIO</th><th class='col-voltage'>Voltage</th><th>Name</th><th>Type</th><th class='col-mode'>Mode</th><th>Value</th><th class='col-range'>Range</th><th class='col-desc'>Description</th></tr></thead>
 <tbody></tbody>
 </table>
 
 <h2>Outputs</h2>
 <table id='outputTable'>
-<thead><tr><th>GPIO</th><th>Name</th><th>Type</th><th>Mode</th><th>Value</th><th>Description</th></tr></thead>
+<thead><tr><th>GPIO</th><th class='col-voltage'>Voltage</th><th>Name</th><th>Type</th><th class='col-mode'>Mode</th><th>Value</th><th class='col-range'>Range</th><th class='col-desc'>Description</th></tr></thead>
 <tbody></tbody>
 </table>
 
 <h2>Bus (SPI / I2C)</h2>
 <table id='busTable'>
-<thead><tr><th>GPIO</th><th>Name</th><th>Type</th><th>Mode</th></tr></thead>
+<thead><tr><th>GPIO</th><th class='col-voltage'>Voltage</th><th>Name</th><th>Type</th><th class='col-mode'>Mode</th></tr></thead>
 <tbody></tbody>
 </table>
 
@@ -81,9 +101,16 @@ tr:hover td{background:var(--hover-bg);}
 <div class='footer'>Auto-refreshes every 2s</div>
 </div>
 <script>
+function vltClass(v){
+ if(!v)return '';
+ if(v.indexOf('\u2192')>=0||v.indexOf('->')>=0)return 'vlt-div';
+ if(v.indexOf('5V')>=0)return 'vlt-5';
+ return 'vlt-33';
+}
 function fmtVal(r){
  if(r.type==='pwm') return '<span class="v v-pct">'+(r.percent!==undefined?r.percent.toFixed(1)+'%':'0%')+'</span>';
  if(r.type==='analog') return '<span class="v v-mv">'+r.mV+' mV</span> <span class="desc">(raw '+r.raw+'/4095)</span>';
+ if(r.rpm!==undefined) return '<span class="v v-on">'+r.rpm+' RPM</span>';
  var v=r.value||'OFF';
  if(v==='N/C') return '<span class="v v-nc">N/C</span>';
  if(v==='ON'||v==='HIGH') return '<span class="v v-on">'+v+'</span>';
@@ -93,21 +120,24 @@ function tc(t){return 't-'+t;}
 function buildInputs(rows){
  var tb=document.querySelector('#inputTable tbody'),h='';
  for(var i=0;i<rows.length;i++){var r=rows[i];
-  h+='<tr><td class="pin">'+r.pin+'</td><td>'+r.name+'</td><td class="'+tc(r.type)+'">'+r.type.toUpperCase()+'</td><td>'+r.mode+'</td><td>'+fmtVal(r)+'</td><td class="desc">'+(r.desc||'')+'</td></tr>';
+  var vc=vltClass(r.voltage);
+  h+='<tr><td class="pin">'+r.pin+'</td><td class="col-voltage"><span class="'+vc+'">'+(r.voltage||'')+'</span></td><td>'+r.name+'</td><td class="'+tc(r.type)+'">'+r.type.toUpperCase()+'</td><td class="col-mode">'+r.mode+'</td><td>'+fmtVal(r)+'</td><td class="col-range range-cell">'+(r.range||'')+'</td><td class="col-desc desc">'+(r.desc||'')+'</td></tr>';
  } tb.innerHTML=h;
 }
 function buildOutputs(rows){
  var tb=document.querySelector('#outputTable tbody'),h='';
  for(var i=0;i<rows.length;i++){var r=rows[i];
   var d=r.desc||'';if(r.note)d+=(d?' ':'')+'<em>('+r.note+')</em>';
-  h+='<tr><td class="pin">'+(r.pin||'--')+'</td><td>'+r.name+'</td><td class="'+tc(r.type)+'">'+r.type.toUpperCase()+'</td><td>'+r.mode+'</td><td>'+fmtVal(r)+'</td><td class="desc">'+d+'</td></tr>';
+  var vc=vltClass(r.voltage);
+  h+='<tr><td class="pin">'+(r.pin||'--')+'</td><td class="col-voltage"><span class="'+vc+'">'+(r.voltage||'')+'</span></td><td>'+r.name+'</td><td class="'+tc(r.type)+'">'+r.type.toUpperCase()+'</td><td class="col-mode">'+r.mode+'</td><td>'+fmtVal(r)+'</td><td class="col-range range-cell">'+(r.range||'')+'</td><td class="col-desc desc">'+d+'</td></tr>';
  } tb.innerHTML=h;
 }
 function buildBus(rows){
  var tb=document.querySelector('#busTable tbody'),h='';
  for(var i=0;i<rows.length;i++){var r=rows[i];
   var cls=r.type==='I2C'?'t-i2c':r.type==='GPIO'?'t-digital':'t-spi';
-  h+='<tr><td class="pin">'+r.pin+'</td><td>'+r.name+'</td><td class="'+cls+'">'+r.type+'</td><td>'+r.mode+'</td></tr>';
+  var vc=vltClass(r.voltage);
+  h+='<tr><td class="pin">'+r.pin+'</td><td class="col-voltage"><span class="'+vc+'">'+(r.voltage||'')+'</span></td><td>'+r.name+'</td><td class="'+cls+'">'+r.type+'</td><td class="col-mode">'+r.mode+'</td></tr>';
  } tb.innerHTML=h;
 }
 function buildExpanders(list){
@@ -120,6 +150,7 @@ function buildExpanders(list){
   var label=exp.type+' #'+exp.index;
   if(isSpi) label+=' ['+exp.bus+', CS=GPIO'+exp.cs+']';
   else label+=' @ '+exp.address;
+  var vlt='5V';
   h+='<h2>'+label+note+'</h2>';
   h+='<div class="status-bar"><span class="lbl">Status:</span> <span class="'+(exp.ready?'pcf-ready':'pcf-fail')+'">'+(exp.ready?'READY':'NOT FOUND')+'</span>';
   if(isSpi){
@@ -129,6 +160,7 @@ function buildExpanders(list){
    h+='<span class="lbl" style="margin-left:12px">SDA:</span> <span class="val">GPIO'+exp.sda+'</span>';
    h+='<span class="lbl" style="margin-left:12px">SCL:</span> <span class="val">GPIO'+exp.scl+'</span>';
   }
+  h+='<span class="lbl" style="margin-left:12px">Voltage:</span> <span class="'+vltClass(vlt)+'">'+vlt+'</span>';
   h+='</div>';
   if(exp.pins){
    h+='<table><thead><tr><th>Pin</th><th>Global</th><th>Name</th><th>Value</th></tr></thead><tbody>';
@@ -139,6 +171,27 @@ function buildExpanders(list){
   }
  }sec.innerHTML=h;
 }
+
+function toggleCol(){
+ var ct=document.querySelector('.content');
+ var cols=['voltage','range','mode','desc'];
+ cols.forEach(function(c){
+  var cb=document.getElementById('tog'+c.charAt(0).toUpperCase()+c.slice(1));
+  if(cb.checked)ct.classList.remove('hide-'+c);
+  else ct.classList.add('hide-'+c);
+  localStorage.setItem('pins-col-'+c,cb.checked?'1':'0');
+ });
+}
+function restoreCols(){
+ var cols=['voltage','range','mode','desc'];
+ cols.forEach(function(c){
+  var saved=localStorage.getItem('pins-col-'+c);
+  var cb=document.getElementById('tog'+c.charAt(0).toUpperCase()+c.slice(1));
+  if(saved!==null){cb.checked=saved==='1';}
+ });
+ toggleCol();
+}
+
 function refresh(){
  fetch('/pins?format=json').then(function(r){return r.json();}).then(function(d){
   buildInputs(d.inputs||[]);buildOutputs(d.outputs||[]);buildBus(d.bus||[]);buildExpanders(d.expanders||[]);
@@ -150,5 +203,6 @@ function refresh(){
 fetch('/theme').then(function(r){return r.json();}).then(function(d){
  if(d.theme){document.documentElement.dataset.theme=d.theme;localStorage.setItem('hp-theme',d.theme);}
 });
+restoreCols();
 refresh();setInterval(refresh,2000);
 </script></body></html>

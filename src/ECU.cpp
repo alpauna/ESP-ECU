@@ -1,4 +1,5 @@
 #include "ECU.h"
+#include <Wire.h>
 #include "CrankSensor.h"
 #include "CamSensor.h"
 #include "IgnitionManager.h"
@@ -15,46 +16,22 @@
 #include "PinExpander.h"
 #include <esp_task_wdt.h>
 
-// GPIO pin assignments (ESP32-S3)
+// Locked GPIO pin assignments — time-critical, not configurable
 static const uint8_t PIN_CRANK        = 1;
 static const uint8_t PIN_CAM          = 2;
-static const uint8_t PIN_ALTERNATOR   = 41;
 
-// I2C bus for PCF8575 expander
-static const uint8_t I2C_SDA          = 0;   // GPIO0 — strapping pin, ext pull-up, works as I2C SDA after boot
-static const uint8_t I2C_SCL          = 42;  // GPIO42 — was FUEL_PUMP, now I2C SCL
+// MCP23017 #0 outputs — fixed expander pin assignments
+static const uint8_t PIN_FUEL_PUMP    = 100; // MCP23017 #0 P0
+static const uint8_t PIN_TACH_OUT     = 101; // MCP23017 #0 P1
+static const uint8_t PIN_CEL          = 102; // MCP23017 #0 P2
+static const uint8_t PIN_SPI_SS_1     = 108; // MCP23017 P8 — CJ125 Bank 1 CS
+static const uint8_t PIN_SPI_SS_2     = 109; // MCP23017 P9 — CJ125 Bank 2 CS
 
-// MCP23017 #0 outputs (pin 100+ = I2C expander P0-P15)
-static const uint8_t PIN_FUEL_PUMP    = 100; // MCP23017 #0 P0 — moved from GPIO42
-static const uint8_t PIN_TACH_OUT     = 101; // MCP23017 #0 P1 — was disabled (GPIO43=TX conflict)
-static const uint8_t PIN_CEL          = 102; // MCP23017 #0 P2 — was disabled (GPIO44=RX conflict)
-
-// CJ125 wideband O2 controller pins (from WB_O2_Micro schematic)
-static const uint8_t PIN_SPI_SS_1     = 108; // MCP23017 P8 — CJ125 Bank 1 chip select
-static const uint8_t PIN_SPI_SS_2     = 109; // MCP23017 P9 — CJ125 Bank 2 chip select
-static const uint8_t PIN_HEATER_OUT_1 = 19;  // LEDC — heater PWM bank 1
-static const uint8_t PIN_HEATER_OUT_2 = 20;  // LEDC — heater PWM bank 2
-static const uint8_t PIN_CJ125_UA_1   = 3;   // ADC — CJ125 lambda output bank 1
-static const uint8_t PIN_CJ125_UA_2   = 4;   // ADC — CJ125 lambda output bank 2
-
-// Transmission control pins (second MCP23017 at 0x21, pin range 116-131)
-static const uint8_t PIN_SS_A        = 116; // MCP23017 #1 P0 — Shift Solenoid A
-static const uint8_t PIN_SS_B        = 117; // MCP23017 #1 P1 — Shift Solenoid B
-static const uint8_t PIN_SS_C        = 118; // MCP23017 #1 P2 — Shift Solenoid C (4R100 only)
-static const uint8_t PIN_SS_D        = 119; // MCP23017 #1 P3 — Coast Clutch (4R100 only)
-static const uint8_t PIN_TCC_PWM     = 45;  // LEDC ch4 — Torque converter clutch (strapping pin, OK after boot)
-static const uint8_t PIN_EPC_PWM     = 46;  // LEDC ch6 — Electronic pressure control (strapping pin, OK after boot)
-// NOTE: GPIO 33-37 are reserved by OPI PSRAM — cannot be used
-// OSS/TSS: GPIO 5/6 freed when second ADS1115 at 0x49 takes over MAP/TPS reads
-// Without second ADS1115, GPIO 5=MAP and GPIO 6=TPS (native ADC) → OSS/TSS disabled
-
-// HSPI bus (SPI3_HOST) — dedicated for MCP23S17 coil/injector expanders
-static const uint8_t HSPI_SCK       = 10;
-static const uint8_t HSPI_MOSI      = 11;
-static const uint8_t HSPI_MISO      = 12;
-static const uint8_t HSPI_CS_COILS  = 13;  // MCP23S17 #0 chip select
-static const uint8_t HSPI_CS_INJ    = 14;  // MCP23S17 #1 chip select
-// GPIO 15-18, 21, 40 freed — available for future use
+// Transmission shift solenoids — fixed MCP23017 #1 assignments
+static const uint8_t PIN_SS_A        = 116; // MCP23017 #1 P0
+static const uint8_t PIN_SS_B        = 117; // MCP23017 #1 P1
+static const uint8_t PIN_SS_C        = 118; // MCP23017 #1 P2 (4R100 only)
+static const uint8_t PIN_SS_D        = 119; // MCP23017 #1 P3 (4R100 only)
 
 static SPIClass hspi(HSPI);
 
@@ -66,7 +43,13 @@ static const uint8_t INJECTOR_PINS[] = {216, 217, 218, 219, 220, 221, 222, 223};
 ECU::ECU(Scheduler* ts)
     : _ts(ts), _tUpdate(nullptr), _crankTeeth(36), _crankMissing(1),
       _realtimeTaskHandle(nullptr), _cj125(nullptr), _ads1115(nullptr),
-      _ads1115_2(nullptr), _trans(nullptr), _cj125Enabled(false), _transType(0) {
+      _ads1115_2(nullptr), _trans(nullptr), _cj125Enabled(false), _transType(0),
+      _pinAlternator(41), _pinI2cSda(0), _pinI2cScl(42),
+      _pinHeater1(19), _pinHeater2(20), _pinCj125Ua1(3), _pinCj125Ua2(4),
+      _pinCj125Ss1(108), _pinCj125Ss2(109),
+      _pinTcc(45), _pinEpc(46),
+      _pinHspiSck(10), _pinHspiMosi(11), _pinHspiMiso(12),
+      _pinHspiCsCoils(13), _pinHspiCsInj(14) {
     memset(&_state, 0, sizeof(_state));
     memset(_firingOrder, 0, sizeof(_firingOrder));
     // Default SBC V8 firing order
@@ -125,6 +108,26 @@ void ECU::configure(const ProjectInfo& proj) {
     // Configure alternator PID
     _alternator->setPID(proj.altPidP, proj.altPidI, proj.altPidD);
 
+    // Pin assignments from config
+    _pinAlternator = proj.pinAlternator;
+    _pinI2cSda = proj.pinI2cSda;
+    _pinI2cScl = proj.pinI2cScl;
+    _pinHeater1 = proj.pinHeater1;
+    _pinHeater2 = proj.pinHeater2;
+    _pinCj125Ua1 = proj.pinO2Bank1;  // CJ125 UA shares O2 ADC pins
+    _pinCj125Ua2 = proj.pinO2Bank2;
+    _pinTcc = proj.pinTcc;
+    _pinEpc = proj.pinEpc;
+    _pinHspiSck = proj.pinHspiSck;
+    _pinHspiMosi = proj.pinHspiMosi;
+    _pinHspiMiso = proj.pinHspiMiso;
+    _pinHspiCsCoils = proj.pinHspiCsCoils;
+    _pinHspiCsInj = proj.pinHspiCsInj;
+
+    // Configure sensor pin assignments
+    _sensors->setPins(proj.pinO2Bank1, proj.pinO2Bank2, proj.pinMap, proj.pinTps,
+                      proj.pinClt, proj.pinIat, proj.pinVbat);
+
     // CJ125 wideband O2
     _cj125Enabled = proj.cj125Enabled;
 
@@ -179,21 +182,50 @@ void ECU::configure(const ProjectInfo& proj) {
              proj.hasCamSensor ? "yes" : "no");
 }
 
+void ECU::setPeripheralFlags(const ProjectInfo& proj) {
+    _i2cEnabled = proj.i2cEnabled;
+    _spiExpandersEnabled = proj.spiExpandersEnabled;
+    _expander0Enabled = proj.expander0Enabled;
+    _expander1Enabled = proj.expander1Enabled;
+    _expander2Enabled = proj.expander2Enabled;
+    _expander3Enabled = proj.expander3Enabled;
+    _spiExp0Enabled = proj.spiExp0Enabled;
+    _spiExp1Enabled = proj.spiExp1Enabled;
+}
+
 void ECU::begin() {
-    // Initialize MCP23017 I2C expander #0 before subsystem init
-    PinExpander::instance().begin(I2C_SDA, I2C_SCL, 0x20);
-
-    // Probe optional MCP23017 #2 and #3 (graceful if absent)
-    PinExpander::instance().begin(2, I2C_SDA, I2C_SCL, 0x22);
-    PinExpander::instance().begin(3, I2C_SDA, I2C_SCL, 0x23);
-
-    // Initialize HSPI bus for MCP23S17 coil/injector expanders
-    hspi.begin(HSPI_SCK, HSPI_MISO, HSPI_MOSI);
-    if (!PinExpander::instance().beginSPI(0, &hspi, HSPI_CS_COILS, 0)) {
-        Log.error("ECU", "MCP23S17 #0 (coils) not detected on HSPI — coil outputs disabled");
+    // I2C bus and MCP23017 expanders
+    if (_i2cEnabled) {
+        if (_expander0Enabled) {
+            PinExpander::instance().begin(_pinI2cSda, _pinI2cScl, 0x20);
+        } else {
+            // Still need Wire.begin for other I2C devices (ADS1115)
+            Wire.begin(_pinI2cSda, _pinI2cScl);
+            Log.info("ECU", "MCP23017 #0 disabled via config");
+        }
+        if (_expander2Enabled) PinExpander::instance().begin(2, _pinI2cSda, _pinI2cScl, 0x22);
+        if (_expander3Enabled) PinExpander::instance().begin(3, _pinI2cSda, _pinI2cScl, 0x23);
+    } else {
+        Log.warn("ECU", "I2C bus disabled — all MCP23017 + ADS1115 skipped");
     }
-    if (!PinExpander::instance().beginSPI(1, &hspi, HSPI_CS_INJ, 0)) {
-        Log.error("ECU", "MCP23S17 #1 (injectors) not detected on HSPI — injector outputs disabled");
+
+    // HSPI bus for MCP23S17 coil/injector expanders
+    if (_spiExpandersEnabled) {
+        hspi.begin(_pinHspiSck, _pinHspiMiso, _pinHspiMosi);
+        if (_spiExp0Enabled) {
+            if (!PinExpander::instance().beginSPI(0, &hspi, _pinHspiCsCoils, 0))
+                Log.error("ECU", "MCP23S17 #0 (coils) not detected on HSPI — coil outputs disabled");
+        } else {
+            Log.info("ECU", "MCP23S17 #0 (coils) disabled via config");
+        }
+        if (_spiExp1Enabled) {
+            if (!PinExpander::instance().beginSPI(1, &hspi, _pinHspiCsInj, 0))
+                Log.error("ECU", "MCP23S17 #1 (injectors) not detected on HSPI — injector outputs disabled");
+        } else {
+            Log.info("ECU", "MCP23S17 #1 (injectors) disabled via config");
+        }
+    } else {
+        Log.warn("ECU", "SPI expanders disabled — coil/injector MCP23S17 skipped");
     }
 
     // Initialize subsystems
@@ -206,40 +238,46 @@ void ECU::begin() {
     _ignition->begin(_state.numCylinders, COIL_PINS, _firingOrder);
     _injection->begin(_state.numCylinders, INJECTOR_PINS, _firingOrder);
     _fuel->begin();
-    _alternator->begin(PIN_ALTERNATOR);
+    _alternator->begin(_pinAlternator);
 
-    // Probe second ADS1115 at 0x49 for MAP/TPS — frees GPIO 5/6 for OSS/TSS
-    _ads1115_2 = new ADS1115Reader();
-    if (_ads1115_2->begin(0x49, GAIN_TWOTHIRDS, RATE_ADS1115_860SPS)) {
-        _sensors->setMapTpsADS1115(_ads1115_2);
-        Log.info("ECU", "ADS1115 @ 0x49 found — MAP/TPS via I2C, GPIO 5/6 freed for OSS/TSS");
-    } else {
-        delete _ads1115_2;
-        _ads1115_2 = nullptr;
-        Log.warn("ECU", "ADS1115 @ 0x49 not found — MAP/TPS on native ADC (GPIO 5/6), OSS/TSS disabled");
+    // Probe second ADS1115 at 0x49 for MAP/TPS — frees MAP/TPS pins for OSS/TSS
+    if (_i2cEnabled) {
+        _ads1115_2 = new ADS1115Reader();
+        if (_ads1115_2->begin(0x49, GAIN_TWOTHIRDS, RATE_ADS1115_860SPS)) {
+            _sensors->setMapTpsADS1115(_ads1115_2);
+            Log.info("ECU", "ADS1115 @ 0x49 found — MAP/TPS via I2C, GPIO %d/%d freed for OSS/TSS",
+                     _sensors->getPin(2), _sensors->getPin(3));
+        } else {
+            delete _ads1115_2;
+            _ads1115_2 = nullptr;
+            Log.warn("ECU", "ADS1115 @ 0x49 not found — MAP/TPS on native ADC (GPIO %d/%d), OSS/TSS disabled",
+                     _sensors->getPin(2), _sensors->getPin(3));
+        }
     }
 
     _sensors->begin();
 
-    // Fuel pump relay ON (PCF P0)
-    xPinMode(PIN_FUEL_PUMP, OUTPUT);
-    xDigitalWrite(PIN_FUEL_PUMP, HIGH);
+    // Fuel pump relay ON (PCF P0) — only if expander #0 enabled
+    if (_i2cEnabled && _expander0Enabled) {
+        xPinMode(PIN_FUEL_PUMP, OUTPUT);
+        xDigitalWrite(PIN_FUEL_PUMP, HIGH);
 
-    // Tach output (PCF P1)
-    xPinMode(PIN_TACH_OUT, OUTPUT);
-    xDigitalWrite(PIN_TACH_OUT, LOW);
+        // Tach output (PCF P1)
+        xPinMode(PIN_TACH_OUT, OUTPUT);
+        xDigitalWrite(PIN_TACH_OUT, LOW);
 
-    // CEL / check engine light (PCF P2)
-    xPinMode(PIN_CEL, OUTPUT);
-    xDigitalWrite(PIN_CEL, LOW);
-
-    // Initialize second MCP23017 for transmission (0x21, 5V via level shifter)
-    if (_transType > 0) {
-        PinExpander::instance().begin(1, I2C_SDA, I2C_SCL, 0x21);
+        // CEL / check engine light (PCF P2)
+        xPinMode(PIN_CEL, OUTPUT);
+        xDigitalWrite(PIN_CEL, LOW);
     }
 
-    // CJ125 wideband O2 controller
-    if (_cj125Enabled) {
+    // Initialize second MCP23017 for transmission (0x21, 5V via level shifter)
+    if (_transType > 0 && _i2cEnabled && _expander1Enabled) {
+        PinExpander::instance().begin(1, _pinI2cSda, _pinI2cScl, 0x21);
+    }
+
+    // CJ125 wideband O2 controller — requires I2C (ADS1115) and expander #0 (SPI CS pins)
+    if (_cj125Enabled && _i2cEnabled && _expander0Enabled) {
         // SPI chip selects via MCP23017 — deselect before init
         xPinMode(PIN_SPI_SS_1, OUTPUT);
         xDigitalWrite(PIN_SPI_SS_1, HIGH);
@@ -252,30 +290,32 @@ void ECU::begin() {
         _cj125 = new CJ125Controller(&SPI);
         _cj125->setADS1115(_ads1115);
         _cj125->begin(PIN_SPI_SS_1, PIN_SPI_SS_2,
-                       PIN_HEATER_OUT_1, PIN_HEATER_OUT_2,
-                       PIN_CJ125_UA_1, PIN_CJ125_UA_2);
+                       _pinHeater1, _pinHeater2,
+                       _pinCj125Ua1, _pinCj125Ua2);
 
         _sensors->setCJ125(_cj125);
         Log.info("ECU", "CJ125 wideband O2 enabled");
     }
 
-    // Transmission controller
-    if (_trans) {
+    // Transmission controller — requires I2C (ADS1115 for TFT/MLPS, MCP23017 #1 for solenoids)
+    if (_trans && _i2cEnabled && _expander1Enabled) {
         // ADS1115 shared: CJ125 uses CH0/CH1, transmission uses CH2/CH3
         if (!_ads1115) {
             _ads1115 = new ADS1115Reader();
             _ads1115->begin(0x48);
         }
         _trans->setADS1115(_ads1115);
-        // OSS/TSS: GPIO 5/6 available only if second ADS1115 took over MAP/TPS
-        uint8_t ossPin = _ads1115_2 ? 5 : 0xFF;
-        uint8_t tssPin = _ads1115_2 ? 6 : 0xFF;
+        // OSS/TSS: MAP/TPS pins available only if second ADS1115 took over
+        uint8_t ossPin = _ads1115_2 ? _sensors->getPin(2) : 0xFF;
+        uint8_t tssPin = _ads1115_2 ? _sensors->getPin(3) : 0xFF;
         _trans->begin(PIN_SS_A, PIN_SS_B, PIN_SS_C, PIN_SS_D,
-                      PIN_TCC_PWM, PIN_EPC_PWM, ossPin, tssPin);
+                      _pinTcc, _pinEpc, ossPin, tssPin);
         Log.info("ECU", "Transmission controller enabled: %s, OSS=%s, TSS=%s",
                  TransmissionManager::typeToString(_trans->getType()),
-                 ossPin != 0xFF ? "GPIO5" : "DISABLED",
-                 tssPin != 0xFF ? "GPIO6" : "DISABLED");
+                 ossPin != 0xFF ? String(String("GPIO") + String(ossPin)).c_str() : "DISABLED",
+                 tssPin != 0xFF ? String(String("GPIO") + String(tssPin)).c_str() : "DISABLED");
+    } else if (_trans && (!_i2cEnabled || !_expander1Enabled)) {
+        Log.warn("ECU", "Transmission controller skipped — I2C or expander #1 disabled");
     }
 
     // Sensor + fuel calc update task (10ms on Core 0)

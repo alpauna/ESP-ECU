@@ -1,5 +1,6 @@
 #include <Arduino.h>
 #include <esp_freertos_hooks.h>
+#include <esp_system.h>
 #include <SPI.h>
 #include <SD.h>
 #include <WiFi.h>
@@ -13,6 +14,32 @@
 #include "FuelManager.h"
 #include "TuneTable.h"
 #include <esp_log.h>
+
+// Boot loop detection — persists across software/WDT/panic resets, NOT power-on
+static RTC_NOINIT_ATTR uint32_t _bootCount;
+static RTC_NOINIT_ATTR uint32_t _bootMagic;
+static const uint32_t BOOT_MAGIC = 0xDEADBEEF;
+static const uint32_t BOOT_LOOP_THRESHOLD = 3;
+
+// Safe mode flag — global, accessible from WebHandler
+bool _safeMode = false;
+uint32_t _bootCountExposed = 0;
+const char* _resetReasonStr = "UNKNOWN";
+
+static const char* getResetReasonStr(esp_reset_reason_t r) {
+    switch (r) {
+        case ESP_RST_POWERON:  return "POWERON";
+        case ESP_RST_SW:       return "SOFTWARE";
+        case ESP_RST_PANIC:    return "PANIC";
+        case ESP_RST_INT_WDT:  return "INT_WDT";
+        case ESP_RST_TASK_WDT: return "TASK_WDT";
+        case ESP_RST_WDT:      return "WDT";
+        case ESP_RST_DEEPSLEEP: return "DEEPSLEEP";
+        case ESP_RST_BROWNOUT: return "BROWNOUT";
+        case ESP_RST_SDIO:     return "SDIO";
+        default:               return "UNKNOWN";
+    }
+}
 
 #ifndef AP_PASSWORD
 #error "AP_PASSWORD not defined — create secrets.ini with: -D AP_PASSWORD=\\\"yourpassword\\\""
@@ -106,7 +133,37 @@ ProjectInfo proj = {
     800,                        // closedLoopMinRpm
     4000,                       // closedLoopMaxRpm
     80.0f,                       // closedLoopMaxMapKpa
-    false                        // cj125Enabled
+    false,                       // cj125Enabled
+    // Pin assignments (defaults)
+    3,                           // pinO2Bank1
+    4,                           // pinO2Bank2
+    5,                           // pinMap
+    6,                           // pinTps
+    7,                           // pinClt
+    8,                           // pinIat
+    9,                           // pinVbat
+    41,                          // pinAlternator
+    19,                          // pinHeater1
+    20,                          // pinHeater2
+    45,                          // pinTcc
+    46,                          // pinEpc
+    10,                          // pinHspiSck
+    11,                          // pinHspiMosi
+    12,                          // pinHspiMiso
+    13,                          // pinHspiCsCoils
+    14,                          // pinHspiCsInj
+    0,                           // pinI2cSda
+    42,                          // pinI2cScl
+    // Safe mode / peripheral control
+    false,                       // forceSafeMode
+    true,                        // i2cEnabled
+    true,                        // spiExpandersEnabled
+    true,                        // expander0Enabled
+    true,                        // expander1Enabled
+    true,                        // expander2Enabled
+    true,                        // expander3Enabled
+    true,                        // spiExp0Enabled
+    true                         // spiExp1Enabled
 };
 
 // Core objects
@@ -166,6 +223,12 @@ Task tWifiSignal(TASK_MINUTE, TASK_FOREVER, []() {
 Task tSaveConfig(5 * TASK_MINUTE, TASK_FOREVER, []() {
     config.updateConfig(_filename, proj);
     Log.debug("MAIN", "Config saved to SD");
+}, &ts, false);
+
+// Boot stable task — resets boot counter after 30s of stable runtime
+Task tBootStable(30 * TASK_SECOND, TASK_ONCE, []() {
+    _bootCount = 0;
+    Serial.println("[BOOT] 30s stable — boot counter reset to 0");
 }, &ts, false);
 
 // WiFi event handler
@@ -230,6 +293,28 @@ void onCalcCpuLoad() {
 void setup() {
     Serial.begin(115200);
 
+    // Boot loop detection
+    esp_reset_reason_t resetReason = esp_reset_reason();
+    _resetReasonStr = getResetReasonStr(resetReason);
+
+    if (resetReason == ESP_RST_POWERON || _bootMagic != BOOT_MAGIC) {
+        _bootCount = 0;
+        _bootMagic = BOOT_MAGIC;
+    }
+    _bootCount++;
+    _bootCountExposed = _bootCount;
+
+    bool crashReset = (resetReason == ESP_RST_PANIC || resetReason == ESP_RST_INT_WDT ||
+                       resetReason == ESP_RST_TASK_WDT || resetReason == ESP_RST_WDT);
+
+    if (_bootCount > BOOT_LOOP_THRESHOLD && crashReset) {
+        _safeMode = true;
+        Serial.printf("\n*** SAFE MODE *** Boot loop detected: %lu boots, last reset: %s\n",
+                      _bootCount, _resetReasonStr);
+    } else {
+        Serial.printf("[BOOT] Reset: %s, boot count: %lu\n", _resetReasonStr, _bootCount);
+    }
+
     // Initialize SD card with custom SPI pins
     SPI.begin(SD_CLK, SD_MISO, SD_MOSI, SD_CS);
 
@@ -257,6 +342,14 @@ void setup() {
         Serial.println("SD Card FAILED - check wiring to CLK=47 MISO=48 MOSI=38 CS=39");
     }
 
+    // Check forceSafeMode from config
+    if (proj.forceSafeMode && !_safeMode) {
+        _safeMode = true;
+        proj.forceSafeMode = false;  // One-shot — clear immediately
+        if (config.isSDCardInitialized()) config.updateConfig(_filename, proj);
+        Serial.println("*** SAFE MODE *** Forced via config flag");
+    }
+
     // WiFi
     WiFi.onEvent(onWiFiEvent);
     WiFi.begin(_WIFI_SSID, _WIFI_PASSWORD);
@@ -264,7 +357,8 @@ void setup() {
     // Config and web handler setup
     config.setProjectInfo(&proj);
     webHandler.setConfig(&config);
-    webHandler.setECU(&ecu);
+    webHandler.setECU(_safeMode ? nullptr : &ecu);
+    webHandler.setSafeMode(_safeMode);
     webHandler.setTimezone(proj.gmtOffsetSec, proj.daylightOffsetSec);
 
     bool sdCardReady = config.isSDCardInitialized();
@@ -304,49 +398,57 @@ void setup() {
     webHandler.begin();
 
     // MQTT
-    mqttHandler.begin(_MQTT_HOST_DEFAULT, _MQTT_PORT, _MQTT_USER, _MQTT_PASSWORD);
-    mqttHandler.setECU(&ecu);
+    if (!_safeMode) {
+        mqttHandler.begin(_MQTT_HOST_DEFAULT, _MQTT_PORT, _MQTT_USER, _MQTT_PASSWORD);
+        mqttHandler.setECU(&ecu);
+    }
 
     // Logger
     Log.setLevel(Logger::LOG_INFO);
-    Log.setMqttClient(mqttHandler.getClient(), "ecu/log");
+    if (!_safeMode) Log.setMqttClient(mqttHandler.getClient(), "ecu/log");
     Log.setLogFile("/log.txt", proj.maxLogSize, proj.maxOldLogCount);
-    Log.info("MAIN", "Logger initialized");
+    Log.info("MAIN", "Logger initialized%s", _safeMode ? " (SAFE MODE)" : "");
 
-    // Initialize ECU with config
-    ecu.configure(proj);
+    if (!_safeMode) {
+        // Initialize ECU with config
+        ecu.configure(proj);
 
-    // Load tune tables from SD card (overrides defaults if files exist)
-    {
-        FuelManager* fuel = ecu.getFuelManager();
-        const char* names[] = {"spark", "ve", "afr"};
-        TuneTable3D* tables[] = {fuel->getSparkTable(), fuel->getVeTable(), fuel->getAfrTable()};
-        for (int i = 0; i < 3; i++) {
-            TuneTable3D* t = tables[i];
-            if (!t || !t->isInitialized()) continue;
-            uint8_t cols = t->getXSize(), rows = t->getYSize();
-            float* data = new float[rows * cols];
-            float* xAxis = new float[cols];
-            float* yAxis = new float[rows];
-            if (config.loadTuneData("/tune.json", names[i], data, rows, cols, xAxis, yAxis)) {
-                t->setXAxis(xAxis);
-                t->setYAxis(yAxis);
-                t->setValues(data);
-                Serial.printf("Loaded tune table: %s\n", names[i]);
+        // Pass peripheral flags to ECU
+        ecu.setPeripheralFlags(proj);
+
+        // Load tune tables from SD card (overrides defaults if files exist)
+        {
+            FuelManager* fuel = ecu.getFuelManager();
+            const char* names[] = {"spark", "ve", "afr"};
+            TuneTable3D* tables[] = {fuel->getSparkTable(), fuel->getVeTable(), fuel->getAfrTable()};
+            for (int i = 0; i < 3; i++) {
+                TuneTable3D* t = tables[i];
+                if (!t || !t->isInitialized()) continue;
+                uint8_t cols = t->getXSize(), rows = t->getYSize();
+                float* data = new float[rows * cols];
+                float* xAxis = new float[cols];
+                float* yAxis = new float[rows];
+                if (config.loadTuneData("/tune.json", names[i], data, rows, cols, xAxis, yAxis)) {
+                    t->setXAxis(xAxis);
+                    t->setYAxis(yAxis);
+                    t->setValues(data);
+                    Serial.printf("Loaded tune table: %s\n", names[i]);
+                }
+                delete[] data;
+                delete[] xAxis;
+                delete[] yAxis;
             }
-            delete[] data;
-            delete[] xAxis;
-            delete[] yAxis;
         }
+
+        ecu.begin();
+
+        // Suppress Wire I2C error spam globally — non-present I2C devices generate noise
+        esp_log_level_set("Wire", ESP_LOG_NONE);
+
+        // Enable tasks
+        tPublishState.enable();
     }
 
-    ecu.begin();
-
-    // Suppress Wire I2C error spam globally — non-present I2C devices generate noise
-    esp_log_level_set("Wire", ESP_LOG_NONE);
-
-    // Enable tasks
-    tPublishState.enable();
     tSaveConfig.enable();
 
     // CPU load monitoring
@@ -354,8 +456,15 @@ void setup() {
     esp_register_freertos_idle_hook_for_cpu(idleHookCore1, 1);
     tCpuLoad.enable();
 
-    Log.info("MAIN", "ESP-ECU started - %d cylinders, %d-%d trigger",
-             proj.cylinders, proj.crankTeeth, proj.crankMissing);
+    // Start boot stability timer — resets boot counter after 30s stable
+    tBootStable.enableDelayed(30 * TASK_SECOND);
+
+    if (_safeMode) {
+        Log.warn("MAIN", "ESP-ECU SAFE MODE — peripherals disabled, web server active");
+    } else {
+        Log.info("MAIN", "ESP-ECU started - %d cylinders, %d-%d trigger",
+                 proj.cylinders, proj.crankTeeth, proj.crankMissing);
+    }
 }
 
 void loop() {

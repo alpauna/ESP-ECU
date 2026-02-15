@@ -42,6 +42,7 @@ public:
     ~ECU();
 
     void configure(const ProjectInfo& proj);
+    void setPeripheralFlags(const ProjectInfo& proj);
     void begin();
     void update();
 
@@ -80,6 +81,34 @@ private:
     uint8_t _firingOrder[12];
     uint8_t _crankTeeth;
     uint8_t _crankMissing;
+
+    // Configurable pin assignments (from ProjectInfo)
+    uint8_t _pinAlternator;
+    uint8_t _pinI2cSda;
+    uint8_t _pinI2cScl;
+    uint8_t _pinHeater1;
+    uint8_t _pinHeater2;
+    uint8_t _pinCj125Ua1;
+    uint8_t _pinCj125Ua2;
+    uint8_t _pinCj125Ss1;    // MCP23017 P8 — CJ125 Bank 1 CS (fixed 108)
+    uint8_t _pinCj125Ss2;    // MCP23017 P9 — CJ125 Bank 2 CS (fixed 109)
+    uint8_t _pinTcc;
+    uint8_t _pinEpc;
+    uint8_t _pinHspiSck;
+    uint8_t _pinHspiMosi;
+    uint8_t _pinHspiMiso;
+    uint8_t _pinHspiCsCoils;
+    uint8_t _pinHspiCsInj;
+
+    // Peripheral enable flags (from config)
+    bool _i2cEnabled = true;
+    bool _spiExpandersEnabled = true;
+    bool _expander0Enabled = true;
+    bool _expander1Enabled = true;
+    bool _expander2Enabled = true;
+    bool _expander3Enabled = true;
+    bool _spiExp0Enabled = true;
+    bool _spiExp1Enabled = true;
 
     TaskHandle_t _realtimeTaskHandle;
     static void realtimeTask(void* param);

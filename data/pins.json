@@ -1,0 +1,23 @@
+{
+  "ESP32-S3 Rev 1.0": {
+    "pinO2Bank1": 3,
+    "pinO2Bank2": 4,
+    "pinMap": 5,
+    "pinTps": 6,
+    "pinClt": 7,
+    "pinIat": 8,
+    "pinVbat": 9,
+    "pinAlternator": 41,
+    "pinHeater1": 19,
+    "pinHeater2": 20,
+    "pinTcc": 45,
+    "pinEpc": 46,
+    "pinHspiSck": 10,
+    "pinHspiMosi": 11,
+    "pinHspiMiso": 12,
+    "pinHspiCsCoils": 13,
+    "pinHspiCsInj": 14,
+    "pinI2cSda": 0,
+    "pinI2cScl": 42
+  }
+}

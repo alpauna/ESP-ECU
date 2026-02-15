@@ -23,6 +23,7 @@ public:
     void setTimezone(int32_t gmtOffset, int32_t daylightOffset);
     void setConfig(Config* config) { _config = config; }
     void setECU(ECU* ecu) { _ecu = ecu; }
+    void setSafeMode(bool safeMode) { _safeMode = safeMode; }
     bool shouldReboot() const { return _shouldReboot; }
     const char* getWiFiIP();
 
@@ -41,6 +42,7 @@ private:
     Config* _config;
 
     bool _shouldReboot;
+    bool _safeMode = false;
     Task* _tDelayedReboot;
     bool _ntpSynced;
     Task* _tNtpSync;

@@ -4,12 +4,16 @@
 #include <esp_adc_cal.h>
 #include "Logger.h"
 
-const uint8_t SensorManager::_channelPins[NUM_CHANNELS] = {
-    O2_BANK1_PIN, O2_BANK2_PIN, MAP_PIN, TPS_PIN, CLT_PIN, IAT_PIN, VBAT_PIN
-};
-
 SensorManager::SensorManager()
     : _mapKpa(0), _tpsPercent(0), _coolantTempF(0), _iatTempF(0), _batteryVoltage(0) {
+    // Default pin assignments
+    _channelPins[0] = 3;  // O2 Bank 1
+    _channelPins[1] = 4;  // O2 Bank 2
+    _channelPins[2] = 5;  // MAP
+    _channelPins[3] = 6;  // TPS
+    _channelPins[4] = 7;  // CLT
+    _channelPins[5] = 8;  // IAT
+    _channelPins[6] = 9;  // VBAT
     memset(_rawFiltered, 0, sizeof(_rawFiltered));
     memset(_rawAdc, 0, sizeof(_rawAdc));
     _o2Afr[0] = 14.7f;
@@ -34,7 +38,7 @@ SensorManager::~SensorManager() {}
 void SensorManager::begin() {
     // Configure ADC1 pins for analog read (skip MAP/TPS if using external ADS1115)
     for (uint8_t i = 0; i < NUM_CHANNELS; i++) {
-        if (_mapTpsAds && (_channelPins[i] == MAP_PIN || _channelPins[i] == TPS_PIN))
+        if (_mapTpsAds && (i == 2 || i == 3))  // index 2=MAP, 3=TPS
             continue;
         pinMode(_channelPins[i], INPUT);
         analogSetPinAttenuation(_channelPins[i], ADC_11db);
@@ -50,7 +54,7 @@ void SensorManager::begin() {
 void SensorManager::update() {
     // Read ADC channels and apply EMA filter (skip MAP/TPS if using ADS1115)
     for (uint8_t i = 0; i < NUM_CHANNELS; i++) {
-        if (_mapTpsAds && (_channelPins[i] == MAP_PIN || _channelPins[i] == TPS_PIN))
+        if (_mapTpsAds && (i == 2 || i == 3))  // index 2=MAP, 3=TPS
             continue;
         _rawAdc[i] = analogRead(_channelPins[i]);
         float raw = (float)_rawAdc[i];
@@ -113,6 +117,17 @@ void SensorManager::setO2Calibration(float afrAt0v, float afrAt5v) {
 
 void SensorManager::setVbatDividerRatio(float ratio) {
     _cal.vbatDividerRatio = ratio;
+}
+
+void SensorManager::setPins(uint8_t o2b1, uint8_t o2b2, uint8_t map, uint8_t tps,
+                             uint8_t clt, uint8_t iat, uint8_t vbat) {
+    _channelPins[0] = o2b1;
+    _channelPins[1] = o2b2;
+    _channelPins[2] = map;
+    _channelPins[3] = tps;
+    _channelPins[4] = clt;
+    _channelPins[5] = iat;
+    _channelPins[6] = vbat;
 }
 
 float SensorManager::adcToVoltage(uint16_t raw) const {
