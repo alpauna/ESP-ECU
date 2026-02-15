@@ -83,6 +83,22 @@ bool PinExpander::begin(uint8_t index, uint8_t sda, uint8_t scl, uint8_t addr) {
     return true;
 }
 
+uint8_t PinExpander::healthCheck() {
+    uint8_t failed = 0;
+    // I2C MCP23017 expanders
+    for (uint8_t i = 0; i < PCF_MAX_EXPANDERS; i++) {
+        if (!_ready[i]) continue;
+        Wire.beginTransmission(_addr[i]);
+        if (Wire.endTransmission() != 0) failed |= (1 << i);
+    }
+    // SPI MCP23S17 expanders
+    for (uint8_t i = 0; i < SPI_EXP_MAX; i++) {
+        if (!_spiReady[i]) continue;
+        if (spiReadReg(i, MCP23S17_IOCON) != 0x08) failed |= (1 << (4 + i));
+    }
+    return failed;
+}
+
 // ---- SPI MCP23S17 support ----
 
 static const uint32_t MCP23S17_SPI_SPEED = 10000000; // 10 MHz

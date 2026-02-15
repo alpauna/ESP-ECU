@@ -24,6 +24,8 @@ public:
     static constexpr uint8_t FAULT_CLT  = 0x04;
     static constexpr uint8_t FAULT_IAT  = 0x08;
     static constexpr uint8_t FAULT_VBAT = 0x10;
+    static constexpr uint8_t FAULT_EXPANDER = 0x20;
+    static constexpr uint8_t FAULT_OIL      = 0x40;
 
     struct AdcCalibration {
         float mapVMin, mapVMax, mapPMin, mapPMax;

@@ -148,6 +148,15 @@ void ECU::configure(const ProjectInfo& proj) {
     _sensors->setLimpThresholds(proj.limpMapMin, proj.limpMapMax,
         proj.limpTpsMin, proj.limpTpsMax, proj.limpCltMax, proj.limpIatMax, proj.limpVbatMin);
 
+    // Oil pressure
+    _oilPressureMode = proj.oilPressureMode;
+    _pinOilPressure = proj.pinOilPressure;
+    _oilPressureActiveLow = proj.oilPressureActiveLow;
+    _oilPressureMinPsi = proj.oilPressureMinPsi;
+    _oilPressureMaxPsi = proj.oilPressureMaxPsi;
+    _oilPressureMcpChannel = proj.oilPressureMcpChannel;
+    _oilPressureStartupMs = proj.oilPressureStartupMs;
+
     // Create 16x16 tune tables with defaults
     static const float defaultRpmAxis[16] = {
         500, 1000, 1500, 2000, 2500, 3000, 3500, 4000,
@@ -342,6 +351,19 @@ void ECU::begin() {
         Log.warn("ECU", "Transmission controller skipped — I2C or expander #1 disabled");
     }
 
+    // Oil pressure pin setup
+    if (_oilPressureMode == 1 && _pinOilPressure > 0) {
+        pinMode(_pinOilPressure, INPUT_PULLUP);
+        Log.info("ECU", "Oil pressure: digital switch on GPIO %d (active %s)",
+                 _pinOilPressure, _oilPressureActiveLow ? "LOW" : "HIGH");
+    } else if (_oilPressureMode == 2 && _pinOilPressure > 0 && !(_mcp3204 && _mcp3204->isReady())) {
+        pinMode(_pinOilPressure, INPUT);
+        analogSetPinAttenuation(_pinOilPressure, ADC_11db);
+        Log.info("ECU", "Oil pressure: analog sender on GPIO %d (native ADC fallback)", _pinOilPressure);
+    } else if (_oilPressureMode == 2 && _mcp3204 && _mcp3204->isReady()) {
+        Log.info("ECU", "Oil pressure: analog sender on MCP3204 CH%d", _oilPressureMcpChannel);
+    }
+
     // Sensor + fuel calc update task (10ms on Core 0)
     _tUpdate = new Task(10 * TASK_MILLISECOND, TASK_FOREVER, [this]() { update(); }, _ts, true);
 
@@ -383,6 +405,15 @@ void ECU::update() {
     _state.engineRunning = (_state.rpm >= 400);
     _state.sequentialMode = _cam->hasCamSignal();
 
+    // Expander health check (every 100 cycles = ~1s at 10ms)
+    if (++_expanderHealthCounter >= 100) {
+        _expanderHealthCounter = 0;
+        checkExpanderHealth();
+    }
+
+    // Oil pressure check
+    checkOilPressure();
+
     // Limp mode check (before fuel calc to set rev limit)
     checkLimpMode();
 
@@ -417,6 +448,8 @@ void ECU::update() {
 
 void ECU::checkLimpMode() {
     uint8_t faults = _sensors->getLimpFaults();
+    if (_expanderFaults) faults |= SensorManager::FAULT_EXPANDER;
+    if (_oilPressureFault) faults |= SensorManager::FAULT_OIL;
 
     if (faults != 0) {
         _limpRecoveryStart = 0;  // reset recovery timer
@@ -456,6 +489,63 @@ void ECU::checkLimpMode() {
     // Update shared state
     _state.limpMode = _limpActive;
     _state.limpFaults = _limpFaults;
+}
+
+void ECU::checkExpanderHealth() {
+    _expanderFaults = PinExpander::instance().healthCheck();
+    _state.expanderFaults = _expanderFaults;
+}
+
+void ECU::checkOilPressure() {
+    if (_oilPressureMode == 0) return;
+
+    // Track engine start for startup delay
+    if (_state.engineRunning) {
+        if (!_engineWasRunning) {
+            _engineRunStartMs = millis();
+            _engineWasRunning = true;
+        }
+    } else {
+        _engineWasRunning = false;
+        _oilPressureFault = false;
+        _oilPressureLow = false;
+        _state.oilPressurePsi = 0.0f;
+        _state.oilPressureLow = false;
+        return;
+    }
+
+    // Skip during startup delay
+    if (millis() - _engineRunStartMs < _oilPressureStartupMs) return;
+
+    if (_oilPressureMode == 1) {
+        // Digital switch
+        bool pinState = digitalRead(_pinOilPressure);
+        _oilPressureLow = _oilPressureActiveLow ? (pinState == LOW) : (pinState == HIGH);
+        _oilPressureFault = _oilPressureLow;
+        _state.oilPressurePsi = _oilPressureLow ? 0.0f : _oilPressureMaxPsi;
+        _state.oilPressureLow = _oilPressureLow;
+    } else if (_oilPressureMode == 2) {
+        // Analog sender
+        float voltage;
+        if (_mcp3204 && _mcp3204->isReady()) {
+            uint16_t raw = _mcp3204->readChannel(_oilPressureMcpChannel);
+            voltage = (float)raw / 4095.0f * 5.0f;
+        } else if (_pinOilPressure > 0) {
+            uint16_t raw = analogRead(_pinOilPressure);
+            // Native ADC 0-3.3V with 2:3 divider → 0-5V sensor range
+            voltage = ((float)raw / 4095.0f) * 3.3f * (5.0f / 3.3f);
+        } else {
+            return;
+        }
+        // Linear: 0.5V = 0 PSI, 4.5V = maxPsi
+        _oilPressurePsi = (voltage - 0.5f) / 4.0f * _oilPressureMaxPsi;
+        if (_oilPressurePsi < 0.0f) _oilPressurePsi = 0.0f;
+        if (_oilPressurePsi > _oilPressureMaxPsi) _oilPressurePsi = _oilPressureMaxPsi;
+        _oilPressureLow = (_oilPressurePsi < _oilPressureMinPsi);
+        _oilPressureFault = _oilPressureLow;
+        _state.oilPressurePsi = _oilPressurePsi;
+        _state.oilPressureLow = _oilPressureLow;
+    }
 }
 
 void ECU::realtimeTask(void* param) {

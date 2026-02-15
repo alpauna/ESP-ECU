@@ -272,6 +272,15 @@ bool Config::loadConfig(const char* filename, ProjectInfo& proj) {
     proj.limpIatMax = doc["limp"]["iatMax"] | 200.0f;
     proj.limpVbatMin = doc["limp"]["vbatMin"] | 10.0f;
 
+    // Oil pressure
+    proj.oilPressureMode = doc["oilPressure"]["mode"] | 0;
+    proj.pinOilPressure = doc["oilPressure"]["pin"] | 0;
+    proj.oilPressureActiveLow = doc["oilPressure"]["activeLow"] | true;
+    proj.oilPressureMinPsi = doc["oilPressure"]["minPsi"] | 10.0f;
+    proj.oilPressureMaxPsi = doc["oilPressure"]["maxPsi"] | 100.0f;
+    proj.oilPressureMcpChannel = doc["oilPressure"]["mcpChannel"] | 2;
+    proj.oilPressureStartupMs = doc["oilPressure"]["startupMs"] | 3000;
+
     Serial.printf("Config loaded: %d cyl, %d-%d trigger\n", proj.cylinders, proj.crankTeeth, proj.crankMissing);
     return true;
 }
@@ -527,6 +536,15 @@ bool Config::updateConfig(const char* filename, ProjectInfo& proj) {
     doc["limp"]["cltMax"] = proj.limpCltMax;
     doc["limp"]["iatMax"] = proj.limpIatMax;
     doc["limp"]["vbatMin"] = proj.limpVbatMin;
+
+    // Oil pressure
+    doc["oilPressure"]["mode"] = proj.oilPressureMode;
+    doc["oilPressure"]["pin"] = proj.pinOilPressure;
+    doc["oilPressure"]["activeLow"] = proj.oilPressureActiveLow;
+    doc["oilPressure"]["minPsi"] = proj.oilPressureMinPsi;
+    doc["oilPressure"]["maxPsi"] = proj.oilPressureMaxPsi;
+    doc["oilPressure"]["mcpChannel"] = proj.oilPressureMcpChannel;
+    doc["oilPressure"]["startupMs"] = proj.oilPressureStartupMs;
 
     file = SD.open(filename, FILE_WRITE);
     if (!file) return false;

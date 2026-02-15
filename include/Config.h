@@ -102,6 +102,14 @@ struct ProjectInfo {
     float limpCltMax;               // CLT fault max F (default 280.0)
     float limpIatMax;               // IAT fault max F (default 200.0)
     float limpVbatMin;              // VBAT fault min V (default 10.0)
+    // Oil pressure
+    uint8_t oilPressureMode;        // 0=disabled, 1=digital, 2=analog (default 0)
+    uint8_t pinOilPressure;         // GPIO pin (default 0 = not set)
+    bool oilPressureActiveLow;      // Digital: LOW = low pressure (default true)
+    float oilPressureMinPsi;        // Analog: fault threshold PSI (default 10.0)
+    float oilPressureMaxPsi;        // Analog: max PSI at 4.5V (default 100.0)
+    uint8_t oilPressureMcpChannel;  // MCP3204 channel for analog (default 2)
+    uint32_t oilPressureStartupMs;  // Delay after engine start before checking (default 3000)
 };
 
 class Config {

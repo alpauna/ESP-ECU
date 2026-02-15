@@ -310,6 +310,10 @@ void WebHandler::setupRoutes() {
         if (_ecu) {
             doc["limpMode"] = _ecu->isLimpActive();
             doc["limpFaults"] = _ecu->getLimpFaults();
+            const EngineState& es = _ecu->getState();
+            doc["oilPressurePsi"] = es.oilPressurePsi;
+            doc["oilPressureLow"] = es.oilPressureLow;
+            doc["expanderFaults"] = es.expanderFaults;
         }
         doc["cpuLoad0"] = getCpuLoadCore0();
         doc["cpuLoad1"] = getCpuLoadCore1();
@@ -582,6 +586,15 @@ void WebHandler::setupRoutes() {
             doc["limpIatMax"] = proj->limpIatMax;
             doc["limpVbatMin"] = proj->limpVbatMin;
 
+            // Oil pressure
+            doc["oilPressureMode"] = proj->oilPressureMode;
+            doc["pinOilPressure"] = proj->pinOilPressure;
+            doc["oilPressureActiveLow"] = proj->oilPressureActiveLow;
+            doc["oilPressureMinPsi"] = proj->oilPressureMinPsi;
+            doc["oilPressureMaxPsi"] = proj->oilPressureMaxPsi;
+            doc["oilPressureMcpChannel"] = proj->oilPressureMcpChannel;
+            doc["oilPressureStartupSec"] = proj->oilPressureStartupMs / 1000;
+
             String json;
             serializeJson(doc, json);
             request->send(200, "application/json", json);
@@ -761,6 +774,19 @@ void WebHandler::setupRoutes() {
         proj->limpCltMax = data["limpCltMax"] | proj->limpCltMax;
         proj->limpIatMax = data["limpIatMax"] | proj->limpIatMax;
         proj->limpVbatMin = data["limpVbatMin"] | proj->limpVbatMin;
+
+        // Oil pressure (mode/pin require reboot, minPsi is live)
+        proj->oilPressureMode = data["oilPressureMode"] | proj->oilPressureMode;
+        proj->pinOilPressure = data["pinOilPressure"] | proj->pinOilPressure;
+        proj->oilPressureActiveLow = data["oilPressureActiveLow"] | proj->oilPressureActiveLow;
+        proj->oilPressureMinPsi = data["oilPressureMinPsi"] | proj->oilPressureMinPsi;
+        proj->oilPressureMaxPsi = data["oilPressureMaxPsi"] | proj->oilPressureMaxPsi;
+        proj->oilPressureMcpChannel = data["oilPressureMcpChannel"] | proj->oilPressureMcpChannel;
+        {
+            uint32_t startSec = data["oilPressureStartupSec"] | (proj->oilPressureStartupMs / 1000);
+            proj->oilPressureStartupMs = startSec * 1000;
+        }
+
         // Apply live to sensor manager
         if (_ecu && _ecu->getSensorManager()) {
             _ecu->getSensorManager()->setLimpThresholds(

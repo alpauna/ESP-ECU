@@ -136,6 +136,13 @@ nav .brand{font-weight:bold;font-size:16px;margin-right:auto;color:#fff;}
 <div class='row'><span class='lbl'>Target</span><span class='val' id='altTarget'>--</span></div>
 </div>
 
+<!-- Oil Pressure (hidden if not configured) -->
+<div class='card' id='oilCard' style='display:none'>
+<h3>Oil Pressure</h3>
+<div class='row'><span class='lbl'>Pressure</span><span class='val' id='oilPsi'>--</span></div>
+<div class='row'><span class='lbl'>Status</span><span class='val' id='oilStatus'>--</span></div>
+</div>
+
 <!-- Per-cylinder trim -->
 <div class='card' style='grid-column:span 2;'>
 <h3>Injector Trim</h3>
@@ -202,7 +209,7 @@ function poll(){
     if(d.limpMode){
       document.getElementById('limpBanner').style.display='block';
       var fl=d.limpFaults||0,pills='';
-      var names=[['MAP',0x01],['TPS',0x02],['CLT',0x04],['IAT',0x08],['VBAT',0x10]];
+      var names=[['MAP',0x01],['TPS',0x02],['CLT',0x04],['IAT',0x08],['VBAT',0x10],['EXP',0x20],['OIL',0x40]];
       for(var i=0;i<names.length;i++){
         var active=(fl&names[i][1])!==0;
         pills+='<span style="display:inline-block;padding:3px 10px;border-radius:12px;font-size:12px;font-weight:bold;'+(active?'background:#fff;color:#d32f2f':'background:rgba(255,255,255,0.3);color:#fff')+'">'+names[i][0]+'</span>';
@@ -266,6 +273,17 @@ function poll(){
     document.getElementById('vbat').textContent=(d.batteryVoltage||0).toFixed(1)+' V';
     document.getElementById('altDuty').textContent=(d.altDuty||0).toFixed(1)+' %';
     document.getElementById('altTarget').textContent=(d.altTarget||0).toFixed(1)+' V';
+
+    // Oil pressure card
+    if(d.oilPressurePsi!==undefined&&d.oilPressurePsi!==null){
+      document.getElementById('oilCard').style.display='';
+      document.getElementById('oilPsi').textContent=d.oilPressurePsi.toFixed(1)+' PSI';
+      var oilEl=document.getElementById('oilStatus');
+      if(d.oilPressureLow){oilEl.textContent='LOW';oilEl.style.color='#f44336';}
+      else{oilEl.textContent='OK';oilEl.style.color='#4CAF50';}
+    }else{
+      document.getElementById('oilCard').style.display='none';
+    }
 
     // Per-cylinder trim bars
     var trim=d.injTrim||[];

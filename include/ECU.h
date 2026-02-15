@@ -38,6 +38,9 @@ struct EngineState {
     volatile bool  cj125Ready[2];
     volatile bool  limpMode;
     volatile uint8_t limpFaults;
+    volatile float oilPressurePsi;
+    volatile bool  oilPressureLow;
+    volatile uint8_t expanderFaults;
 };
 
 class ECU {
@@ -139,6 +142,26 @@ private:
     uint16_t _normalRevLimit = 6000;
     void checkLimpMode();
     FaultCallback _faultCb;
+
+    // Expander health
+    uint8_t _expanderHealthCounter = 0;
+    uint8_t _expanderFaults = 0;
+    void checkExpanderHealth();
+
+    // Oil pressure
+    uint8_t _oilPressureMode = 0;       // 0=disabled, 1=digital, 2=analog
+    uint8_t _pinOilPressure = 0;
+    bool _oilPressureActiveLow = true;
+    float _oilPressureMinPsi = 10.0f;
+    float _oilPressureMaxPsi = 100.0f;
+    uint8_t _oilPressureMcpChannel = 2;
+    uint32_t _oilPressureStartupMs = 3000;
+    uint32_t _engineRunStartMs = 0;
+    bool _engineWasRunning = false;
+    float _oilPressurePsi = 0.0f;
+    bool _oilPressureLow = false;
+    bool _oilPressureFault = false;
+    void checkOilPressure();
 
     TaskHandle_t _realtimeTaskHandle;
     static void realtimeTask(void* param);

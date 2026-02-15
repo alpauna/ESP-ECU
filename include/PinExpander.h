@@ -56,6 +56,9 @@ public:
     uint8_t readPinSpi(uint8_t spiPin);
     uint16_t readAllSpi(uint8_t index);
 
+    // Health check — returns bitmask of failed devices (bits 0-3 = I2C, 4-5 = SPI)
+    uint8_t healthCheck();
+
     // Info accessors
     uint8_t getSDA() const { return _sda; }
     uint8_t getSCL() const { return _scl; }
