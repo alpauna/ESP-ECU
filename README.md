@@ -12,6 +12,10 @@ ESP32-S3 Engine Control Unit for gas engines. Controls coil-over-plug ignition (
 - **Alternator field control** -- PID-regulated PWM output for alternator voltage regulation
 - **Crank/cam decoding** -- 36-1 trigger wheel with cam phase detection for sequential mode
 - **Automatic transmission control** -- Ford 4R70W and 4R100 shift solenoid control, TCC PWM lockup, EPC line pressure, TFT temp monitoring, and MLPS gear range detection via second MCP23017 I2C expander (5V via PCA9306 level shifter). OSS/TSS speed sensors disabled (no free native GPIO)
+- **I/O expansion** -- 4x I2C MCP23017 (64 pins) + 2x SPI MCP23S17 (32 pins) with unified virtual pin routing, ghost device detection, and runtime health monitoring
+- **Safe mode** -- Automatic boot loop detection with peripheral isolation. Configurable per-device enable/disable for I2C and SPI expanders via web UI
+- **Limp mode** -- Sensor fault protection (MAP, TPS, CLT, IAT, VBAT), expander health monitoring, and oil pressure sensor support. Reduces rev limit, caps ignition advance, locks transmission gear, and lights CEL
+- **Oil pressure monitoring** -- Configurable as digital switch or analog sender (0-5V via MCP3204 or native GPIO), with engine-running guard and startup delay
 - **Remote access** -- REST API, WebSocket, and MQTT for monitoring and tuning
 - **Live dashboard** -- Real-time gauges and status at `/dashboard`
 - **Web-based tuning** -- 16x16 table editor with live cursor at `/tune`
@@ -60,8 +64,9 @@ Cores communicate via shared `EngineState` struct with volatile fields.
 | `src/SensorManager.cpp` | ADC reads: O2, MAP, TPS, CLT, IAT, VBAT |
 | `src/CJ125Controller.cpp` | Dual-bank CJ125 wideband O2 controller (SPI + heater PID) |
 | `src/ADS1115Reader.cpp` | ADS1115 I2C ADC wrapper (CJ125 Nernst @ 0x48, MAP/TPS @ 0x49) |
+| `src/MCP3204Reader.cpp` | MCP3204 SPI 12-bit ADC for MAP/TPS (alternative to ADS1115 @ 0x49) |
 | `src/TransmissionManager.cpp` | Ford 4R70W/4R100 automatic transmission controller |
-| `src/PinExpander.cpp` | I2C MCP23017 + SPI MCP23S17 GPIO expander manager |
+| `src/PinExpander.cpp` | I2C MCP23017 + SPI MCP23S17 GPIO expander with health check |
 | `src/Config.cpp` | SD card and JSON configuration |
 | `src/Logger.cpp` | Multi-output logging with tar.gz rotation |
 | `src/WebHandler.cpp` | Web server and REST API |
@@ -194,6 +199,75 @@ IDLE -> WAIT_POWER (battery > 11V) -> CALIBRATING -> CONDENSATION (2V, 5s)
 - Decimation: `update()` called every 10ms from ECU, CJ125 logic executes every 100ms
 
 The CJ125 SPI register constants and PID tuning values are derived from the [Lambda Shield](https://github.com/Bylund/Lambda-Shield-Example) project by Bylund.
+
+## I/O Expanders
+
+The ECU extends GPIO capacity through I2C and SPI expanders, managed by `PinExpander` with a unified virtual pin system. All pin operations route through `xDigitalWrite()` / `xDigitalRead()` / `xPinMode()` which automatically dispatch to native GPIO, I2C MCP23017, or SPI MCP23S17 based on pin number.
+
+| Range | Bus | Device | Purpose |
+|-------|-----|--------|---------|
+| 0-99 | -- | Native ESP32 GPIO | Direct hardware pins |
+| 100-115 | I2C | MCP23017 #0 (0x20) | Fuel pump, tach, CEL, CJ125 CS |
+| 116-131 | I2C | MCP23017 #1 (0x21) | Shift solenoids (5V via TXB0108) |
+| 132-147 | I2C | MCP23017 #2 (0x22) | Future expansion |
+| 148-163 | I2C | MCP23017 #3 (0x23) | Future expansion |
+| 200-215 | SPI | MCP23S17 #0 (HSPI) | Coils 1-8 |
+| 216-231 | SPI | MCP23S17 #1 (HSPI) | Injectors 1-8 |
+
+**SPI performance:** MCP23S17 expanders use a custom thin SPI driver at 10 MHz with shadow registers, achieving ~3-5 us per write vs ~30 us with the Adafruit library at 1 MHz. Each `beginTransaction()` sets the clock per-device, so the MCP3204 ADC (1 MHz) and MCP23S17 (10 MHz) coexist on the same HSPI bus at their own speeds.
+
+**Ghost device detection:** Floating I2C buses with no pull-ups generate false ACKs from ESP32's weak internal pull-ups (~45k ohm). After a Wire probe ACK, `begin()` reads the MCP23017 IODIRA register -- a real device returns 0xFF (power-on reset default), while a ghost returns 0x00 or random values. SPI expanders verify IOCON readback matches the configured value (0x08).
+
+**Runtime health monitoring:** `PinExpander::healthCheck()` probes all initialized devices every ~1 second. I2C devices are checked via `Wire.beginTransmission()` + `endTransmission()`. SPI devices verify IOCON register readback. Failed devices are reported as a bitmask (bits 0-3 = I2C, bits 4-5 = SPI) and trigger limp mode.
+
+## Safe Mode
+
+The ECU includes boot loop detection and per-peripheral enable/disable to recover from hardware faults without reflashing.
+
+**Boot loop detection:** An `RTC_NOINIT_ATTR` counter persists across soft resets, watchdog timeouts, and panic reboots (reset on power-on). If the counter exceeds 3, the ECU enters safe mode automatically. A 30-second stability timer resets the counter after a successful boot.
+
+**Safe mode behavior:** Skips `ECU::configure()`, `ECU::begin()`, tune table loading, MQTT, and state publishing. Retains WiFi, web server, FTP, logger, config save, and CPU load monitoring -- allowing remote configuration changes to fix the problem.
+
+**Peripheral control:** Eight individual enable flags (persisted to `peripherals.*` in config JSON) allow disabling specific I2C or SPI devices:
+
+| Flag | Controls | Default |
+|------|----------|---------|
+| `i2cEnabled` | Entire I2C bus (all MCP23017 + ADS1115) | true |
+| `spiExpandersEnabled` | HSPI bus (all MCP23S17) | true |
+| `expander0Enabled` - `expander3Enabled` | Individual MCP23017 #0-#3 | true |
+| `spiExp0Enabled`, `spiExp1Enabled` | Individual MCP23S17 #0-#1 | true |
+
+**Web interface:** The config page has a "Peripherals & Safe Mode" fieldset with checkboxes (master bus disable greys out children). A red banner appears on the dashboard in safe mode with boot count, reset reason, and an "Exit Safe Mode" button. `POST /safemode/clear` clears the flag and reboots. `proj.forceSafeMode` is a one-shot flag to enter safe mode on next reboot.
+
+## Limp Mode
+
+Limp mode protects the engine when critical sensors fail, I/O expanders go offline, or oil pressure drops. When active, it reduces the rev limit (default 3000 RPM), caps ignition advance (default 10 deg), locks the current transmission gear, unlocks TCC, and turns on the check engine light.
+
+**Fault sources** (bitmask in `limpFaults`):
+
+| Bit | Constant | Trigger |
+|-----|----------|---------|
+| 0x01 | `FAULT_MAP` | MAP reading outside configurable min/max range |
+| 0x02 | `FAULT_TPS` | TPS reading outside configurable min/max range |
+| 0x04 | `FAULT_CLT` | Coolant temp exceeds configurable max |
+| 0x08 | `FAULT_IAT` | Intake air temp exceeds configurable max |
+| 0x10 | `FAULT_VBAT` | Battery voltage below configurable min |
+| 0x20 | `FAULT_EXPANDER` | Any initialized I2C/SPI expander fails health check |
+| 0x40 | `FAULT_OIL` | Low oil pressure while engine running |
+
+**Recovery:** All faults must clear for a configurable recovery delay (default 5 seconds) before limp mode exits. This prevents rapid cycling from intermittent faults.
+
+**Oil pressure sensor:** Configurable as disabled (default), digital switch, or analog sender:
+
+- **Digital mode:** GPIO pin with internal pull-up. Configurable polarity (`oilPressureActiveLow`, default true). LOW = low pressure fault.
+- **Analog mode:** Reads voltage from MCP3204 SPI ADC (priority) or native GPIO (fallback). Linear conversion: 0.5V = 0 PSI, 4.5V = max PSI (configurable, default 100). Faults when PSI drops below threshold (default 10 PSI).
+- **Engine-running guard:** Oil pressure is only checked when RPM >= 400, with a configurable startup delay (default 3 seconds) to allow pressure to build after engine start.
+
+**MQTT:** Limp state and fault bitmask published in `ecu/state`. Fault enter/exit events published to `ecu/fault`.
+
+**Dashboard:** Red limp mode banner with per-fault pills (MAP, TPS, CLT, IAT, VBAT, EXP, OIL). Oil pressure card shows live PSI value and OK/LOW status (auto-hidden when oil pressure is disabled).
+
+**Config page:** "Limp Mode" fieldset with rev limit, advance cap, recovery delay, and 7 sensor fault thresholds. "Oil Pressure" fieldset with mode dropdown and mode-dependent field visibility. All sensor thresholds are live (no reboot). Oil pressure mode and pin changes require reboot.
 
 ## Screenshots
 
