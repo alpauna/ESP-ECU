@@ -58,6 +58,8 @@ public:
     SensorManager* getSensorManager() { return _sensors; }
     CJ125Controller* getCJ125() { return _cj125; }
     TransmissionManager* getTransmission() { return _trans; }
+    ADS1115Reader* getADS1115_0() { return _ads1115; }
+    ADS1115Reader* getADS1115_1() { return _ads1115_2; }
     uint32_t getUpdateTimeUs() const { return _updateTimeUs; }
     uint32_t getSensorTimeUs() const { return _sensorTimeUs; }
 

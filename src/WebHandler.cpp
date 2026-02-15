@@ -10,6 +10,7 @@
 #include "FuelManager.h"
 #include "TuneTable.h"
 #include "PinExpander.h"
+#include "ADS1115Reader.h"
 #include "OtaUtils.h"
 
 extern const char compile_date[];
@@ -1159,6 +1160,53 @@ void WebHandler::setupRoutes() {
                         else snprintf(nm, sizeof(nm), "SPARE_%d", i);
                         p["name"] = nm;
                         p["value"] = (raw & (1 << i)) ? "HIGH" : "LOW";
+                    }
+                }
+            }
+
+            // ADS1115 #0 @ 0x48 (CJ125_UR + Transmission)
+            if (_ecu && _ecu->getADS1115_0()) {
+                ADS1115Reader* ads0 = _ecu->getADS1115_0();
+                JsonObject adsExp0 = expanders.add<JsonObject>();
+                adsExp0["index"] = 6;
+                adsExp0["type"] = "ADS1115";
+                adsExp0["address"] = "0x48";
+                adsExp0["ready"] = ads0->isReady();
+                adsExp0["sda"] = pcf.getSDA();
+                adsExp0["scl"] = pcf.getSCL();
+                adsExp0["gain"] = "\xc2\xb1" "4.096V";
+                adsExp0["rate"] = "128 SPS";
+                if (ads0->isReady()) {
+                    const char* chNames[] = {"CJ125_UR_1", "CJ125_UR_2", "TFT_TEMP", "MLPS"};
+                    JsonArray channels = adsExp0["channels"].to<JsonArray>();
+                    for (uint8_t i = 0; i < 4; i++) {
+                        JsonObject ch = channels.add<JsonObject>();
+                        ch["ch"] = i;
+                        ch["name"] = chNames[i];
+                        ch["mV"] = serialized(String(ads0->readMillivolts(i), 1));
+                    }
+                }
+            }
+            // ADS1115 #1 @ 0x49 (MAP/TPS)
+            if (_ecu && _ecu->getADS1115_1()) {
+                ADS1115Reader* ads1 = _ecu->getADS1115_1();
+                JsonObject adsExp1 = expanders.add<JsonObject>();
+                adsExp1["index"] = 7;
+                adsExp1["type"] = "ADS1115";
+                adsExp1["address"] = "0x49";
+                adsExp1["ready"] = ads1->isReady();
+                adsExp1["sda"] = pcf.getSDA();
+                adsExp1["scl"] = pcf.getSCL();
+                adsExp1["gain"] = "\xc2\xb1" "6.144V";
+                adsExp1["rate"] = "860 SPS";
+                if (ads1->isReady()) {
+                    const char* chNames[] = {"MAP", "TPS", "SPARE", "SPARE"};
+                    JsonArray channels = adsExp1["channels"].to<JsonArray>();
+                    for (uint8_t i = 0; i < 4; i++) {
+                        JsonObject ch = channels.add<JsonObject>();
+                        ch["ch"] = i;
+                        ch["name"] = chNames[i];
+                        ch["mV"] = serialized(String(ads1->readMillivolts(i), 1));
                     }
                 }
             }
