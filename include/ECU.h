@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Arduino.h>
+#include <functional>
 #include <TaskSchedulerDeclarations.h>
 
 class CrankSensor;
@@ -12,6 +13,7 @@ class AlternatorControl;
 class SensorManager;
 class CJ125Controller;
 class ADS1115Reader;
+class MCP3204Reader;
 class TransmissionManager;
 struct ProjectInfo;
 
@@ -34,6 +36,8 @@ struct EngineState {
     volatile float lambda[2];
     volatile float oxygenPct[2];
     volatile bool  cj125Ready[2];
+    volatile bool  limpMode;
+    volatile uint8_t limpFaults;
 };
 
 class ECU {
@@ -42,6 +46,7 @@ public:
     ~ECU();
 
     void configure(const ProjectInfo& proj);
+    void setPeripheralFlags(const ProjectInfo& proj);
     void begin();
     void update();
 
@@ -57,6 +62,16 @@ public:
     SensorManager* getSensorManager() { return _sensors; }
     CJ125Controller* getCJ125() { return _cj125; }
     TransmissionManager* getTransmission() { return _trans; }
+    ADS1115Reader* getADS1115_0() { return _ads1115; }
+    ADS1115Reader* getADS1115_1() { return _ads1115_2; }
+    MCP3204Reader* getMCP3204() { return _mcp3204; }
+    uint32_t getUpdateTimeUs() const { return _updateTimeUs; }
+    uint32_t getSensorTimeUs() const { return _sensorTimeUs; }
+    bool isLimpActive() const { return _limpActive; }
+    uint8_t getLimpFaults() const { return _limpFaults; }
+
+    typedef std::function<void(const char* fault, const char* message, bool active)> FaultCallback;
+    void setFaultCallback(FaultCallback cb) { _faultCb = cb; }
 
 private:
     Scheduler* _ts;
@@ -73,6 +88,7 @@ private:
     CJ125Controller* _cj125;
     ADS1115Reader* _ads1115;
     ADS1115Reader* _ads1115_2;   // Second ADS1115 at 0x49 for MAP/TPS (frees GPIO 5/6 for OSS/TSS)
+    MCP3204Reader* _mcp3204;     // MCP3204 SPI ADC for MAP/TPS (alternative to ADS1115 @ 0x49)
     TransmissionManager* _trans;
     bool _cj125Enabled;
     uint8_t _transType;
@@ -80,6 +96,49 @@ private:
     uint8_t _firingOrder[12];
     uint8_t _crankTeeth;
     uint8_t _crankMissing;
+
+    // Configurable pin assignments (from ProjectInfo)
+    uint8_t _pinAlternator;
+    uint8_t _pinI2cSda;
+    uint8_t _pinI2cScl;
+    uint8_t _pinHeater1;
+    uint8_t _pinHeater2;
+    uint8_t _pinCj125Ua1;
+    uint8_t _pinCj125Ua2;
+    uint8_t _pinCj125Ss1;    // MCP23017 P8 — CJ125 Bank 1 CS (fixed 108)
+    uint8_t _pinCj125Ss2;    // MCP23017 P9 — CJ125 Bank 2 CS (fixed 109)
+    uint8_t _pinTcc;
+    uint8_t _pinEpc;
+    uint8_t _pinHspiSck;
+    uint8_t _pinHspiMosi;
+    uint8_t _pinHspiMiso;
+    uint8_t _pinHspiCsCoils;
+    uint8_t _pinHspiCsInj;
+    uint8_t _pinMcp3204Cs;
+
+    // Peripheral enable flags (from config)
+    bool _i2cEnabled = true;
+    bool _spiExpandersEnabled = true;
+    bool _expander0Enabled = true;
+    bool _expander1Enabled = true;
+    bool _expander2Enabled = true;
+    bool _expander3Enabled = true;
+    bool _spiExp0Enabled = true;
+    bool _spiExp1Enabled = true;
+
+    volatile uint32_t _updateTimeUs = 0;
+    volatile uint32_t _sensorTimeUs = 0;
+
+    // Limp mode
+    bool _limpActive = false;
+    uint8_t _limpFaults = 0;
+    uint16_t _limpRevLimit = 3000;
+    float _limpAdvanceCap = 10.0f;
+    uint32_t _limpRecoveryMs = 5000;
+    uint32_t _limpRecoveryStart = 0;
+    uint16_t _normalRevLimit = 6000;
+    void checkLimpMode();
+    FaultCallback _faultCb;
 
     TaskHandle_t _realtimeTaskHandle;
     static void realtimeTask(void* param);

@@ -52,6 +52,8 @@ void MQTTHandler::publishState() {
     doc["running"] = s.engineRunning;
     doc["cranking"] = s.cranking;
     doc["sequential"] = s.sequentialMode;
+    doc["limp"] = s.limpMode;
+    doc["limpFaults"] = s.limpFaults;
 
     // Transmission
     TransmissionManager* trans = _ecu->getTransmission();

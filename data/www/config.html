@@ -39,6 +39,10 @@ button:hover{background:#45a049;}
 <a href='#' class='reboot' onclick="if(confirm('Reboot device?')){fetch('/reboot',{method:'POST',headers:{'Authorization':'Basic '+btoa(prompt('user:pass','admin:'))}}).then(r=>r.ok?alert('Rebooting...'):alert('Failed'))};return false">Reboot</a>
 </div></nav>
 <div class='content'>
+<div id='safeBanner' style='display:none;background:#d32f2f;color:#fff;padding:12px 16px;border-radius:6px;margin-bottom:15px;font-size:14px;'>
+<strong>SAFE MODE ACTIVE</strong> — Peripherals disabled. <span id='safeBannerInfo'></span>
+<button type='button' onclick='clearSafeMode()' style='background:#fff;color:#d32f2f;border:none;padding:6px 16px;border-radius:4px;cursor:pointer;font-weight:bold;margin-left:10px;'>Clear &amp; Reboot</button>
+</div>
 <h1>Configuration</h1>
 <form id='configForm' onsubmit='return save(event)'>
 
@@ -143,6 +147,104 @@ button:hover{background:#45a049;}
 </div>
 </fieldset>
 
+<fieldset><legend>Pin Map</legend>
+<label>Board Preset</label>
+<select id='pinPreset' onchange='applyPinPreset()'>
+<option value=''>Custom</option>
+</select>
+<div id='pinDupWarn' style='display:none;color:#f44336;font-size:13px;margin:8px 0;padding:6px;background:#ffebee;border-radius:4px'></div>
+<p style='font-size:12px;color:var(--text-secondary);margin:4px 0 12px'>Locked: CRANK=GPIO1, CAM=GPIO2, SD=47/48/38/39. Pin changes require reboot.</p>
+<label style='font-weight:bold;color:var(--text);font-size:13px;margin-bottom:4px'>Analog Inputs (ADC1)</label>
+<div class='row2'>
+<div><label>O2 Bank 1</label><select id='pinO2Bank1' class='pinSel' onchange='checkPinDups()'></select></div>
+<div><label>O2 Bank 2</label><select id='pinO2Bank2' class='pinSel' onchange='checkPinDups()'></select></div>
+</div>
+<div class='row2'>
+<div><label>MAP</label><select id='pinMap' class='pinSel' onchange='checkPinDups()'></select></div>
+<div><label>TPS</label><select id='pinTps' class='pinSel' onchange='checkPinDups()'></select></div>
+</div>
+<div class='row2'>
+<div><label>CLT</label><select id='pinClt' class='pinSel' onchange='checkPinDups()'></select></div>
+<div><label>IAT</label><select id='pinIat' class='pinSel' onchange='checkPinDups()'></select></div>
+</div>
+<div><label>VBAT</label><select id='pinVbat' class='pinSel' onchange='checkPinDups()'></select></div>
+<label style='font-weight:bold;color:var(--text);font-size:13px;margin:12px 0 4px'>PWM Outputs</label>
+<div class='row2'>
+<div><label>Alternator</label><select id='pinAlternator' class='pinSel' onchange='checkPinDups()'></select></div>
+<div><label>Heater 1 (CJ125)</label><select id='pinHeater1' class='pinSel' onchange='checkPinDups()'></select></div>
+</div>
+<div class='row2'>
+<div><label>Heater 2 (CJ125)</label><select id='pinHeater2' class='pinSel' onchange='checkPinDups()'></select></div>
+<div><label>TCC PWM</label><select id='pinTcc' class='pinSel' onchange='checkPinDups()'></select></div>
+</div>
+<div><label>EPC PWM</label><select id='pinEpc' class='pinSel' onchange='checkPinDups()'></select></div>
+<label style='font-weight:bold;color:var(--text);font-size:13px;margin:12px 0 4px'>HSPI Bus</label>
+<div class='row2'>
+<div><label>SCK</label><select id='pinHspiSck' class='pinSel' onchange='checkPinDups()'></select></div>
+<div><label>MOSI</label><select id='pinHspiMosi' class='pinSel' onchange='checkPinDups()'></select></div>
+</div>
+<div class='row2'>
+<div><label>MISO</label><select id='pinHspiMiso' class='pinSel' onchange='checkPinDups()'></select></div>
+<div><label>CS Coils</label><select id='pinHspiCsCoils' class='pinSel' onchange='checkPinDups()'></select></div>
+</div>
+<div><label>CS Injectors</label><select id='pinHspiCsInj' class='pinSel' onchange='checkPinDups()'></select></div>
+<div><label>CS MCP3204 ADC</label><select id='pinMcp3204Cs' class='pinSel' onchange='checkPinDups()'></select></div>
+<label style='font-weight:bold;color:var(--text);font-size:13px;margin:12px 0 4px'>I2C Bus</label>
+<div class='row2'>
+<div><label>SDA</label><select id='pinI2cSda' class='pinSel' onchange='checkPinDups()'></select></div>
+<div><label>SCL</label><select id='pinI2cScl' class='pinSel' onchange='checkPinDups()'></select></div>
+</div>
+</fieldset>
+
+<fieldset><legend>Limp Mode</legend>
+<div class='row2'>
+<div><label>Rev Limit (RPM)</label><input type='number' id='limpRevLimit' min='1000' max='8000' step='100'></div>
+<div><label>Advance Cap (&deg;)</label><input type='number' id='limpAdvanceCap' min='0' max='30' step='1'></div>
+</div>
+<div class='row2'>
+<div><label>Recovery Delay (sec)</label><input type='number' id='limpRecoverySec' min='1' max='30' step='1'></div>
+<div></div>
+</div>
+<label style='font-weight:bold;color:var(--text);font-size:13px;margin:10px 0 4px'>Fault Thresholds</label>
+<div class='row2'>
+<div><label>MAP Min (kPa)</label><input type='number' id='limpMapMin' min='0' max='50' step='1'></div>
+<div><label>MAP Max (kPa)</label><input type='number' id='limpMapMax' min='80' max='300' step='1'></div>
+</div>
+<div class='row2'>
+<div><label>TPS Min (%)</label><input type='number' id='limpTpsMin' min='-20' max='0' step='1'></div>
+<div><label>TPS Max (%)</label><input type='number' id='limpTpsMax' min='100' max='120' step='1'></div>
+</div>
+<div class='row2'>
+<div><label>CLT Max (&deg;F)</label><input type='number' id='limpCltMax' min='200' max='350' step='5'></div>
+<div><label>IAT Max (&deg;F)</label><input type='number' id='limpIatMax' min='150' max='300' step='5'></div>
+</div>
+<div class='row2'>
+<div><label>VBAT Min (V)</label><input type='number' id='limpVbatMin' min='6' max='14' step='0.5'></div>
+<div></div>
+</div>
+</fieldset>
+
+<fieldset><legend>Peripherals &amp; Safe Mode</legend>
+<label style='margin-top:2px'><input type='checkbox' id='forceSafeMode' style='width:auto;margin-right:6px'>Force safe mode on next reboot</label>
+<label style='font-weight:bold;color:var(--text);font-size:13px;margin:10px 0 4px'>Bus Control (requires reboot)</label>
+<label><input type='checkbox' id='i2cEnabled' style='width:auto;margin-right:6px' onchange='togglePeriphDeps()'>I2C Bus (MCP23017 + ADS1115)</label>
+<label><input type='checkbox' id='spiExpandersEnabled' style='width:auto;margin-right:6px' onchange='togglePeriphDeps()'>SPI Expanders (MCP23S17 HSPI)</label>
+<label style='font-weight:bold;color:var(--text);font-size:13px;margin:10px 0 4px'>I2C Expanders</label>
+<div class='row2'>
+<div><label><input type='checkbox' id='expander0Enabled' class='i2cDep' style='width:auto;margin-right:6px'>MCP23017 #0 @ 0x20 (fuel, tach, CEL, CJ125 CS)</label></div>
+<div><label><input type='checkbox' id='expander1Enabled' class='i2cDep' style='width:auto;margin-right:6px'>MCP23017 #1 @ 0x21 (transmission)</label></div>
+</div>
+<div class='row2'>
+<div><label><input type='checkbox' id='expander2Enabled' class='i2cDep' style='width:auto;margin-right:6px'>MCP23017 #2 @ 0x22 (spare)</label></div>
+<div><label><input type='checkbox' id='expander3Enabled' class='i2cDep' style='width:auto;margin-right:6px'>MCP23017 #3 @ 0x23 (spare)</label></div>
+</div>
+<label style='font-weight:bold;color:var(--text);font-size:13px;margin:10px 0 4px'>SPI Expanders</label>
+<div class='row2'>
+<div><label><input type='checkbox' id='spiExp0Enabled' class='spiDep' style='width:auto;margin-right:6px'>MCP23S17 #0 (coils)</label></div>
+<div><label><input type='checkbox' id='spiExp1Enabled' class='spiDep' style='width:auto;margin-right:6px'>MCP23S17 #1 (injectors)</label></div>
+</div>
+</fieldset>
+
 <fieldset><legend>WiFi</legend>
 <label>SSID</label><input type='text' id='wifiSSID'>
 <label>Password</label><input type='password' id='wifiPassword' placeholder='Leave blank to keep current'>
@@ -188,17 +290,38 @@ button:hover{background:#45a049;}
 <script>
 var _enginePresets={};
 var _transPresets={};
+var _pinPresets={};
 var _prevTransType='0';
+var _adcPins=[3,4,5,6,7,8,9,10];
+var _reservedPins=[1,2,33,34,35,36,37,38,39,47,48];
+var _allGpio=[];
+(function(){for(var i=0;i<=48;i++){if(_reservedPins.indexOf(i)<0)_allGpio.push(i);}})();
+var _pinFields=['pinO2Bank1','pinO2Bank2','pinMap','pinTps','pinClt','pinIat','pinVbat',
+  'pinAlternator','pinHeater1','pinHeater2','pinTcc','pinEpc',
+  'pinHspiSck','pinHspiMosi','pinHspiMiso','pinHspiCsCoils','pinHspiCsInj','pinMcp3204Cs','pinI2cSda','pinI2cScl'];
+var _adcFields=['pinO2Bank1','pinO2Bank2','pinMap','pinTps','pinClt','pinIat','pinVbat'];
+
+function populatePinSelects(){
+  _pinFields.forEach(function(id){
+    var sel=document.getElementById(id);if(!sel)return;
+    var pins=(_adcFields.indexOf(id)>=0)?_adcPins:_allGpio;
+    sel.innerHTML='';
+    pins.forEach(function(p){var o=document.createElement('option');o.value=p;o.textContent='GPIO '+p;sel.appendChild(o);});
+  });
+}
 
 function load(){
+  populatePinSelects();
   Promise.all([
     fetch('/presets/engines').then(function(r){return r.json()}).catch(function(){return {}}),
     fetch('/presets/transmissions').then(function(r){return r.json()}).catch(function(){return {}}),
+    fetch('/presets/pins').then(function(r){return r.json()}).catch(function(){return {}}),
     fetch('/config?format=json').then(function(r){return r.json()})
   ]).then(function(results){
     _enginePresets=results[0];
     _transPresets=results[1];
-    var d=results[2];
+    _pinPresets=results[2];
+    var d=results[3];
 
     // Populate engine preset dropdown
     var ep=document.getElementById('enginePreset');
@@ -256,8 +379,50 @@ function load(){
     document.getElementById('shiftTimeMs').value=d.shiftTimeMs||500;
     document.getElementById('maxTftTempF').value=d.maxTftTempF||275;
     toggleTransFields();
+
+    // Populate pin preset dropdown
+    var pp=document.getElementById('pinPreset');
+    for(var name in _pinPresets){
+      var o=document.createElement('option');o.value=name;o.textContent=name;pp.appendChild(o);
+    }
+    // Fill pin values from config
+    _pinFields.forEach(function(id){
+      var el=document.getElementById(id);
+      if(el&&d[id]!==undefined)el.value=d[id];
+    });
+    matchPinPreset();
+    checkPinDups();
+
+    // Peripherals & Safe Mode
+    document.getElementById('forceSafeMode').checked=d.forceSafeMode||false;
+    document.getElementById('i2cEnabled').checked=d.i2cEnabled!==false;
+    document.getElementById('spiExpandersEnabled').checked=d.spiExpandersEnabled!==false;
+    document.getElementById('expander0Enabled').checked=d.expander0Enabled!==false;
+    document.getElementById('expander1Enabled').checked=d.expander1Enabled!==false;
+    document.getElementById('expander2Enabled').checked=d.expander2Enabled!==false;
+    document.getElementById('expander3Enabled').checked=d.expander3Enabled!==false;
+    document.getElementById('spiExp0Enabled').checked=d.spiExp0Enabled!==false;
+    document.getElementById('spiExp1Enabled').checked=d.spiExp1Enabled!==false;
+    togglePeriphDeps();
+
+    // Limp mode
+    document.getElementById('limpRevLimit').value=d.limpRevLimit!=null?d.limpRevLimit:3000;
+    document.getElementById('limpAdvanceCap').value=d.limpAdvanceCap!=null?d.limpAdvanceCap:10;
+    document.getElementById('limpRecoverySec').value=d.limpRecoverySec!=null?d.limpRecoverySec:5;
+    document.getElementById('limpMapMin').value=d.limpMapMin!=null?d.limpMapMin:5;
+    document.getElementById('limpMapMax').value=d.limpMapMax!=null?d.limpMapMax:120;
+    document.getElementById('limpTpsMin').value=d.limpTpsMin!=null?d.limpTpsMin:-5;
+    document.getElementById('limpTpsMax').value=d.limpTpsMax!=null?d.limpTpsMax:105;
+    document.getElementById('limpCltMax').value=d.limpCltMax!=null?d.limpCltMax:280;
+    document.getElementById('limpIatMax').value=d.limpIatMax!=null?d.limpIatMax:200;
+    document.getElementById('limpVbatMin').value=d.limpVbatMin!=null?d.limpVbatMin:10;
+    if(d.safeMode){
+      document.getElementById('safeBanner').style.display='block';
+      document.getElementById('safeBannerInfo').textContent='Boot count: '+(d.bootCount||'?')+', last reset: '+(d.resetReason||'?');
+    }
+
     document.getElementById('wifiSSID').value=d.wifiSSID||'';
-    document.getElementById('apFallbackMin').value=Math.round((d.apFallbackSeconds||600)/60);
+    document.getElementById('apFallbackMin').value=d.apFallbackMinutes||10;
     document.getElementById('mqttHost').value=d.mqttHost||'';
     document.getElementById('mqttPort').value=d.mqttPort||1883;
     document.getElementById('mqttUser').value=d.mqttUser||'';
@@ -267,6 +432,22 @@ function load(){
     matchEnginePreset();
     matchTransPreset();
   }).catch(function(){});
+}
+
+function togglePeriphDeps(){
+  var i2c=document.getElementById('i2cEnabled').checked;
+  var spi=document.getElementById('spiExpandersEnabled').checked;
+  var deps=document.querySelectorAll('.i2cDep');
+  for(var x=0;x<deps.length;x++){deps[x].disabled=!i2c;if(!i2c)deps[x].style.opacity='0.5';else deps[x].style.opacity='1';}
+  var sdeps=document.querySelectorAll('.spiDep');
+  for(var x=0;x<sdeps.length;x++){sdeps[x].disabled=!spi;if(!spi)sdeps[x].style.opacity='0.5';else sdeps[x].style.opacity='1';}
+}
+
+function clearSafeMode(){
+  if(!confirm('Clear safe mode and reboot?'))return;
+  fetch('/safemode/clear',{method:'POST',headers:{'Content-Type':'application/json'}}).then(function(r){return r.json()}).then(function(d){
+    alert(d.message||'Rebooting...');
+  }).catch(function(e){alert('Error: '+e);});
 }
 
 function matchEnginePreset(){
@@ -342,6 +523,46 @@ function toggleTransFields(){
   _prevTransType=v;
 }
 
+function matchPinPreset(){
+  var pp=document.getElementById('pinPreset');
+  for(var name in _pinPresets){
+    var p=_pinPresets[name];var match=true;
+    for(var i=0;i<_pinFields.length;i++){
+      var el=document.getElementById(_pinFields[i]);
+      if(el&&String(el.value)!==String(p[_pinFields[i]])){match=false;break;}
+    }
+    if(match){pp.value=name;return;}
+  }
+  pp.value='';
+}
+
+function applyPinPreset(){
+  var name=document.getElementById('pinPreset').value;
+  if(!name||!_pinPresets[name])return;
+  var p=_pinPresets[name];
+  _pinFields.forEach(function(id){
+    var el=document.getElementById(id);
+    if(el&&p[id]!==undefined)el.value=p[id];
+  });
+  checkPinDups();
+}
+
+function checkPinDups(){
+  var used={};var dups=[];
+  _pinFields.forEach(function(id){
+    var el=document.getElementById(id);if(!el)return;
+    var v=el.value;
+    el.style.borderColor='';
+    if(used[v]){dups.push(id+' and '+used[v]+' both use GPIO '+v);el.style.borderColor='#f44336';
+      document.getElementById(used[v]).style.borderColor='#f44336';
+    }
+    used[v]=id;
+  });
+  var w=document.getElementById('pinDupWarn');
+  if(dups.length){w.style.display='block';w.textContent='Duplicate pins: '+dups.join('; ');}
+  else{w.style.display='none';}
+}
+
 function save(e){
   e.preventDefault();
   var fo=document.getElementById('firingOrder').value.split(',').map(Number);
@@ -385,12 +606,32 @@ function save(e){
     shiftTimeMs:parseInt(document.getElementById('shiftTimeMs').value),
     maxTftTempF:parseFloat(document.getElementById('maxTftTempF').value),
     wifiSSID:document.getElementById('wifiSSID').value,
-    apFallbackSeconds:parseInt(document.getElementById('apFallbackMin').value)*60,
+    apFallbackMinutes:parseInt(document.getElementById('apFallbackMin').value),
     mqttHost:document.getElementById('mqttHost').value,
     mqttPort:parseInt(document.getElementById('mqttPort').value),
     mqttUser:document.getElementById('mqttUser').value,
-    theme:document.getElementById('theme').value
+    theme:document.getElementById('theme').value,
+    forceSafeMode:document.getElementById('forceSafeMode').checked,
+    i2cEnabled:document.getElementById('i2cEnabled').checked,
+    spiExpandersEnabled:document.getElementById('spiExpandersEnabled').checked,
+    expander0Enabled:document.getElementById('expander0Enabled').checked,
+    expander1Enabled:document.getElementById('expander1Enabled').checked,
+    expander2Enabled:document.getElementById('expander2Enabled').checked,
+    expander3Enabled:document.getElementById('expander3Enabled').checked,
+    spiExp0Enabled:document.getElementById('spiExp0Enabled').checked,
+    spiExp1Enabled:document.getElementById('spiExp1Enabled').checked,
+    limpRevLimit:parseInt(document.getElementById('limpRevLimit').value),
+    limpAdvanceCap:parseFloat(document.getElementById('limpAdvanceCap').value),
+    limpRecoverySec:parseInt(document.getElementById('limpRecoverySec').value),
+    limpMapMin:parseFloat(document.getElementById('limpMapMin').value),
+    limpMapMax:parseFloat(document.getElementById('limpMapMax').value),
+    limpTpsMin:parseFloat(document.getElementById('limpTpsMin').value),
+    limpTpsMax:parseFloat(document.getElementById('limpTpsMax').value),
+    limpCltMax:parseFloat(document.getElementById('limpCltMax').value),
+    limpIatMax:parseFloat(document.getElementById('limpIatMax').value),
+    limpVbatMin:parseFloat(document.getElementById('limpVbatMin').value)
   };
+  _pinFields.forEach(function(id){data[id]=parseInt(document.getElementById(id).value);});
   var pw=document.getElementById('wifiPassword').value;if(pw) data.wifiPassword=pw;
   var mpw=document.getElementById('mqttPassword').value;if(mpw) data.mqttPassword=mpw;
   var apw=document.getElementById('adminPassword').value;if(apw) data.adminPassword=apw;

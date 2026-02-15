@@ -4,6 +4,8 @@
 #include <Adafruit_ADS1X15.h>
 
 class ADS1115Reader {
+    static constexpr uint32_t ADS_READ_TIMEOUT_MS = 10;  // Max wait for conversion
+
 public:
     ADS1115Reader();
     bool begin(uint8_t addr = 0x48, adsGain_t gain = GAIN_ONE,

@@ -211,6 +211,39 @@ bool Config::loadConfig(const char* filename, ProjectInfo& proj) {
     proj.closedLoopMaxMapKpa = doc["o2"]["closedLoopMaxMapKpa"] | 80.0f;
     proj.cj125Enabled = doc["engine"]["cj125Enabled"] | false;
 
+    // Pin assignments
+    proj.pinO2Bank1 = doc["pins"]["o2Bank1"] | 3;
+    proj.pinO2Bank2 = doc["pins"]["o2Bank2"] | 4;
+    proj.pinMap = doc["pins"]["map"] | 5;
+    proj.pinTps = doc["pins"]["tps"] | 6;
+    proj.pinClt = doc["pins"]["clt"] | 7;
+    proj.pinIat = doc["pins"]["iat"] | 8;
+    proj.pinVbat = doc["pins"]["vbat"] | 9;
+    proj.pinAlternator = doc["pins"]["alternator"] | 41;
+    proj.pinHeater1 = doc["pins"]["heater1"] | 19;
+    proj.pinHeater2 = doc["pins"]["heater2"] | 20;
+    proj.pinTcc = doc["pins"]["tcc"] | 45;
+    proj.pinEpc = doc["pins"]["epc"] | 46;
+    proj.pinHspiSck = doc["pins"]["hspiSck"] | 10;
+    proj.pinHspiMosi = doc["pins"]["hspiMosi"] | 11;
+    proj.pinHspiMiso = doc["pins"]["hspiMiso"] | 12;
+    proj.pinHspiCsCoils = doc["pins"]["hspiCsCoils"] | 13;
+    proj.pinHspiCsInj = doc["pins"]["hspiCsInj"] | 14;
+    proj.pinMcp3204Cs = doc["pins"]["mcp3204Cs"] | 15;
+    proj.pinI2cSda = doc["pins"]["i2cSda"] | 0;
+    proj.pinI2cScl = doc["pins"]["i2cScl"] | 42;
+
+    // Safe mode / peripherals
+    proj.forceSafeMode = doc["safeMode"]["force"] | false;
+    proj.i2cEnabled = doc["peripherals"]["i2c"] | true;
+    proj.spiExpandersEnabled = doc["peripherals"]["spiExpanders"] | true;
+    proj.expander0Enabled = doc["peripherals"]["exp0"] | true;
+    proj.expander1Enabled = doc["peripherals"]["exp1"] | true;
+    proj.expander2Enabled = doc["peripherals"]["exp2"] | true;
+    proj.expander3Enabled = doc["peripherals"]["exp3"] | true;
+    proj.spiExp0Enabled = doc["peripherals"]["spiExp0"] | true;
+    proj.spiExp1Enabled = doc["peripherals"]["spiExp1"] | true;
+
     // Transmission
     proj.transType = doc["transmission"]["type"] | 0;
     proj.upshift12Rpm = doc["transmission"]["upshift12Rpm"] | 1500;
@@ -226,6 +259,18 @@ bool Config::loadConfig(const char* filename, ProjectInfo& proj) {
     proj.epcShiftBoost = doc["transmission"]["epcShiftBoost"] | 80.0f;
     proj.shiftTimeMs = doc["transmission"]["shiftTimeMs"] | 500;
     proj.maxTftTempF = doc["transmission"]["maxTftTempF"] | 275.0f;
+
+    // Limp mode
+    proj.limpRevLimit = doc["limp"]["revLimit"] | 3000;
+    proj.limpAdvanceCap = doc["limp"]["advanceCap"] | 10.0f;
+    proj.limpRecoveryMs = doc["limp"]["recoveryMs"] | 5000;
+    proj.limpMapMin = doc["limp"]["mapMin"] | 5.0f;
+    proj.limpMapMax = doc["limp"]["mapMax"] | 120.0f;
+    proj.limpTpsMin = doc["limp"]["tpsMin"] | (-5.0f);
+    proj.limpTpsMax = doc["limp"]["tpsMax"] | 105.0f;
+    proj.limpCltMax = doc["limp"]["cltMax"] | 280.0f;
+    proj.limpIatMax = doc["limp"]["iatMax"] | 200.0f;
+    proj.limpVbatMin = doc["limp"]["vbatMin"] | 10.0f;
 
     Serial.printf("Config loaded: %d cyl, %d-%d trigger\n", proj.cylinders, proj.crankTeeth, proj.crankMissing);
     return true;
@@ -300,6 +345,28 @@ bool Config::saveConfig(const char* filename, ProjectInfo& proj) {
     o2["closedLoopMaxRpm"] = proj.closedLoopMaxRpm;
     o2["closedLoopMaxMapKpa"] = proj.closedLoopMaxMapKpa;
 
+    JsonObject pins = doc["pins"].to<JsonObject>();
+    pins["o2Bank1"] = proj.pinO2Bank1;
+    pins["o2Bank2"] = proj.pinO2Bank2;
+    pins["map"] = proj.pinMap;
+    pins["tps"] = proj.pinTps;
+    pins["clt"] = proj.pinClt;
+    pins["iat"] = proj.pinIat;
+    pins["vbat"] = proj.pinVbat;
+    pins["alternator"] = proj.pinAlternator;
+    pins["heater1"] = proj.pinHeater1;
+    pins["heater2"] = proj.pinHeater2;
+    pins["tcc"] = proj.pinTcc;
+    pins["epc"] = proj.pinEpc;
+    pins["hspiSck"] = proj.pinHspiSck;
+    pins["hspiMosi"] = proj.pinHspiMosi;
+    pins["hspiMiso"] = proj.pinHspiMiso;
+    pins["hspiCsCoils"] = proj.pinHspiCsCoils;
+    pins["hspiCsInj"] = proj.pinHspiCsInj;
+    pins["mcp3204Cs"] = proj.pinMcp3204Cs;
+    pins["i2cSda"] = proj.pinI2cSda;
+    pins["i2cScl"] = proj.pinI2cScl;
+
     JsonObject trans = doc["transmission"].to<JsonObject>();
     trans["type"] = proj.transType;
     trans["upshift12Rpm"] = proj.upshift12Rpm;
@@ -315,6 +382,17 @@ bool Config::saveConfig(const char* filename, ProjectInfo& proj) {
     trans["epcShiftBoost"] = proj.epcShiftBoost;
     trans["shiftTimeMs"] = proj.shiftTimeMs;
     trans["maxTftTempF"] = proj.maxTftTempF;
+
+    doc["safeMode"]["force"] = false;
+    JsonObject periph = doc["peripherals"].to<JsonObject>();
+    periph["i2c"] = proj.i2cEnabled;
+    periph["spiExpanders"] = proj.spiExpandersEnabled;
+    periph["exp0"] = proj.expander0Enabled;
+    periph["exp1"] = proj.expander1Enabled;
+    periph["exp2"] = proj.expander2Enabled;
+    periph["exp3"] = proj.expander3Enabled;
+    periph["spiExp0"] = proj.spiExp0Enabled;
+    periph["spiExp1"] = proj.spiExp1Enabled;
 
     serializeJson(doc, file);
     file.close();
@@ -392,6 +470,27 @@ bool Config::updateConfig(const char* filename, ProjectInfo& proj) {
     doc["o2"]["closedLoopMaxRpm"] = proj.closedLoopMaxRpm;
     doc["o2"]["closedLoopMaxMapKpa"] = proj.closedLoopMaxMapKpa;
 
+    doc["pins"]["o2Bank1"] = proj.pinO2Bank1;
+    doc["pins"]["o2Bank2"] = proj.pinO2Bank2;
+    doc["pins"]["map"] = proj.pinMap;
+    doc["pins"]["tps"] = proj.pinTps;
+    doc["pins"]["clt"] = proj.pinClt;
+    doc["pins"]["iat"] = proj.pinIat;
+    doc["pins"]["vbat"] = proj.pinVbat;
+    doc["pins"]["alternator"] = proj.pinAlternator;
+    doc["pins"]["heater1"] = proj.pinHeater1;
+    doc["pins"]["heater2"] = proj.pinHeater2;
+    doc["pins"]["tcc"] = proj.pinTcc;
+    doc["pins"]["epc"] = proj.pinEpc;
+    doc["pins"]["hspiSck"] = proj.pinHspiSck;
+    doc["pins"]["hspiMosi"] = proj.pinHspiMosi;
+    doc["pins"]["hspiMiso"] = proj.pinHspiMiso;
+    doc["pins"]["hspiCsCoils"] = proj.pinHspiCsCoils;
+    doc["pins"]["hspiCsInj"] = proj.pinHspiCsInj;
+    doc["pins"]["mcp3204Cs"] = proj.pinMcp3204Cs;
+    doc["pins"]["i2cSda"] = proj.pinI2cSda;
+    doc["pins"]["i2cScl"] = proj.pinI2cScl;
+
     doc["transmission"]["type"] = proj.transType;
     doc["transmission"]["upshift12Rpm"] = proj.upshift12Rpm;
     doc["transmission"]["upshift23Rpm"] = proj.upshift23Rpm;
@@ -406,6 +505,28 @@ bool Config::updateConfig(const char* filename, ProjectInfo& proj) {
     doc["transmission"]["epcShiftBoost"] = proj.epcShiftBoost;
     doc["transmission"]["shiftTimeMs"] = proj.shiftTimeMs;
     doc["transmission"]["maxTftTempF"] = proj.maxTftTempF;
+
+    doc["safeMode"]["force"] = proj.forceSafeMode;
+    doc["peripherals"]["i2c"] = proj.i2cEnabled;
+    doc["peripherals"]["spiExpanders"] = proj.spiExpandersEnabled;
+    doc["peripherals"]["exp0"] = proj.expander0Enabled;
+    doc["peripherals"]["exp1"] = proj.expander1Enabled;
+    doc["peripherals"]["exp2"] = proj.expander2Enabled;
+    doc["peripherals"]["exp3"] = proj.expander3Enabled;
+    doc["peripherals"]["spiExp0"] = proj.spiExp0Enabled;
+    doc["peripherals"]["spiExp1"] = proj.spiExp1Enabled;
+
+    // Limp mode
+    doc["limp"]["revLimit"] = proj.limpRevLimit;
+    doc["limp"]["advanceCap"] = proj.limpAdvanceCap;
+    doc["limp"]["recoveryMs"] = proj.limpRecoveryMs;
+    doc["limp"]["mapMin"] = proj.limpMapMin;
+    doc["limp"]["mapMax"] = proj.limpMapMax;
+    doc["limp"]["tpsMin"] = proj.limpTpsMin;
+    doc["limp"]["tpsMax"] = proj.limpTpsMax;
+    doc["limp"]["cltMax"] = proj.limpCltMax;
+    doc["limp"]["iatMax"] = proj.limpIatMax;
+    doc["limp"]["vbatMin"] = proj.limpVbatMin;
 
     file = SD.open(filename, FILE_WRITE);
     if (!file) return false;

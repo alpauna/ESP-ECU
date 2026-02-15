@@ -68,6 +68,8 @@ public:
     static const char* mlpsToString(MLPSPosition p);
     static const char* typeToString(TransType t);
 
+    void setLimpMode(bool active);
+
     // ISR handlers (called from static ISR wrappers)
     void onOssPulse();
     void onTssPulse();
@@ -119,6 +121,7 @@ private:
     bool _tccEnabled = false;
     bool _epcEnabled = false;
     bool _speedSensorsEnabled = false;
+    bool _limpMode = false;
 
     // Internal methods
     void calcSpeedSensors();

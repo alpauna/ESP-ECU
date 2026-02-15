@@ -62,6 +62,17 @@ nav .brand{font-weight:bold;font-size:16px;margin-right:auto;color:#fff;}
 </div></nav>
 <div class='content'>
 
+<div id='safeBanner' style='display:none;background:#d32f2f;color:#fff;padding:12px 16px;border-radius:6px;margin-bottom:12px;text-align:center;'>
+<div style='font-size:18px;font-weight:bold;margin-bottom:4px'>SAFE MODE</div>
+<div id='safeInfo' style='font-size:13px;margin-bottom:8px'></div>
+<button onclick="if(confirm('Exit safe mode and reboot?')){fetch('/safemode/clear',{method:'POST'}).then(function(){alert('Rebooting...')}).catch(function(){alert('Failed')})}" style='background:#fff;color:#d32f2f;border:none;padding:6px 18px;border-radius:4px;cursor:pointer;font-weight:bold;'>Exit Safe Mode</button>
+</div>
+
+<div id='limpBanner' style='display:none;background:#d32f2f;color:#fff;padding:12px 16px;border-radius:6px;margin-bottom:12px;text-align:center;'>
+<div style='font-size:18px;font-weight:bold;margin-bottom:4px'>LIMP MODE</div>
+<div id='limpFaults' style='font-size:13px;display:flex;gap:6px;justify-content:center;flex-wrap:wrap'></div>
+</div>
+
 <div class='state-banner state-OFF' id='banner'>OFF</div>
 
 <div class='grid'>
@@ -180,6 +191,26 @@ nav .brand{font-weight:bold;font-size:16px;margin-right:auto;color:#fff;}
 <script>
 function poll(){
   fetch('/state').then(function(r){return r.json();}).then(function(d){
+    // Safe mode banner
+    if(d.safeMode){
+      document.getElementById('safeBanner').style.display='block';
+      document.getElementById('safeInfo').textContent='Boot loop detected ('+d.bootCount+' boots, last reset: '+d.resetReason+'). Peripherals disabled.';
+    }else{
+      document.getElementById('safeBanner').style.display='none';
+    }
+    // Limp mode banner
+    if(d.limpMode){
+      document.getElementById('limpBanner').style.display='block';
+      var fl=d.limpFaults||0,pills='';
+      var names=[['MAP',0x01],['TPS',0x02],['CLT',0x04],['IAT',0x08],['VBAT',0x10]];
+      for(var i=0;i<names.length;i++){
+        var active=(fl&names[i][1])!==0;
+        pills+='<span style="display:inline-block;padding:3px 10px;border-radius:12px;font-size:12px;font-weight:bold;'+(active?'background:#fff;color:#d32f2f':'background:rgba(255,255,255,0.3);color:#fff')+'">'+names[i][0]+'</span>';
+      }
+      document.getElementById('limpFaults').innerHTML=pills;
+    }else{
+      document.getElementById('limpBanner').style.display='none';
+    }
     var st=d.state||'OFF';
     var banner=document.getElementById('banner');
     banner.textContent=st;

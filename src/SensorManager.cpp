@@ -1,15 +1,20 @@
 #include "SensorManager.h"
 #include "CJ125Controller.h"
 #include "ADS1115Reader.h"
+#include "MCP3204Reader.h"
 #include <esp_adc_cal.h>
 #include "Logger.h"
 
-const uint8_t SensorManager::_channelPins[NUM_CHANNELS] = {
-    O2_BANK1_PIN, O2_BANK2_PIN, MAP_PIN, TPS_PIN, CLT_PIN, IAT_PIN, VBAT_PIN
-};
-
 SensorManager::SensorManager()
     : _mapKpa(0), _tpsPercent(0), _coolantTempF(0), _iatTempF(0), _batteryVoltage(0) {
+    // Default pin assignments
+    _channelPins[0] = 3;  // O2 Bank 1
+    _channelPins[1] = 4;  // O2 Bank 2
+    _channelPins[2] = 5;  // MAP
+    _channelPins[3] = 6;  // TPS
+    _channelPins[4] = 7;  // CLT
+    _channelPins[5] = 8;  // IAT
+    _channelPins[6] = 9;  // VBAT
     memset(_rawFiltered, 0, sizeof(_rawFiltered));
     memset(_rawAdc, 0, sizeof(_rawAdc));
     _o2Afr[0] = 14.7f;
@@ -32,25 +37,29 @@ SensorManager::SensorManager()
 SensorManager::~SensorManager() {}
 
 void SensorManager::begin() {
-    // Configure ADC1 pins for analog read (skip MAP/TPS if using external ADS1115)
+    // Configure ADC1 pins for analog read (skip MAP/TPS if using external ADC)
+    bool extMapTps = hasExternalMapTps();
     for (uint8_t i = 0; i < NUM_CHANNELS; i++) {
-        if (_mapTpsAds && (_channelPins[i] == MAP_PIN || _channelPins[i] == TPS_PIN))
+        if (extMapTps && (i == 2 || i == 3))  // index 2=MAP, 3=TPS
             continue;
         pinMode(_channelPins[i], INPUT);
         analogSetPinAttenuation(_channelPins[i], ADC_11db);
     }
     analogSetAttenuation(ADC_11db);
     analogReadResolution(12);
-    if (_mapTpsAds)
+    if (_mapTpsMcp)
+        Log.info("SENS", "SensorManager initialized (%d channels, MAP/TPS via MCP3204 SPI)", NUM_CHANNELS);
+    else if (_mapTpsAds)
         Log.info("SENS", "SensorManager initialized (%d channels, MAP/TPS via ADS1115)", NUM_CHANNELS);
     else
         Log.info("SENS", "SensorManager initialized (%d channels)", NUM_CHANNELS);
 }
 
 void SensorManager::update() {
-    // Read ADC channels and apply EMA filter (skip MAP/TPS if using ADS1115)
+    // Read ADC channels and apply EMA filter (skip MAP/TPS if using external ADC)
+    bool extMapTps = hasExternalMapTps();
     for (uint8_t i = 0; i < NUM_CHANNELS; i++) {
-        if (_mapTpsAds && (_channelPins[i] == MAP_PIN || _channelPins[i] == TPS_PIN))
+        if (extMapTps && (i == 2 || i == 3))  // index 2=MAP, 3=TPS
             continue;
         _rawAdc[i] = analogRead(_channelPins[i]);
         float raw = (float)_rawAdc[i];
@@ -64,10 +73,12 @@ void SensorManager::update() {
     float vIat  = adcToVoltage((uint16_t)_rawFiltered[5]);
     float vBat  = adcToVoltage((uint16_t)_rawFiltered[6]);
 
-    // MAP/TPS: read from second ADS1115 (CH0=MAP, CH1=TPS) if available, else native ADC
+    // MAP/TPS: MCP3204 (SPI) > ADS1115 @ 0x49 (I2C) > native GPIO ADC
     float vMap, vTps;
-    if (_mapTpsAds && _mapTpsAds->isReady()) {
-        // ADS1115 at GAIN_TWOTHIRDS returns actual voltage (0-6.144V range)
+    if (_mapTpsMcp && _mapTpsMcp->isReady()) {
+        vMap = _mapTpsMcp->readMillivolts(0) / 1000.0f;
+        vTps = _mapTpsMcp->readMillivolts(1) / 1000.0f;
+    } else if (_mapTpsAds && _mapTpsAds->isReady()) {
         vMap = _mapTpsAds->readMillivolts(0) / 1000.0f;
         vTps = _mapTpsAds->readMillivolts(1) / 1000.0f;
     } else {
@@ -89,6 +100,8 @@ void SensorManager::update() {
     _coolantTempF    = voltageToNtcTempF(vClt);
     _iatTempF        = voltageToNtcTempF(vIat);
     _batteryVoltage  = voltageToBatteryV(vBat);
+
+    validateSensors();
 }
 
 float SensorManager::getO2Afr(uint8_t bank) const {
@@ -113,6 +126,17 @@ void SensorManager::setO2Calibration(float afrAt0v, float afrAt5v) {
 
 void SensorManager::setVbatDividerRatio(float ratio) {
     _cal.vbatDividerRatio = ratio;
+}
+
+void SensorManager::setPins(uint8_t o2b1, uint8_t o2b2, uint8_t map, uint8_t tps,
+                             uint8_t clt, uint8_t iat, uint8_t vbat) {
+    _channelPins[0] = o2b1;
+    _channelPins[1] = o2b2;
+    _channelPins[2] = map;
+    _channelPins[3] = tps;
+    _channelPins[4] = clt;
+    _channelPins[5] = iat;
+    _channelPins[6] = vbat;
 }
 
 float SensorManager::adcToVoltage(uint16_t raw) const {
@@ -156,4 +180,25 @@ float SensorManager::voltageToNtcTempF(float voltage) const {
 
 float SensorManager::voltageToBatteryV(float voltage) const {
     return voltage * _cal.vbatDividerRatio;
+}
+
+void SensorManager::validateSensors() {
+    uint8_t f = 0;
+    if (_mapKpa < _limpMapMin || _mapKpa > _limpMapMax) f |= FAULT_MAP;
+    if (_tpsPercent < _limpTpsMin || _tpsPercent > _limpTpsMax) f |= FAULT_TPS;
+    if (_coolantTempF > _limpCltMax) f |= FAULT_CLT;
+    if (_iatTempF > _limpIatMax) f |= FAULT_IAT;
+    if (_batteryVoltage < _limpVbatMin && _batteryVoltage > 0.5f) f |= FAULT_VBAT;
+    _limpFaults = f;
+}
+
+void SensorManager::setLimpThresholds(float mapMin, float mapMax, float tpsMin, float tpsMax,
+                                       float cltMax, float iatMax, float vbatMin) {
+    _limpMapMin = mapMin;
+    _limpMapMax = mapMax;
+    _limpTpsMin = tpsMin;
+    _limpTpsMax = tpsMax;
+    _limpCltMax = cltMax;
+    _limpIatMax = iatMax;
+    _limpVbatMin = vbatMin;
 }
