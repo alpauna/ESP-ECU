@@ -201,6 +201,7 @@ void ECU::begin() {
         } else {
             // Still need Wire.begin for other I2C devices (ADS1115)
             Wire.begin(_pinI2cSda, _pinI2cScl);
+            Wire.setTimeOut(10);  // 10ms I2C bus timeout (capital O = I2C, not Stream)
             Log.info("ECU", "MCP23017 #0 disabled via config");
         }
         if (_expander2Enabled) PinExpander::instance().begin(2, _pinI2cSda, _pinI2cScl, 0x22);
@@ -328,8 +329,10 @@ void ECU::begin() {
 }
 
 void ECU::update() {
+    uint32_t t0 = micros();
     // Core 0: read sensors and run fuel/ignition calculations
     _sensors->update();
+    uint32_t t1 = micros();
     _cam->update();
 
     // Update shared state from sensors
@@ -376,6 +379,9 @@ void ECU::update() {
     if (_trans) {
         _trans->update(_state.rpm, _state.tps, _state.batteryVoltage);
     }
+    uint32_t t2 = micros();
+    _updateTimeUs = t2 - t0;
+    _sensorTimeUs = t1 - t0;
 }
 
 void ECU::realtimeTask(void* param) {

@@ -308,6 +308,10 @@ void WebHandler::setupRoutes() {
         doc["cpuLoad0"] = getCpuLoadCore0();
         doc["cpuLoad1"] = getCpuLoadCore1();
         doc["freeHeap"] = ESP.getFreeHeap();
+        if (_ecu) {
+            doc["updateUs"] = _ecu->getUpdateTimeUs();
+            doc["sensorUs"] = _ecu->getSensorTimeUs();
+        }
         doc["wifiSSID"] = WiFi.SSID();
         doc["wifiRSSI"] = WiFi.RSSI();
         doc["wifiIP"] = WiFi.localIP().toString();

@@ -58,6 +58,8 @@ public:
     SensorManager* getSensorManager() { return _sensors; }
     CJ125Controller* getCJ125() { return _cj125; }
     TransmissionManager* getTransmission() { return _trans; }
+    uint32_t getUpdateTimeUs() const { return _updateTimeUs; }
+    uint32_t getSensorTimeUs() const { return _sensorTimeUs; }
 
 private:
     Scheduler* _ts;
@@ -109,6 +111,9 @@ private:
     bool _expander3Enabled = true;
     bool _spiExp0Enabled = true;
     bool _spiExp1Enabled = true;
+
+    volatile uint32_t _updateTimeUs = 0;
+    volatile uint32_t _sensorTimeUs = 0;
 
     TaskHandle_t _realtimeTaskHandle;
     static void realtimeTask(void* param);

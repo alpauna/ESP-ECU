@@ -24,6 +24,7 @@ bool PinExpander::begin(uint8_t index, uint8_t sda, uint8_t scl, uint8_t addr) {
 
     if (!_wireInitialized) {
         Wire.begin(sda, scl);
+        Wire.setTimeOut(10);  // 10ms I2C bus timeout (capital O = I2C, not Stream)
         _wireInitialized = true;
     }
 
@@ -35,12 +36,28 @@ bool PinExpander::begin(uint8_t index, uint8_t sda, uint8_t scl, uint8_t addr) {
     uint8_t probeErr = Wire.endTransmission();
 
     if (probeErr != 0) {
-        Log.warn("MCP", "MCP23017 #%d not found at 0x%02X — expander disabled", index, addr);
         _ready[index] = false;
         return false;
     }
 
-    // Device responded — full initialization
+    // ACK received — verify it's a real device, not a floating bus false positive.
+    // MCP23017 IODIRA register (0x00) reads 0xFF after power-on reset.
+    // Use raw Wire calls (not Adafruit library) to avoid library-level hangs
+    // on ghost devices where the floating bus generates spurious ACKs.
+    Wire.beginTransmission(addr);
+    Wire.write(0x00);  // IODIRA register address
+    Wire.endTransmission(false);  // repeated start
+    uint8_t recv = Wire.requestFrom(addr, (uint8_t)1);
+    uint8_t iodira = Wire.available() ? Wire.read() : 0x00;
+
+    if (recv != 1 || iodira != 0xFF) {
+        // Ghost device — floating bus false positive
+        Log.warn("MCP", "MCP23017 #%d ghost at 0x%02X (IODIRA=0x%02X) — skipped", index, addr, iodira);
+        _ready[index] = false;
+        return false;
+    }
+
+    // Device verified — full initialization via Adafruit library
     _mcp[index] = new Adafruit_MCP23X17();
     bool ok = _mcp[index]->begin_I2C(addr, &Wire);
 

@@ -1,6 +1,7 @@
 #include <Arduino.h>
 #include <esp_freertos_hooks.h>
 #include <esp_system.h>
+#include <Wire.h>
 #include <SPI.h>
 #include <SD.h>
 #include <WiFi.h>
@@ -264,7 +265,7 @@ void startAPMode() {
     Log.warn("WiFi", "AP MODE ACTIVE - SSID: %s IP: %s", apSSID, apIP.toString().c_str());
 }
 
-static uint8_t _cpuLoadWarmup = 15;
+static uint8_t _cpuLoadWarmup = 30;
 
 void onCalcCpuLoad() {
     uint32_t count0 = _idleCountCore0;
@@ -483,8 +484,6 @@ void loop() {
     }
     if (ftpActive) ftpSrv.handleFTP();
 
-    bool bIdle = ts.execute();
-    if (bIdle) {
-        vTaskDelay(1); // Yield to FreeRTOS so idle hooks fire
-    }
+    ts.execute();
+    vTaskDelay(1);  // Always yield to FreeRTOS for AsyncWebServer + idle hooks
 }
