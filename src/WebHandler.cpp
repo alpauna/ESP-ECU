@@ -478,6 +478,9 @@ void WebHandler::setupRoutes() {
         request->send(200, "application/json", json);
     });
 
+    // Diagnostics page
+    _server.on("/diag/view", HTTP_GET, [this](AsyncWebServerRequest* r) { serveFile(r, "/diag.html"); });
+
     // Detailed diagnostic endpoint
     _server.on("/diag", HTTP_GET, [this](AsyncWebServerRequest* request) {
         if (!checkAuth(request)) return;

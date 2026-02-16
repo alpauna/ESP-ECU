@@ -1,0 +1,174 @@
+<html><head><title>Diagnostics - ESP-ECU</title>
+<meta name='viewport' content='width=device-width,initial-scale=1'>
+<link rel='stylesheet' href='/theme.css'>
+<script>document.documentElement.dataset.theme=localStorage.getItem('hp-theme')||'dark'</script>
+<style>
+body{font-family:Arial,sans-serif;margin:0;padding:0;background:var(--bg);}
+nav{background:var(--nav-bg);padding:10px 20px;display:flex;align-items:center;gap:18px;}
+nav a{color:#fff;text-decoration:none;font-size:14px;padding:6px 12px;border-radius:4px;}
+nav a:hover,nav a.active{background:#4CAF50;}
+nav .brand{font-weight:bold;font-size:16px;margin-right:auto;color:#fff;}
+.hamburger{display:none;background:none;border:none;cursor:pointer;padding:4px;}
+.hamburger span{display:block;width:22px;height:2px;background:#fff;margin:5px 0;}
+@media(max-width:600px){
+  .hamburger{display:block;}
+  .nav-links{display:none;position:absolute;top:48px;left:0;right:0;background:var(--nav-bg);flex-direction:column;padding:10px;z-index:100;}
+  .nav-links.open{display:flex;}
+}
+.content{max-width:1100px;margin:10px auto;padding:0 15px;}
+.health-banner{text-align:center;padding:16px;border-radius:6px;margin-bottom:14px;color:#fff;}
+.health-banner .score{font-size:48px;font-weight:bold;line-height:1.1;}
+.health-banner .score-label{font-size:13px;opacity:0.9;margin-top:2px;}
+.health-meta{display:flex;justify-content:center;gap:20px;margin-top:8px;font-size:13px;opacity:0.9;}
+.disabled-msg{text-align:center;padding:60px 20px;color:var(--text-secondary);}
+.disabled-msg h2{color:var(--text-muted);font-size:22px;margin-bottom:8px;}
+.disabled-msg p{font-size:14px;}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin-bottom:12px;}
+.ch-card{background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:10px 12px;position:relative;}
+.ch-card .ch-name{font-size:11px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.3px;margin-bottom:4px;}
+.ch-card .ch-val{font-size:24px;font-weight:bold;color:var(--text);line-height:1.1;}
+.ch-card .ch-unit{font-size:12px;color:var(--text-muted);margin-left:2px;}
+.ch-card .ch-mv{font-size:11px;color:var(--text-muted);margin-top:2px;}
+.badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:bold;color:#fff;position:absolute;top:8px;right:8px;}
+.badge-ok{background:#4CAF50;}
+.badge-warn{background:#ff9800;}
+.badge-fault{background:#d32f2f;}
+.badge-inv{background:#2196F3;animation:pulse 0.8s infinite alternate;}
+@keyframes pulse{from{opacity:1}to{opacity:0.6}}
+.range-bar{margin-top:6px;height:6px;background:var(--border);border-radius:3px;position:relative;overflow:visible;}
+.range-fill{height:100%;border-radius:3px;transition:width 0.3s;}
+.range-marker{position:absolute;top:-3px;width:2px;height:12px;background:var(--text);border-radius:1px;transition:left 0.3s;}
+.range-labels{display:flex;justify-content:space-between;font-size:10px;color:var(--text-muted);margin-top:2px;}
+.ch-faults{font-size:11px;color:var(--text-muted);margin-top:4px;}
+.burst-section{margin-top:6px;border-top:1px solid var(--border-light);padding-top:6px;}
+.burst-title{font-size:10px;color:var(--text-secondary);text-transform:uppercase;margin-bottom:3px;}
+.burst-bars{display:flex;align-items:flex-end;gap:2px;height:30px;}
+.burst-bar{flex:1;background:#2196F3;border-radius:2px 2px 0 0;min-width:6px;transition:height 0.3s;}
+.burst-stats{font-size:10px;color:var(--text-muted);margin-top:2px;}
+.footer{text-align:center;color:var(--text-muted);font-size:11px;margin-top:8px;}
+</style></head><body>
+<nav><span class='brand'>ESP-ECU</span>
+<button class='hamburger' onclick='this.nextElementSibling.classList.toggle("open")'><span></span><span></span><span></span></button>
+<div class='nav-links'>
+<a href='/'>Home</a>
+<a href='/dashboard'>Dashboard</a>
+<a href='/tune'>Tune</a>
+<a href='/pins'>Pins</a>
+<a href='/sensors'>Sensors</a>
+<a href='/diag/view' class='active'>Diag</a>
+<a href='/config'>Config</a>
+<a href='/update'>Update</a>
+<a href='/log/view'>Log</a>
+<a href='/heap/view'>Heap</a>
+<a href='#' class='reboot' onclick="if(confirm('Reboot device?')){fetch('/reboot',{method:'POST',headers:{'Authorization':'Basic '+btoa(prompt('user:pass','admin:'))}}).then(r=>r.ok?alert('Rebooting...'):alert('Failed'))};return false">Reboot</a>
+</div></nav>
+<div class='content'>
+<div id='main'>Loading...</div>
+<div id='footer' class='footer'></div>
+</div>
+<script>
+var stateNames=['OK','WARN','FAULT','INVESTIGATING'];
+var badgeClass=['badge-ok','badge-warn','badge-fault','badge-inv'];
+
+function healthColor(score){
+  if(score>80) return '#4CAF50';
+  if(score>50) return '#ff9800';
+  return '#d32f2f';
+}
+
+function rangeColor(state){
+  if(state===0) return '#4CAF50';
+  if(state===1) return '#ff9800';
+  if(state>=2) return '#d32f2f';
+  return 'var(--border)';
+}
+
+function renderDisabled(){
+  return "<div class='disabled-msg'><h2>Board Diagnostics Disabled</h2>"
+    +"<p>Enable in Configuration &rarr; Diagnostics &rarr; Enabled</p>"
+    +"<p style='margin-top:12px;font-size:12px;color:var(--text-muted)'>Requires CD74HC4067 mux + ADS1115 @ 0x4A hardware</p></div>";
+}
+
+function renderChannel(ch){
+  var s=ch.state||0;
+  var val=(ch.value!=null)?ch.value.toFixed(2):'--';
+  var mv=(ch.mv!=null)?ch.mv.toFixed(1):'--';
+  var pct=0;
+  if(ch.max>ch.min && ch.value!=null){
+    pct=Math.max(0,Math.min(100,((ch.value-ch.min)/(ch.max-ch.min))*100));
+  }
+  var h="<div class='ch-card'>";
+  h+="<span class='badge "+badgeClass[s]+"'>"+stateNames[s]+"</span>";
+  h+="<div class='ch-name'>"+ch.name+"</div>";
+  h+="<div><span class='ch-val'>"+val+"</span><span class='ch-unit'>"+ch.unit+"</span></div>";
+  h+="<div class='ch-mv'>"+mv+" mV raw</div>";
+  h+="<div class='range-bar'><div class='range-fill' style='width:"+pct+"%;background:"+rangeColor(s)+"'></div>";
+  h+="<div class='range-marker' style='left:"+pct+"%'></div></div>";
+  h+="<div class='range-labels'><span>"+ch.min.toFixed(1)+"</span><span>"+ch.max.toFixed(1)+"</span></div>";
+  if(ch.totalFaults>0){
+    h+="<div class='ch-faults'>Faults: "+ch.totalFaults+"</div>";
+  }
+  if(ch.burst && ch.burst.length>0){
+    var bMax=0;
+    var bMin=1e9;
+    var bSum=0;
+    for(var i=0;i<ch.burst.length;i++){
+      if(ch.burst[i]>bMax)bMax=ch.burst[i];
+      if(ch.burst[i]<bMin)bMin=ch.burst[i];
+      bSum+=ch.burst[i];
+    }
+    var bMean=bSum/ch.burst.length;
+    var bVar=0;
+    for(var i=0;i<ch.burst.length;i++){bVar+=(ch.burst[i]-bMean)*(ch.burst[i]-bMean);}
+    var bStd=Math.sqrt(bVar/ch.burst.length);
+    var bRange=bMax-bMin||1;
+    h+="<div class='burst-section'>";
+    h+="<div class='burst-title'>Burst Samples</div>";
+    h+="<div class='burst-bars'>";
+    for(var i=0;i<ch.burst.length;i++){
+      var bh=Math.max(3,((ch.burst[i]-bMin)/bRange)*28);
+      var bc=(ch.burst[i]<ch.min||ch.burst[i]>ch.max)?'#d32f2f':'#2196F3';
+      h+="<div class='burst-bar' style='height:"+bh+"px;background:"+bc+"' title='"+ch.burst[i].toFixed(2)+"'></div>";
+    }
+    h+="</div>";
+    h+="<div class='burst-stats'>Mean: "+bMean.toFixed(2)+" &sigma;: "+bStd.toFixed(3)+"</div>";
+    h+="</div>";
+  }
+  h+="</div>";
+  return h;
+}
+
+function poll(){
+  fetch('/diag').then(function(r){return r.json()}).then(function(d){
+    if(!d.enabled){
+      document.getElementById('main').innerHTML=renderDisabled();
+      document.getElementById('footer').textContent='Updated: '+new Date().toLocaleTimeString();
+      return;
+    }
+    var hc=healthColor(d.health);
+    var html="<div class='health-banner' style='background:"+hc+"'>";
+    html+="<div class='score'>"+d.health+"</div>";
+    html+="<div class='score-label'>Health Score</div>";
+    html+="<div class='health-meta'>";
+    html+="<span>Faults: "+d.faultCount+"</span>";
+    html+="<span>Scan: "+d.scanCycleMs+"ms</span>";
+    html+="<span>Rails: "+(d.crossValid?"PASS":"FAIL")+"</span>";
+    html+="<span>Channel: "+d.currentCh+"/16</span>";
+    html+="</div></div>";
+    if(d.channels && d.channels.length>0){
+      html+="<div class='grid'>";
+      for(var i=0;i<d.channels.length;i++){
+        html+=renderChannel(d.channels[i]);
+      }
+      html+="</div>";
+    }
+    document.getElementById('main').innerHTML=html;
+    document.getElementById('footer').textContent='Updated: '+new Date().toLocaleTimeString();
+  }).catch(function(e){
+    document.getElementById('main').innerHTML="<div class='disabled-msg'><h2>Connection Error</h2><p>Unable to reach /diag endpoint</p></div>";
+  });
+}
+poll();setInterval(poll,2000);
+fetch('/theme').then(function(r){return r.json()}).then(function(d){var t=d.theme||'light';document.documentElement.dataset.theme=t;localStorage.setItem('hp-theme',t);}).catch(function(){});
+</script>
+</body></html>
