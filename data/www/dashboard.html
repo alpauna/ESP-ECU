@@ -54,6 +54,7 @@ nav .brand{font-weight:bold;font-size:16px;margin-right:auto;color:#fff;}
 <a href='/dashboard' class='active'>Dashboard</a>
 <a href='/tune'>Tune</a>
 <a href='/pins'>Pins</a>
+<a href='/sensors'>Sensors</a>
 <a href='/config'>Config</a>
 <a href='/update'>Update</a>
 <a href='/log/view'>Log</a>
@@ -71,6 +72,11 @@ nav .brand{font-weight:bold;font-size:16px;margin-right:auto;color:#fff;}
 <div id='limpBanner' style='display:none;background:#d32f2f;color:#fff;padding:12px 16px;border-radius:6px;margin-bottom:12px;text-align:center;'>
 <div style='font-size:18px;font-weight:bold;margin-bottom:4px'>LIMP MODE</div>
 <div id='limpFaults' style='font-size:13px;display:flex;gap:6px;justify-content:center;flex-wrap:wrap'></div>
+</div>
+
+<div id='celBanner' style='display:none;background:#ff9800;color:#fff;padding:10px 16px;border-radius:6px;margin-bottom:12px;text-align:center;'>
+<div style='font-size:16px;font-weight:bold;margin-bottom:4px'>CHECK ENGINE</div>
+<div id='celFaults' style='font-size:13px;display:flex;gap:6px;justify-content:center;flex-wrap:wrap'></div>
 </div>
 
 <div class='state-banner state-OFF' id='banner'>OFF</div>
@@ -118,6 +124,7 @@ nav .brand{font-weight:bold;font-size:16px;margin-right:auto;color:#fff;}
 <div class='row'><span class='lbl'>Advance</span><span class='val' id='advance'>--</span></div>
 <div class='row'><span class='lbl'>Rev Limit</span><span class='val' id='revLimiting'>--</span></div>
 <div class='row'><span class='lbl'>Sync</span><span class='val' id='sync'>--</span></div>
+<div class='row'><span class='lbl'>Overdwell</span><span class='val' id='overdwell'>0</span></div>
 </div>
 
 <!-- Fuel -->
@@ -126,6 +133,9 @@ nav .brand{font-weight:bold;font-size:16px;margin-right:auto;color:#fff;}
 <div class='row'><span class='lbl'>Pulse Width</span><span class='val' id='pw'>--</span></div>
 <div class='row'><span class='lbl'>Target AFR</span><span class='val' id='targetAfr'>--</span></div>
 <div class='row'><span class='lbl'>Fuel Cut</span><span class='val' id='fuelCut'>--</span></div>
+<div class='row'><span class='lbl'>Fuel Pump</span><span class='val' id='fuelPump'>--</span></div>
+<div class='row'><span class='lbl'>ASE</span><span class='val' id='ase'>--</span></div>
+<div class='row'><span class='lbl'>DFCO</span><span class='val' id='dfco'>--</span></div>
 </div>
 
 <!-- Alternator -->
@@ -136,11 +146,10 @@ nav .brand{font-weight:bold;font-size:16px;margin-right:auto;color:#fff;}
 <div class='row'><span class='lbl'>Target</span><span class='val' id='altTarget'>--</span></div>
 </div>
 
-<!-- Oil Pressure (hidden if not configured) -->
-<div class='card' id='oilCard' style='display:none'>
-<h3>Oil Pressure</h3>
-<div class='row'><span class='lbl'>Pressure</span><span class='val' id='oilPsi'>--</span></div>
-<div class='row'><span class='lbl'>Status</span><span class='val' id='oilStatus'>--</span></div>
+<!-- Sensor Inputs (dynamic from descriptor array) -->
+<div class='card' id='sensorCard' style='grid-column:span 2;'>
+<h3>Sensor Inputs</h3>
+<div id='sensorGrid' style='display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:6px;'></div>
 </div>
 
 <!-- Per-cylinder trim -->
@@ -156,6 +165,7 @@ nav .brand{font-weight:bold;font-size:16px;margin-right:auto;color:#fff;}
 <div class='row'><span class='lbl'>CPU Core 1</span><span class='val' id='cpu1'>--</span></div>
 <div class='row'><span class='lbl'>Free Heap</span><span class='val' id='heap'>--</span></div>
 <div class='row'><span class='lbl'>Sequential</span><span class='val' id='sequential'>--</span></div>
+<div class='row'><span class='lbl'>Tooth Log</span><span class='val'><button id='toothBtn' onclick='captureTeeth()' style='font-size:11px;padding:2px 8px;'>Capture</button> <span id='toothStatus'>--</span></span></div>
 </div>
 
 <!-- Transmission (hidden if not enabled) -->
@@ -214,9 +224,25 @@ function poll(){
         var active=(fl&names[i][1])!==0;
         pills+='<span style="display:inline-block;padding:3px 10px;border-radius:12px;font-size:12px;font-weight:bold;'+(active?'background:#fff;color:#d32f2f':'background:rgba(255,255,255,0.3);color:#fff')+'">'+names[i][0]+'</span>';
       }
+      var ruleNames=d.activeRules||[];
+      if(ruleNames.length>0){
+        pills+='<br><span style="font-size:11px;color:#fff;opacity:0.8;margin-top:4px;display:inline-block">Rules: '+ruleNames.join(', ')+'</span>';
+      }
       document.getElementById('limpFaults').innerHTML=pills;
     }else{
       document.getElementById('limpBanner').style.display='none';
+    }
+    // CEL-only banner (shown when CEL faults exist but NOT in limp)
+    var cf=d.celFaults||0;
+    if(cf&&!d.limpMode){
+      document.getElementById('celBanner').style.display='block';
+      var cp='',cnames=[['MAP',0x01],['TPS',0x02],['CLT',0x04],['IAT',0x08],['VBAT',0x10],['EXP',0x20],['OIL',0x40]];
+      for(var ci=0;ci<cnames.length;ci++){
+        if(cf&cnames[ci][1]) cp+='<span style="display:inline-block;padding:3px 10px;border-radius:12px;font-size:12px;font-weight:bold;background:#fff;color:#ff9800">'+cnames[ci][0]+'</span>';
+      }
+      document.getElementById('celFaults').innerHTML=cp;
+    }else{
+      document.getElementById('celBanner').style.display='none';
     }
     var st=d.state||'OFF';
     var banner=document.getElementById('banner');
@@ -224,8 +250,15 @@ function poll(){
     banner.className='state-banner state-'+st;
 
     document.getElementById('rpm').textContent=d.rpm||0;
-    document.getElementById('map').textContent=(d.mapKpa||0).toFixed(1);
-    document.getElementById('tps').textContent=(d.tps||0).toFixed(1);
+    // Sensor color helper: error=red, warn=yellow, ok=green
+    var _sMap={};
+    if(d.sensors){for(var si=0;si<d.sensors.length;si++){_sMap[d.sensors[si].name]=d.sensors[si];}}
+    function sColor(name){var s=_sMap[name];if(!s)return '';if(s.error)return '#f44336';if(s.warn)return '#ff9800';return '#4CAF50';}
+    function sVal(name,def,dec){var s=_sMap[name];return s&&s.value!=null?s.value.toFixed(dec!=null?dec:1):def;}
+    document.getElementById('map').textContent=sVal('MAP','0',1);
+    document.getElementById('map').style.color=sColor('MAP');
+    document.getElementById('tps').textContent=sVal('TPS','0',1);
+    document.getElementById('tps').style.color=sColor('TPS');
 
     // AFR / CJ125 Wideband O2
     var cj=d.cj125;
@@ -259,30 +292,68 @@ function poll(){
       document.getElementById('afrContent').innerHTML="<div class='dual-gauge'><div class='gauge'><div class='val'>"+(afr[0]?afr[0].toFixed(1):'--')+"</div><div class='label'>Bank 1</div></div><div class='gauge'><div class='val'>"+(afr[1]?afr[1].toFixed(1):'--')+"</div><div class='label'>Bank 2</div></div></div>";
     }
 
-    document.getElementById('clt').textContent=(d.coolantTempF||0).toFixed(0)+' F';
-    document.getElementById('iat').textContent=(d.iatTempF||0).toFixed(0)+' F';
+    document.getElementById('clt').textContent=sVal('CLT','--',0)+' F';
+    document.getElementById('clt').style.color=sColor('CLT');
+    document.getElementById('iat').textContent=sVal('IAT','--',0)+' F';
+    document.getElementById('iat').style.color=sColor('IAT');
 
     document.getElementById('advance').textContent=(d.sparkAdvanceDeg||0).toFixed(1)+' deg';
     document.getElementById('revLimiting').textContent=d.revLimiting?'ACTIVE':'--';
     document.getElementById('sync').textContent=d.syncState||'--';
+    var odw=d.overdwellCount||0;
+    document.getElementById('overdwell').textContent=odw;
+    document.getElementById('overdwell').style.color=odw>0?'#f44336':'';
 
     document.getElementById('pw').textContent=(d.injPulseWidthUs||0).toFixed(0)+' us';
     document.getElementById('targetAfr').textContent=(d.targetAfr||0).toFixed(1);
     document.getElementById('fuelCut').textContent=d.fuelCut?'YES':'No';
+    // Fuel pump
+    var fpEl=document.getElementById('fuelPump');
+    if(d.fuelPumpPriming){fpEl.textContent='PRIMING';fpEl.style.color='#ff9800';}
+    else if(d.fuelPumpOn){fpEl.textContent='ON';fpEl.style.color='#4CAF50';}
+    else{fpEl.textContent='OFF';fpEl.style.color='var(--text-muted)';}
+    // ASE
+    var aseEl=document.getElementById('ase');
+    if(d.aseActive){aseEl.textContent='+'+(d.asePct||0).toFixed(1)+'%';aseEl.style.color='#ff9800';}
+    else{aseEl.textContent='--';aseEl.style.color='';}
+    // DFCO
+    var dfcoEl=document.getElementById('dfco');
+    if(d.dfcoActive){dfcoEl.textContent='ACTIVE';dfcoEl.style.color='#2196F3';}
+    else{dfcoEl.textContent='--';dfcoEl.style.color='';};
 
-    document.getElementById('vbat').textContent=(d.batteryVoltage||0).toFixed(1)+' V';
+    document.getElementById('vbat').textContent=sVal('VBAT','--',1)+' V';
+    document.getElementById('vbat').style.color=sColor('VBAT');
     document.getElementById('altDuty').textContent=(d.altDuty||0).toFixed(1)+' %';
     document.getElementById('altTarget').textContent=(d.altTarget||0).toFixed(1)+' V';
 
-    // Oil pressure card
-    if(d.oilPressurePsi!==undefined&&d.oilPressurePsi!==null){
-      document.getElementById('oilCard').style.display='';
-      document.getElementById('oilPsi').textContent=d.oilPressurePsi.toFixed(1)+' PSI';
-      var oilEl=document.getElementById('oilStatus');
-      if(d.oilPressureLow){oilEl.textContent='LOW';oilEl.style.color='#f44336';}
-      else{oilEl.textContent='OK';oilEl.style.color='#4CAF50';}
+    // Dynamic sensor inputs grid (all enabled descriptors)
+    if(d.sensors&&d.sensors.length>0){
+      document.getElementById('sensorCard').style.display='';
+      var sH='';
+      for(var si=0;si<d.sensors.length;si++){
+        var sn=d.sensors[si];
+        var bg=sn.error?'rgba(244,67,54,0.15)':sn.warn?'rgba(255,152,0,0.15)':'rgba(76,175,80,0.08)';
+        var bc=sn.error?'#f44336':sn.warn?'#ff9800':'#4CAF50';
+        var vc=sn.error?'#f44336':sn.warn?'#ff9800':'var(--text)';
+        var isBool=(sn.unit==='bool');
+        var v;
+        if(isBool){v=sn.value>=1?'ON':'OFF';vc=sn.value>=1?'#4CAF50':'var(--text-muted)';}
+        else{v=sn.value!=null?sn.value.toFixed(1):'--';}
+        var badge='';
+        if(sn.srcType==6)badge='<span style="display:inline-block;padding:1px 5px;border-radius:8px;font-size:9px;font-weight:bold;margin-left:4px;background:#1976D2;color:#fff">ENG</span>';
+        else if(sn.srcType==7)badge='<span style="display:inline-block;padding:1px 5px;border-radius:8px;font-size:9px;font-weight:bold;margin-left:4px;background:#7B1FA2;color:#fff">OUT</span>';
+        var curSt=d.engineRunning?4:(d.cranking?2:1);
+        var inactive=sn.activeStates!=null&&!(sn.activeStates&curSt);
+        var opacity=inactive?'opacity:0.35;':'';
+        sH+="<div style='background:"+bg+";border:1px solid "+bc+";border-radius:6px;padding:6px 8px;text-align:center;"+opacity+"'>";
+        sH+="<div style='font-size:10px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.5px'>"+sn.name+badge+"</div>";
+        sH+="<div style='font-size:18px;font-weight:bold;color:"+vc+"'>"+v+"</div>";
+        sH+="<div style='font-size:10px;color:var(--text-secondary)'>"+sn.unit+"</div>";
+        sH+="</div>";
+      }
+      document.getElementById('sensorGrid').innerHTML=sH;
     }else{
-      document.getElementById('oilCard').style.display='none';
+      document.getElementById('sensorCard').style.display='none';
     }
 
     // Per-cylinder trim bars
@@ -378,6 +449,29 @@ function poll(){
   }).catch(function(){});
 }
 poll();setInterval(poll,1000);
+function captureTeeth(){
+  var btn=document.getElementById('toothBtn');
+  var st=document.getElementById('toothStatus');
+  btn.disabled=true;btn.textContent='...';st.textContent='Starting';
+  fetch('/teeth',{method:'POST'}).then(function(r){return r.text();}).then(function(){
+    st.textContent='Capturing...';
+    var iv=setInterval(function(){
+      fetch('/teeth').then(function(r){return r.json();}).then(function(d){
+        if(d.status==='capturing'){st.textContent=d.count+'/720';}
+        else if(d.status==='complete'){
+          clearInterval(iv);btn.disabled=false;btn.textContent='Capture';
+          st.textContent=d.count+' pts';
+          // Download as CSV
+          var csv='index,period_us,tooth\n';
+          for(var i=0;i<d.data.length;i++){csv+=i+','+d.data[i].p+','+d.data[i].t+'\n';}
+          var blob=new Blob([csv],{type:'text/csv'});
+          var a=document.createElement('a');a.href=URL.createObjectURL(blob);
+          a.download='tooth_log.csv';a.click();
+        }else{clearInterval(iv);btn.disabled=false;btn.textContent='Capture';st.textContent='Empty';}
+      });
+    },500);
+  }).catch(function(){btn.disabled=false;btn.textContent='Capture';st.textContent='Error';});
+}
 fetch('/theme').then(function(r){return r.json()}).then(function(d){var t=d.theme||'light';document.documentElement.dataset.theme=t;localStorage.setItem('hp-theme',t);}).catch(function(){});
 </script>
 </body></html>

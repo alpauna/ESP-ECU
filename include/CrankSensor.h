@@ -7,6 +7,12 @@ public:
     enum SyncState { LOST, SYNCING, SYNCED };
 
     static const uint8_t TOOTH_HISTORY_SIZE = 8;
+    static const uint16_t TOOTH_LOG_SIZE = 720;
+
+    struct ToothLogEntry {
+        uint32_t periodUs;
+        uint8_t toothNum;
+    };
 
     CrankSensor();
     ~CrankSensor();
@@ -19,6 +25,14 @@ public:
     bool isSynced() const { return _syncState == SYNCED; }
     int64_t getLastToothTimeUs() const { return _lastToothTimeUs; }
     uint8_t getTotalTeeth() const { return _totalTeeth; }
+
+    // Tooth logging
+    void startToothLog();
+    void stopToothLog();
+    bool isToothLogComplete() const { return _toothLogComplete; }
+    bool isToothLogCapturing() const { return _toothLogCapturing; }
+    const volatile ToothLogEntry* getToothLog() const { return _toothLog; }
+    uint16_t getToothLogSize() const { return _toothLogIdx; }
 
 private:
     uint8_t _pin;
@@ -34,6 +48,12 @@ private:
     volatile uint32_t _lastPeriodUs;
     volatile uint8_t _toothCount;
     volatile bool _gapDetected;
+
+    // Tooth log buffer (DRAM for ISR access)
+    volatile ToothLogEntry _toothLog[TOOTH_LOG_SIZE];
+    volatile uint16_t _toothLogIdx;
+    volatile bool _toothLogCapturing;
+    volatile bool _toothLogComplete;
 
     static CrankSensor* _instance;
     static void IRAM_ATTR isrHandler();

@@ -38,7 +38,7 @@ const uint8_t CJ125Controller::IP_LAMBDA_TABLE_SIZE =
 CJ125Controller::CJ125Controller(SPIClass* spi)
     : _spi(spi) {}
 
-void CJ125Controller::begin(uint8_t spiSS1, uint8_t spiSS2,
+void CJ125Controller::begin(uint16_t spiSS1, uint16_t spiSS2,
                               uint8_t heaterOut1, uint8_t heaterOut2,
                               uint8_t uaPin1, uint8_t uaPin2) {
     _banks[0].spiSS = spiSS1;

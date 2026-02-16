@@ -24,6 +24,16 @@ public:
     float getTargetAfr() const { return _targetAfr; }
     float getVE() const { return _ve; }
 
+    // ASE
+    void setAseParams(float initialPct, uint32_t durationMs, float minCltF);
+    bool isAseActive() const { return _aseActive; }
+    float getAsePct() const { return _aseCurrentPct; }
+
+    // DFCO
+    void setDfcoParams(uint16_t rpmThresh, float tpsThresh, uint32_t delayMs,
+                       uint16_t exitRpm, float exitTps);
+    bool isDfcoActive() const { return _dfcoActive; }
+
     void setReqFuel(float ccPerMin, float displacementCc, uint8_t numCyl);
     float getReqFuelMs() const { return _reqFuelMs; }
 
@@ -66,6 +76,24 @@ private:
     float _prevTps;
     float _accelEnrichRemaining;
     uint32_t _lastUpdateMs;
+
+    // ASE state
+    bool _aseActive = false;
+    uint32_t _aseStartMs = 0;
+    float _aseCurrentPct = 0.0f;
+    float _aseInitialPct = 35.0f;
+    uint32_t _aseDurationMs = 10000;
+    float _aseMinCltF = 100.0f;
+    bool _wasCranking = false;
+
+    // DFCO state
+    bool _dfcoActive = false;
+    uint32_t _dfcoEntryStart = 0;
+    uint16_t _dfcoRpmThreshold = 2500;
+    float _dfcoTpsThreshold = 3.0f;
+    uint32_t _dfcoEntryDelayMs = 500;
+    uint16_t _dfcoExitRpm = 1800;
+    float _dfcoExitTps = 5.0f;
 
     float calculateWarmupEnrichment(float coolantTempF);
     float calculateAccelEnrichment(float tps);

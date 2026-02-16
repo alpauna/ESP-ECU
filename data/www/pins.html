@@ -10,13 +10,34 @@ nav a:hover,nav a.active{background:#4CAF50;}
 nav .brand{font-weight:bold;font-size:16px;margin-right:auto;color:#fff;}
 .content{max-width:1200px;margin:10px auto;padding:0 15px;}
 h2{color:var(--text);margin:18px 0 8px;font-size:15px;border-bottom:2px solid #4CAF50;padding-bottom:4px;text-transform:uppercase;letter-spacing:0.5px;}
-.status-bar{display:flex;align-items:center;gap:16px;margin:12px 0;padding:10px 14px;background:var(--surface);border:1px solid var(--border);border-radius:6px;font-size:13px;}
+.status-bar{display:flex;align-items:center;gap:16px;margin:12px 0;padding:10px 14px;background:var(--surface);border:1px solid var(--border);border-radius:6px;font-size:13px;flex-wrap:wrap;}
 .status-bar .lbl{color:var(--text-secondary);}
 .status-bar .val{font-weight:bold;color:var(--text);}
 .sync-badge{display:inline-block;padding:2px 10px;border-radius:10px;font-weight:bold;font-size:12px;color:#fff;}
 .sync-LOST{background:#d32f2f;}
 .sync-SYNCING{background:#ff9800;}
 .sync-SYNCED{background:#4CAF50;}
+.toolbar{display:flex;align-items:center;gap:8px;margin:12px 0;padding:10px 14px;background:var(--surface);border:1px solid var(--border);border-radius:6px;flex-wrap:wrap;}
+.toolbar button{background:#4CAF50;color:#fff;padding:6px 16px;border:none;border-radius:4px;cursor:pointer;font-size:13px;}
+.toolbar button:hover{background:#45a049;}
+.toolbar .btn-cancel{background:#757575;}
+.toolbar .btn-cancel:hover{background:#616161;}
+.toolbar .btn-danger{background:#d32f2f;}
+.toolbar .btn-danger:hover{background:#b71c1c;}
+.toolbar select{padding:6px;border:1px solid var(--input-border);border-radius:4px;background:var(--input-bg);color:var(--text);font-size:13px;}
+.toolbar .spacer{flex:1;}
+#pinDupWarn{display:none;color:#f44336;font-size:13px;margin:8px 0;padding:8px 12px;background:#ffebee;border-radius:4px;border:1px solid #ef9a9a;}
+#rebootNote{display:none;color:var(--text-secondary);font-size:12px;margin:4px 0;font-style:italic;}
+#safeBanner{display:none;background:#d32f2f;color:#fff;padding:12px 16px;border-radius:6px;margin-bottom:12px;font-size:14px;}
+#safeBanner button{background:#fff;color:#d32f2f;border:none;padding:6px 16px;border-radius:4px;cursor:pointer;font-weight:bold;margin-left:10px;}
+.edit-section{display:none;margin:12px 0;}
+.edit-section.show{display:block;}
+.edit-section fieldset{border:1px solid var(--border);border-radius:6px;padding:12px 15px;background:var(--surface);}
+.edit-section legend{color:#4CAF50;font-weight:bold;padding:0 8px;font-size:13px;}
+.edit-section label{display:inline-block;margin:4px 12px 4px 0;color:var(--text-secondary);font-size:13px;cursor:pointer;}
+.edit-section input[type=checkbox]{width:auto;margin-right:4px;vertical-align:middle;}
+.edit-section .sub-label{font-weight:bold;color:var(--text);font-size:13px;display:block;margin:10px 0 4px;}
+.edit-section .row2{display:grid;grid-template-columns:1fr 1fr;gap:4px 16px;}
 .col-toggles{display:flex;gap:14px;flex-wrap:wrap;margin:8px 0 4px;padding:6px 10px;background:var(--surface);border:1px solid var(--border);border-radius:4px;font-size:12px;}
 .col-toggles label{color:var(--text-secondary);cursor:pointer;display:flex;align-items:center;gap:4px;}
 .col-toggles input{width:auto;}
@@ -48,7 +69,64 @@ tr:hover td{background:var(--hover-bg);}
 .hide-range .col-range{display:none!important;}
 .hide-mode .col-mode{display:none!important;}
 .hide-desc .col-desc{display:none!important;}
+.pinSel{padding:3px 4px;border:1px solid var(--input-border);border-radius:3px;background:var(--input-bg);color:var(--text);font-size:12px;font-family:monospace;width:120px;}
+.pinSel option{background:var(--input-bg);color:var(--text);}
+.pinSel option:disabled{color:var(--text-muted);background:var(--surface);}
+.pinSel.dup{border-color:#f44336!important;background:rgba(244,67,54,0.1);}
+.lock{color:var(--text-muted);font-size:10px;margin-left:3px;}
+/* Custom I/O & Rules */
+.section-header{display:flex;align-items:center;gap:12px;margin:18px 0 8px;border-bottom:2px solid #4CAF50;padding-bottom:4px;}
+.section-header h2{margin:0;border:none;padding:0;}
+.section-header .spacer{flex:1;}
+.btn-sm{background:#4CAF50;color:#fff;padding:4px 12px;border:none;border-radius:3px;cursor:pointer;font-size:12px;}
+.btn-sm:hover{background:#45a049;}
+.btn-sm.btn-del{background:#d32f2f;}
+.btn-sm.btn-del:hover{background:#b71c1c;}
+.btn-sm.btn-edit{background:#1976d2;}
+.btn-sm.btn-edit:hover{background:#1565c0;}
+.btn-sm.btn-toggle{background:#ff9800;min-width:36px;}
+.btn-sm.btn-toggle:hover{background:#f57c00;}
+.status-dot{display:inline-block;width:10px;height:10px;border-radius:50%;vertical-align:middle;}
+.dot-active{background:#4CAF50;}
+.dot-inactive{background:#757575;}
+.dot-disabled{background:#424242;}
+.form-card{background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:14px;margin:10px 0;display:none;}
+.form-card.show{display:block;}
+.form-card .form-title{font-weight:bold;color:#4CAF50;margin-bottom:10px;font-size:14px;}
+.form-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px 16px;}
+.form-grid label{display:block;font-size:12px;color:var(--text-secondary);margin-bottom:2px;}
+.form-grid input,.form-grid select{width:100%;padding:5px 8px;border:1px solid var(--input-border);border-radius:3px;background:var(--input-bg);color:var(--text);font-size:13px;box-sizing:border-box;}
+.form-grid input[type=checkbox]{width:auto;}
+.form-grid .full-width{grid-column:1/-1;}
+.form-btns{margin-top:10px;display:flex;gap:8px;}
+.form-btns button{padding:6px 16px;border:none;border-radius:4px;cursor:pointer;font-size:13px;}
+.form-btns .btn-save{background:#4CAF50;color:#fff;}
+.form-btns .btn-save:hover{background:#45a049;}
+.form-btns .btn-cancel{background:#757575;color:#fff;}
+.form-btns .btn-cancel:hover{background:#616161;}
+.hidden{display:none!important;}
+.cp-mode-field{display:none;}
+.cp-mode-field.show{display:block;}
 .footer{text-align:center;color:var(--text-muted);font-size:11px;margin-top:8px;}
+.pin-taken{color:var(--text-muted)!important;font-style:italic;}
+/* Rule simulator */
+.sim-panel{background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:14px;margin:10px 0;display:none;}
+.sim-panel.show{display:block;}
+.sim-panel .sim-title{font-weight:bold;color:#4CAF50;margin-bottom:10px;font-size:14px;}
+.sim-row{display:flex;align-items:center;gap:12px;margin:6px 0;flex-wrap:wrap;}
+.sim-row label{font-size:12px;color:var(--text-secondary);min-width:80px;}
+.sim-row input[type=range]{flex:1;min-width:200px;}
+.sim-row input[type=number]{width:80px;padding:4px 6px;border:1px solid var(--input-border);border-radius:3px;background:var(--input-bg);color:var(--text);font-size:13px;}
+.sim-result{font-size:14px;font-weight:bold;padding:8px 14px;border-radius:4px;margin-top:8px;display:inline-block;}
+.sim-active{background:#4caf501a;color:#4CAF50;border:1px solid #4CAF50;}
+.sim-inactive{background:#7575751a;color:#999;border:1px solid #757575;}
+.sim-info{font-size:11px;color:var(--text-muted);margin-top:6px;}
+.sim-bar{position:relative;height:24px;background:var(--hover-bg);border-radius:4px;margin:8px 0;overflow:hidden;}
+.sim-bar-fill{position:absolute;top:0;height:100%;border-radius:4px;transition:width 0.15s;}
+.sim-bar-mark{position:absolute;top:0;height:100%;width:2px;background:#fff;z-index:2;}
+.sim-bar-label{position:absolute;top:26px;font-size:10px;color:var(--text-muted);transform:translateX(-50%);white-space:nowrap;}
+.btn-sm.btn-test{background:#7b1fa2;}
+.btn-sm.btn-test:hover{background:#6a1b9a;}
 </style></head><body>
 <nav><span class='brand'>ESP-ECU</span>
 <button class='hamburger' onclick='this.nextElementSibling.classList.toggle("open")'><span></span><span></span><span></span></button>
@@ -57,17 +135,58 @@ tr:hover td{background:var(--hover-bg);}
 <a href='/dashboard'>Dashboard</a>
 <a href='/tune'>Tune</a>
 <a href='/pins' class='active'>Pins</a>
+<a href='/sensors'>Sensors</a>
 <a href='/config'>Config</a>
 <a href='/update'>Update</a>
 <a href='/log/view'>Log</a>
 <a href='/heap/view'>Heap</a>
-<a href='#' class='reboot' onclick="if(confirm('Reboot device?')){fetch('/reboot',{method:'POST',headers:{'Authorization':'Basic '+btoa(prompt('user:pass','admin:'))}}).then(r=>r.ok?alert('Rebooting...'):alert('Failed'))};return false">Reboot</a>
+<a href='#' class='reboot' onclick="if(confirm('Reboot device?')){if(!_authHeader&&!promptAuth())return false;authFetch('/reboot',{method:'POST'}).then(r=>r.ok?alert('Rebooting...'):alert('Failed'))};return false">Reboot</a>
 </div></nav>
 <div class='content'>
+
+<div id='safeBanner'>
+<strong>SAFE MODE ACTIVE</strong> — Peripherals disabled. <span id='safeBannerInfo'></span>
+<button type='button' onclick='clearSafeMode()'>Clear &amp; Reboot</button>
+</div>
 
 <div class='status-bar'>
 <span class='lbl'>Crank:</span> <span id='crankSync' class='sync-badge sync-LOST'>--</span>
 <span class='lbl' style='margin-left:12px;'>RPM:</span> <span class='val' id='rpm'>0</span>
+</div>
+
+<div class='toolbar' id='toolbar'>
+<select id='pinPreset' style='display:none' onchange='applyPinPreset()'>
+<option value=''>Custom</option>
+</select>
+<span class='spacer'></span>
+<button id='btnEdit' onclick='enterEditMode()'>Edit Pins</button>
+<button id='btnSave' style='display:none' onclick='savePins()'>Save</button>
+<button id='btnCancel' class='btn-cancel' style='display:none' onclick='exitEditMode()'>Cancel</button>
+</div>
+
+<div id='pinDupWarn'></div>
+<div id='rebootNote'>Pin and peripheral changes require reboot.</div>
+
+<div class='edit-section' id='periphSection'>
+<fieldset><legend>Peripherals &amp; Safe Mode</legend>
+<label><input type='checkbox' id='forceSafeMode'>Force safe mode on next reboot</label>
+<span class='sub-label'>Bus Control (requires reboot)</span>
+<label><input type='checkbox' id='i2cEnabled' onchange='togglePeriphDeps()'>I2C Bus (ADS1115 only)</label>
+<label><input type='checkbox' id='spiExpandersEnabled' onchange='togglePeriphDeps()'>SPI Expanders (6x MCP23S17 HSPI)</label>
+<span class='sub-label'>MCP23S17 Expanders (shared CS, HAEN addressing)</span>
+<div class='row2'>
+<label><input type='checkbox' id='expander0Enabled' class='spiDep'>MCP23S17 #0 (general I/O)</label>
+<label><input type='checkbox' id='expander1Enabled' class='spiDep'>MCP23S17 #1 (transmission)</label>
+</div>
+<div class='row2'>
+<label><input type='checkbox' id='expander2Enabled' class='spiDep'>MCP23S17 #2 (expansion)</label>
+<label><input type='checkbox' id='expander3Enabled' class='spiDep'>MCP23S17 #3 (expansion)</label>
+</div>
+<div class='row2'>
+<label><input type='checkbox' id='expander4Enabled' class='spiDep'>MCP23S17 #4 (coils)</label>
+<label><input type='checkbox' id='expander5Enabled' class='spiDep'>MCP23S17 #5 (injectors)</label>
+</div>
+</fieldset>
 </div>
 
 <div class='col-toggles'>
@@ -98,9 +217,259 @@ tr:hover td{background:var(--hover-bg);}
 
 <div id='expandersSection'></div>
 
-<div class='footer'>Auto-refreshes every 2s</div>
+<!-- Custom I/O Pins -->
+<div class='section-header'>
+<h2>Custom I/O</h2>
+<span class='spacer'></span>
+<button class='btn-sm' onclick='showCpForm(-1)'>+ Add Pin</button>
+</div>
+<table id='cpTable'>
+<thead><tr><th>Slot</th><th>Name</th><th>Pin</th><th>Mode</th><th>Interval</th><th>Value</th><th>Actions</th></tr></thead>
+<tbody id='cpBody'><tr><td colspan='7' style='color:var(--text-muted)'>No custom pins configured</td></tr></tbody>
+</table>
+<div class='form-card' id='cpForm'>
+<div class='form-title' id='cpFormTitle'>Add Custom Pin</div>
+<div class='form-grid'>
+<div><label>Name (max 15 chars)</label><input type='text' id='cpName' maxlength='15' placeholder='MY_PIN'></div>
+<div><label>Mode</label><select id='cpMode' onchange='cpModeChanged()'>
+<option value='1'>Poll (Digital)</option>
+<option value='2'>ISR (Interrupt)</option>
+<option value='3'>Timer (Cron)</option>
+<option value='4'>Analog In</option>
+<option value='5'>Output</option>
+<option value='6'>PWM Output</option>
+</select></div>
+<div><label>Pin</label><select id='cpPin'></select></div>
+<div class='cp-mode-field' id='cpFieldInterval'><label>Interval (ms)</label><input type='number' id='cpInterval' value='1000' min='1'></div>
+<div class='cp-mode-field' id='cpFieldEdge'><label>ISR Edge</label><select id='cpEdge'>
+<option value='0'>Rising</option><option value='1'>Falling</option><option value='2'>Change</option>
+</select></div>
+<div class='cp-mode-field' id='cpFieldPwmFreq'><label>PWM Freq (Hz)</label><input type='number' id='cpPwmFreq' value='25000' min='1'></div>
+<div class='cp-mode-field' id='cpFieldPwmRes'><label>PWM Bits</label><input type='number' id='cpPwmRes' value='8' min='1' max='16'></div>
+<div class='cp-mode-field' id='cpFieldCron'><label>Cron (sec min hr dom mon dow)</label><input type='text' id='cpCron' value='0 * * * * *' placeholder='0 * * * * *'><div class='desc' style='margin-top:4px;font-size:11px'>6-field: sec(0-59) min(0-59) hr(0-23) dom(1-31) mon(1-12) dow(0-6,Sun=0). Use */N for every N.</div></div>
+<div><label style='display:flex;align-items:center;gap:6px;margin-top:6px'><input type='checkbox' id='cpInMap'> Show in Pin Map</label>
+<div class='desc'>Include this pin in the main Inputs/Outputs tables</div></div>
+</div>
+<input type='hidden' id='cpEditSlot' value='-1'>
+<div class='form-btns'>
+<button class='btn-save' onclick='saveCustomPin()'>Save</button>
+<button class='btn-cancel' onclick='hideCpForm()'>Cancel</button>
+</div>
+</div>
+
+<!-- Output Rules (Hot-Linking) -->
+<div class='section-header'>
+<h2>Output Rules</h2>
+<span class='spacer'></span>
+<button class='btn-sm' onclick='showRuleForm(-1)'>+ Add Rule</button>
+</div>
+<table id='ruleTable'>
+<thead><tr><th>Slot</th><th>Name</th><th>Source</th><th>Condition</th><th>Target</th><th>Status</th><th>Actions</th></tr></thead>
+<tbody id='ruleBody'><tr><td colspan='7' style='color:var(--text-muted)'>No output rules configured</td></tr></tbody>
+</table>
+<div class='form-card' id='ruleForm'>
+<div class='form-title' id='ruleFormTitle'>Add Output Rule</div>
+<div class='form-grid'>
+<div><label>Name</label><input type='text' id='rlName' maxlength='15' placeholder='CLT_FAN'></div>
+<div><label>Enabled</label><select id='rlEnabled'><option value='1'>Yes</option><option value='0'>No</option></select></div>
+<div><label>Source Type</label><select id='rlSrcType' onchange='rlSrcChanged()'>
+<option value='0'>Sensor Slot</option><option value='1'>Custom Pin</option><option value='2'>Engine State</option><option value='3'>Output State</option>
+</select></div>
+<div><label>Source Slot/Channel</label><select id='rlSrcSlot'></select></div>
+<div><label>Operator</label><select id='rlOp' onchange='rlOpChanged()'>
+<option value='0'>&lt; (Less Than)</option><option value='1'>&gt; (Greater Than)</option>
+<option value='2'>Range (A..B)</option><option value='3'>Outside (not A..B)</option>
+<option value='4'>Delta |A-B|</option>
+</select></div>
+<div><label>Threshold A</label><input type='number' id='rlThreshA' step='any' value='0'></div>
+<div class='cp-mode-field' id='rlFieldThreshB'><label>Threshold B</label><input type='number' id='rlThreshB' step='any' value='0'></div>
+<div><label>Hysteresis</label><input type='number' id='rlHyst' step='any' value='0'></div>
+<div class='cp-mode-field' id='rlFieldSrcB'>
+<label>Source B Type</label><select id='rlSrcTypeB' onchange='rlSrcBChanged()'>
+<option value='0'>Sensor Slot</option><option value='1'>Custom Pin</option><option value='2'>Engine State</option><option value='3'>Output State</option>
+</select></div>
+<div class='cp-mode-field' id='rlFieldSlotB'><label>Source B Slot</label><select id='rlSrcSlotB'></select></div>
+<div><label>Target (Output Pin)</label><select id='rlTarget'></select></div>
+<div><label>On Value</label><input type='number' id='rlOnVal' value='1' min='0' max='255'></div>
+<div><label>Off Value</label><input type='number' id='rlOffVal' value='0' min='0' max='255'></div>
+<div><label>Debounce (ms)</label><input type='number' id='rlDebounce' value='0' min='0'></div>
+<div><label>Require Running</label><select id='rlRunning'><option value='0'>No</option><option value='1'>Yes</option></select></div>
+<div><label>RPM Gate Min (0=off)</label><input type='number' id='rlRpmMin' value='0' min='0'></div>
+<div><label>RPM Gate Max (0=off)</label><input type='number' id='rlRpmMax' value='0' min='0'></div>
+<div><label>MAP Gate Min (blank=off)</label><input type='number' id='rlMapMin' step='any' value=''></div>
+<div><label>MAP Gate Max (blank=off)</label><input type='number' id='rlMapMax' step='any' value=''></div>
+<div><label>Curve Source</label><select id='rlCurveSrc' onchange='rlCurveChanged()'></select></div>
+<div class='cp-mode-field full-width' id='rlFieldCurve'>
+<label>Curve Points (X,Y pairs)</label>
+<div style='display:grid;grid-template-columns:repeat(6,1fr);gap:4px;'>
+<input type='number' id='rlCX0' step='any' placeholder='X1'>
+<input type='number' id='rlCX1' step='any' placeholder='X2'>
+<input type='number' id='rlCX2' step='any' placeholder='X3'>
+<input type='number' id='rlCX3' step='any' placeholder='X4'>
+<input type='number' id='rlCX4' step='any' placeholder='X5'>
+<input type='number' id='rlCX5' step='any' placeholder='X6'>
+<input type='number' id='rlCY0' step='any' placeholder='Y1'>
+<input type='number' id='rlCY1' step='any' placeholder='Y2'>
+<input type='number' id='rlCY2' step='any' placeholder='Y3'>
+<input type='number' id='rlCY3' step='any' placeholder='Y4'>
+<input type='number' id='rlCY4' step='any' placeholder='Y5'>
+<input type='number' id='rlCY5' step='any' placeholder='Y6'>
+</div>
+</div>
+</div>
+<input type='hidden' id='rlEditSlot' value='-1'>
+<div class='form-btns'>
+<button class='btn-save' onclick='saveRule()'>Save</button>
+<button class='btn-cancel' onclick='hideRuleForm()'>Cancel</button>
+</div>
+</div>
+
+<!-- Rule Simulator -->
+<div class='sim-panel' id='simPanel'>
+<div class='sim-title' id='simTitle'>Rule Simulator</div>
+<div class='sim-row'>
+<label>Source A:</label>
+<input type='range' id='simSlider' min='0' max='100' step='0.1' value='0' oninput='simSliderToNum()'>
+<input type='number' id='simVal' step='any' value='0' oninput='simNumToSlider()' style='width:90px'>
+<span id='simUnit' style='font-size:12px;color:var(--text-muted)'></span>
+</div>
+<div class='sim-row' id='simRowB' style='display:none'>
+<label>Source B:</label>
+<input type='range' id='simSliderB' min='0' max='100' step='0.1' value='0' oninput='simSliderToNumB()'>
+<input type='number' id='simValB' step='any' value='0' oninput='simNumToSliderB()' style='width:90px'>
+</div>
+<div class='sim-bar' id='simBar'>
+<div class='sim-bar-fill' id='simBarFill'></div>
+</div>
+<div id='simMarkers' style='position:relative;height:18px;margin-bottom:4px'></div>
+<div>
+<span class='sim-result' id='simResult'>INACTIVE</span>
+<span id='simOutput' style='margin-left:12px;font-size:13px;color:var(--text-secondary)'></span>
+</div>
+<div class='sim-info' id='simInfo'></div>
+<div style='margin-top:8px'>
+<button class='btn-sm btn-cancel' onclick='hideSimPanel()'>Close</button>
+<button class='btn-sm' onclick='simSweep()' id='simSweepBtn'>Sweep</button>
+</div>
+</div>
+
+<div class='footer' id='footerText'>Auto-refreshes every 2s</div>
 </div>
 <script>
+/* ── State ── */
+var _editing=false,_pollTimer=null,_pinConfig={},_pinPresets={},_liveData={},_renderedFields={};
+var _customPins=[],_customRules=[];
+
+/* ── Constants ── */
+var _nameToConfig={
+  'O2_BANK1':'pinO2Bank1','O2_BANK2':'pinO2Bank2',
+  'MAP':'pinMap','TPS':'pinTps','CLT':'pinClt','IAT':'pinIat','VBAT':'pinVbat',
+  'ALT_FIELD':'pinAlternator','HEATER_OUT_1':'pinHeater1','HEATER_OUT_2':'pinHeater2',
+  'TCC_PWM':'pinTcc','EPC_PWM':'pinEpc',
+  'HSPI_SCK':'pinHspiSck','HSPI_MOSI':'pinHspiMosi','HSPI_MISO':'pinHspiMiso',
+  'HSPI_CS':'pinHspiCs','HSPI_CS2':'pinMcp3204Cs',
+  'I2C_SDA':'pinI2cSda','I2C_SCL':'pinI2cScl',
+  'FUEL_PUMP':'pinFuelPump','TACH_OUT':'pinTachOut','CEL':'pinCel',
+  'CJ125_SS1':'pinCj125Ss1','CJ125_SS2':'pinCj125Ss2',
+  'SS_A':'pinSsA','SS_B':'pinSsB','SS_C':'pinSsC','SS_D':'pinSsD',
+  'SD_CLK':'pinSdClk','SD_MISO':'pinSdMiso','SD_MOSI':'pinSdMosi','SD_CS':'pinSdCs',
+  'SHARED_INT':'pinSharedInt'
+};
+
+var _pinFields=['pinO2Bank1','pinO2Bank2','pinMap','pinTps','pinClt','pinIat','pinVbat',
+  'pinAlternator','pinHeater1','pinHeater2','pinTcc','pinEpc',
+  'pinHspiSck','pinHspiMosi','pinHspiMiso','pinHspiCs','pinMcp3204Cs',
+  'pinI2cSda','pinI2cScl',
+  'pinFuelPump','pinTachOut','pinCel','pinCj125Ss1','pinCj125Ss2',
+  'pinSsA','pinSsB','pinSsC','pinSsD',
+  'pinSdClk','pinSdMiso','pinSdMosi','pinSdCs',
+  'pinSharedInt'];
+
+var _adcFields=['pinO2Bank1','pinO2Bank2','pinMap','pinTps','pinClt','pinIat','pinVbat'];
+var _pwmFields=['pinAlternator','pinHeater1','pinHeater2','pinTcc','pinEpc'];
+var _busFields=['pinHspiSck','pinHspiMosi','pinHspiMiso','pinI2cSda','pinI2cScl',
+  'pinSdClk','pinSdMiso','pinSdMosi','pinSdCs'];
+var _adcPins=[3,4,5,6,7,8,9,10];
+var _reservedPins=[1,2,33,34,35,36,37];
+var _strapPins=[0,45,46];
+var _allGpio=[];
+(function(){for(var i=0;i<=48;i++){if(_reservedPins.indexOf(i)<0)_allGpio.push(i);}})();
+
+var _modeNames=['Disabled','Poll','ISR','Timer','Analog In','Output','PWM'];
+var _edgeNames=['Rising','Falling','Change'];
+var _opNames=['<','>','Range','Outside','Delta'];
+var _opLabels=['Less Than','Greater Than','In Range','Outside Range','Delta |A-B|'];
+var _srcTypeNames=['Sensor','Custom Pin','Engine State','Output State'];
+var _engineChNames=['RPM','MAP (kPa)','TPS (%)','CLT (\u00b0F)','IAT (\u00b0F)','Battery (V)',
+  'AFR Bank 1','AFR Bank 2','Spark Adv (\u00b0)','Inj Pulse (\u00b5s)','Running','Oil PSI'];
+var _outputChNames=['Fuel Pump','CEL','TCC Duty','EPC Duty','Alt Duty'];
+
+/* ── Taken pin tracker ── */
+function getTakenPins(excludeCpSlot){
+ var taken={};
+ // Reserved/locked
+ taken[1]='CRANK';taken[2]='CAM';
+ [33,34,35,36,37].forEach(function(p){taken[p]='PSRAM';});
+ // From live data (predefined pins)
+ if(_liveData.inputs)_liveData.inputs.forEach(function(r){if(r.pin!=null)taken[r.pin]=r.name;});
+ if(_liveData.outputs)_liveData.outputs.forEach(function(r){if(r.pin!=null)taken[r.pin]=r.name;});
+ if(_liveData.bus)_liveData.bus.forEach(function(r){if(r.pin!=null&&r.name!=='FREE')taken[r.pin]=r.name;});
+ // Expander pin usage (coils, injectors, etc.)
+ if(_liveData.expanders)_liveData.expanders.forEach(function(e){
+  if(e.pins)e.pins.forEach(function(p){if(p.name&&p.name!=='SPARE')taken[p.globalPin]=p.name;});
+ });
+ // From other custom pins
+ _customPins.forEach(function(p){
+  if(p.mode>0&&p.slot!==excludeCpSlot)taken[p.pin]='Custom: '+p.name;
+ });
+ return taken;
+}
+
+/* ── Pin dropdown builder ── */
+function getPinType(cf){
+ if(_adcFields.indexOf(cf)>=0) return 'adc';
+ return 'full';
+}
+function buildPinOpts(type,curVal,taken){
+ if(!taken) taken={};
+ function opt(v,label){
+  var sel=(v==curVal)?' selected':'';
+  var use=taken[v];
+  if(use&&v!=curVal) return '<option value="'+v+'" disabled class="pin-taken">'+label+' ['+use+']</option>';
+  return '<option value="'+v+'"'+sel+'>'+label+'</option>';
+ }
+ var h='';
+ if(type==='adc'){
+  h+='<optgroup label="Native ADC (GPIO)">';
+  for(var i=3;i<=10;i++) h+=opt(i,'GPIO '+i);
+  h+='</optgroup>';
+  h+='<optgroup label="MCP3204 (SPI ADC)">';
+  for(var i=0;i<4;i++) h+=opt(240+i,'MCP3204 CH'+i);
+  h+='</optgroup>';
+  h+='<optgroup label="ADS1115 #0 (0x48)">';
+  for(var i=0;i<4;i++) h+=opt(244+i,'ADS1115-0 CH'+i);
+  h+='</optgroup>';
+  h+='<optgroup label="ADS1115 #1 (0x49)">';
+  for(var i=0;i<4;i++) h+=opt(248+i,'ADS1115-1 CH'+i);
+  h+='</optgroup>';
+  return h;
+ }
+ h+='<optgroup label="GPIO">';
+ for(var i=0;i<_allGpio.length;i++){var g=_allGpio[i];var lbl='GPIO '+g;if(_strapPins.indexOf(g)>=0)lbl+=' (Bootstrap)';h+=opt(g,lbl);}
+ h+='</optgroup>';
+ if(type==='full'){
+  var spis=[{l:'MCP23S17 #0 (I/O)',s:200},{l:'MCP23S17 #1 (Trans)',s:216},{l:'MCP23S17 #2 (Exp)',s:232},
+            {l:'MCP23S17 #3 (Exp)',s:248},{l:'MCP23S17 #4 (Coils)',s:264},{l:'MCP23S17 #5 (Inj)',s:280}];
+  for(var m=0;m<spis.length;m++){
+   h+='<optgroup label="'+spis[m].l+'">';
+   for(var p=0;p<16;p++) h+=opt(spis[m].s+p,'P'+p+' ('+(spis[m].s+p)+')');
+   h+='</optgroup>';
+  }
+ }
+ return h;
+}
+
+/* ── Value formatting ── */
 function vltClass(v){
  if(!v)return '';
  if(v.indexOf('\u2192')>=0||v.indexOf('->')>=0)return 'vlt-div';
@@ -117,11 +486,53 @@ function fmtVal(r){
  return '<span class="v v-off">'+v+'</span>';
 }
 function tc(t){return 't-'+t;}
+function pinLabel(pin){
+ if(pin>=200&&pin<296){var off=pin-200;var dev=Math.floor(off/16);return 'SPI#'+dev+' P'+(off%16)+' ('+pin+')';}
+ if(pin>=248) return 'ADS1115-1 CH'+(pin-248);
+ if(pin>=244) return 'ADS1115-0 CH'+(pin-244);
+ if(pin>=240) return 'MCP3204 CH'+(pin-240);
+ return 'GPIO '+pin;
+}
+
+/* ── Pin cell (edit mode dropdowns) ── */
+function pinCell(pin,name){
+ var cf=_nameToConfig[name];
+ // Coil pin
+ var cm=name.match(/^COIL_(\d+)$/);
+ if(_editing && cm){
+  var idx=parseInt(cm[1])-1;
+  var curVal=(_pinConfig.coilPins&&_pinConfig.coilPins[idx]!==undefined)?_pinConfig.coilPins[idx]:pin;
+  var tk=getTakenPins();
+  return '<td><select class="pinSel" data-array="coilPins" data-index="'+idx+'" onchange="checkPinDups()">'+buildPinOpts('full',curVal,tk)+'</select></td>';
+ }
+ // Injector pin
+ var im=name.match(/^INJ_(\d+)$/);
+ if(_editing && im){
+  var idx=parseInt(im[1])-1;
+  var curVal=(_pinConfig.injectorPins&&_pinConfig.injectorPins[idx]!==undefined)?_pinConfig.injectorPins[idx]:pin;
+  var tk=getTakenPins();
+  return '<td><select class="pinSel" data-array="injectorPins" data-index="'+idx+'" onchange="checkPinDups()">'+buildPinOpts('full',curVal,tk)+'</select></td>';
+ }
+ // Named configurable pin
+ if(_editing && cf && !_renderedFields[cf]){
+  _renderedFields[cf]=true;
+  var curVal=_pinConfig[cf]!==undefined?_pinConfig[cf]:pin;
+  var type=getPinType(cf);
+  var tk=getTakenPins();
+  return '<td><select class="pinSel" data-field="'+cf+'" onchange="checkPinDups()">'+buildPinOpts(type,curVal,tk)+'</select></td>';
+ }
+ // Locked pins
+ if(_editing && (name==='CRANK'||name==='CAM'))
+  return '<td class="pin">'+pin+' <span class="lock">\ud83d\udd12</span></td>';
+ return '<td class="pin">'+(typeof pin==='number'?pinLabel(pin):pin)+'</td>';
+}
+
+/* ── Table builders ── */
 function buildInputs(rows){
  var tb=document.querySelector('#inputTable tbody'),h='';
  for(var i=0;i<rows.length;i++){var r=rows[i];
   var vc=vltClass(r.voltage);
-  h+='<tr><td class="pin">'+r.pin+'</td><td class="col-voltage"><span class="'+vc+'">'+(r.voltage||'')+'</span></td><td>'+r.name+'</td><td class="'+tc(r.type)+'">'+r.type.toUpperCase()+'</td><td class="col-mode">'+r.mode+'</td><td>'+fmtVal(r)+'</td><td class="col-range range-cell">'+(r.range||'')+'</td><td class="col-desc desc">'+(r.desc||'')+'</td></tr>';
+  h+='<tr>'+pinCell(r.pin,r.name)+'<td class="col-voltage"><span class="'+vc+'">'+(r.voltage||'')+'</span></td><td>'+r.name+'</td><td class="'+tc(r.type)+'">'+r.type.toUpperCase()+'</td><td class="col-mode">'+r.mode+'</td><td>'+fmtVal(r)+'</td><td class="col-range range-cell">'+(r.range||'')+'</td><td class="col-desc desc">'+(r.desc||'')+'</td></tr>';
  } tb.innerHTML=h;
 }
 function buildOutputs(rows){
@@ -129,7 +540,7 @@ function buildOutputs(rows){
  for(var i=0;i<rows.length;i++){var r=rows[i];
   var d=r.desc||'';if(r.note)d+=(d?' ':'')+'<em>('+r.note+')</em>';
   var vc=vltClass(r.voltage);
-  h+='<tr><td class="pin">'+(r.pin||'--')+'</td><td class="col-voltage"><span class="'+vc+'">'+(r.voltage||'')+'</span></td><td>'+r.name+'</td><td class="'+tc(r.type)+'">'+r.type.toUpperCase()+'</td><td class="col-mode">'+r.mode+'</td><td>'+fmtVal(r)+'</td><td class="col-range range-cell">'+(r.range||'')+'</td><td class="col-desc desc">'+d+'</td></tr>';
+  h+='<tr>'+pinCell(r.pin||'--',r.name)+'<td class="col-voltage"><span class="'+vc+'">'+(r.voltage||'')+'</span></td><td>'+r.name+'</td><td class="'+tc(r.type)+'">'+r.type.toUpperCase()+'</td><td class="col-mode">'+r.mode+'</td><td>'+fmtVal(r)+'</td><td class="col-range range-cell">'+(r.range||'')+'</td><td class="col-desc desc">'+d+'</td></tr>';
  } tb.innerHTML=h;
 }
 function buildBus(rows){
@@ -137,21 +548,35 @@ function buildBus(rows){
  for(var i=0;i<rows.length;i++){var r=rows[i];
   var cls=r.type==='I2C'?'t-i2c':r.type==='GPIO'?'t-digital':'t-spi';
   var vc=vltClass(r.voltage);
-  h+='<tr><td class="pin">'+r.pin+'</td><td class="col-voltage"><span class="'+vc+'">'+(r.voltage||'')+'</span></td><td>'+r.name+'</td><td class="'+cls+'">'+r.type+'</td><td class="col-mode">'+r.mode+'</td></tr>';
+  h+='<tr>'+pinCell(r.pin,r.name)+'<td class="col-voltage"><span class="'+vc+'">'+(r.voltage||'')+'</span></td><td>'+r.name+'</td><td class="'+cls+'">'+r.type+'</td><td class="col-mode">'+r.mode+'</td></tr>';
  } tb.innerHTML=h;
+}
+function intGpioField(exp){
+ // All MCP23S17 devices share a single interrupt GPIO
+ if(exp.type==='MCP23S17') return exp.index===0?'pinSharedInt':null; // show field only once (on #0)
+ return null;
+}
+function buildIntGpioOpts(curVal,taken){
+ var h='<option value="255"'+(curVal===255||curVal===undefined?' selected':'')+'>None</option>';
+ for(var i=0;i<_allGpio.length;i++){var g=_allGpio[i];
+  var sel=(g==curVal)?' selected':'';
+  var use=taken?taken[g]:null;
+  var sl=(_strapPins.indexOf(g)>=0)?' (Bootstrap)':'';
+  if(use&&g!=curVal) h+='<option value="'+g+'" disabled class="pin-taken">GPIO '+g+sl+' ['+use+']</option>';
+  else h+='<option value="'+g+'"'+sel+'>GPIO '+g+sl+'</option>';
+ }
+ return h;
 }
 function buildExpanders(list){
  var sec=document.getElementById('expandersSection');
  if(!list||!list.length){sec.innerHTML='<h2>Expanders</h2><p style="color:var(--text-muted)">No expanders detected</p>';return;}
  var h='';
  for(var e=0;e<list.length;e++){var exp=list[e];
-  var isSpi=exp.type==='MCP23S17';
-  var isAds=exp.type==='ADS1115';
-  var isMcp3204=exp.type==='MCP3204';
-  var note=exp.note?' ('+exp.note+')':'';
-  var label=exp.type+' #'+exp.index;
+  var isSpi=exp.type==='MCP23S17';var isAds=exp.type==='ADS1115';var isMcp3204=exp.type==='MCP3204';
+  var desc=exp.desc?' \u2014 '+exp.desc:'';
+  var label=exp.type+' #'+exp.index+desc;
   if(isSpi||isMcp3204) label+=' ['+exp.bus+', CS=GPIO'+exp.cs+']';
-  else label+=' @ '+exp.address;
+  else if(exp.address) label+=' @ '+exp.address;
   var vlt='5V';
   h+='<h2>'+label+note+'</h2>';
   h+='<div class="status-bar"><span class="lbl">Status:</span> <span class="'+(exp.ready?'pcf-ready':'pcf-fail')+'">'+(exp.ready?'READY':'NOT FOUND')+'</span>';
@@ -170,6 +595,17 @@ function buildExpanders(list){
    h+='<span class="lbl" style="margin-left:12px">Gain:</span> <span class="val">'+exp.gain+'</span>';
    h+='<span class="lbl" style="margin-left:12px">Rate:</span> <span class="val">'+exp.rate+'</span>';
   }
+  var igf=intGpioField(exp);
+  if(igf){
+   if(_editing){
+    var curV=_pinConfig[igf]!==undefined?_pinConfig[igf]:255;
+    h+='<span class="lbl" style="margin-left:12px">INT GPIO:</span> ';
+    h+='<select class="pinSel" data-field="'+igf+'" onchange="checkPinDups()" style="padding:3px 6px;font-size:12px;font-family:monospace;width:110px">'+buildIntGpioOpts(curV,getTakenPins())+'</select>';
+   } else {
+    var iv=exp.intGpio;
+    h+='<span class="lbl" style="margin-left:12px">INT:</span> <span class="val">'+(iv!==undefined&&iv!==255?'GPIO '+iv:'None')+'</span>';
+   }
+  }
   h+='</div>';
   if((isAds||isMcp3204)&&exp.channels){
    h+='<table><thead><tr><th>Channel</th><th>Name</th><th>mV</th></tr></thead><tbody>';
@@ -179,17 +615,546 @@ function buildExpanders(list){
   }else if(exp.pins){
    h+='<table><thead><tr><th>Pin</th><th>Global</th><th>Name</th><th>Value</th></tr></thead><tbody>';
    for(var i=0;i<exp.pins.length;i++){var p=exp.pins[i];var vc=p.value==='HIGH'?'v-on':'v-off';
-    var pn=p.pcfPin!==undefined?p.pcfPin:p.spiPin;
+    var pn=p.pin!==undefined?p.pin:i;
     h+='<tr><td class="pin">P'+pn+'</td><td class="pin">'+p.globalPin+'</td><td>'+p.name+'</td><td><span class="v '+vc+'">'+p.value+'</span></td></tr>';
    }h+='</tbody></table>';
   }
  }sec.innerHTML=h;
 }
 
+/* ── Custom I/O rendering ── */
+function renderCustomPins(){
+ var tb=document.getElementById('cpBody'),h='';
+ var active=_customPins.filter(function(p){return p.mode>0||p.name;});
+ if(!active.length){tb.innerHTML='<tr><td colspan="7" style="color:var(--text-muted)">No custom pins configured</td></tr>';return;}
+ for(var i=0;i<active.length;i++){var p=active[i];
+  var mode=_modeNames[p.mode]||'?';
+  var intv=(p.mode===3)?(p.cron||'--'):((p.mode>=1&&p.mode<=4)?p.interval+'ms':'--');
+  var val;
+  if(p.mode===4) val='<span class="v v-mv">'+p.value.toFixed(0)+'</span>';
+  else if(p.mode===6) val='<span class="v v-pct">'+p.value.toFixed(1)+'%</span>';
+  else if(p.mode===2) val='<span class="v v-on">'+p.isrCount+' pulses</span>';
+  else if(p.mode===5) val='<span class="v '+(p.value?'v-on':'v-off')+'">'+(p.value?'ON':'OFF')+'</span>';
+  else val='<span class="v '+(p.value?'v-on':'v-off')+'">'+(p.value?'HIGH':'LOW')+'</span>';
+  var acts='<button class="btn-sm btn-edit" onclick="showCpForm('+p.slot+')">Edit</button> ';
+  if(p.mode===5) acts+='<button class="btn-sm btn-toggle" onclick="toggleCpOutput('+p.slot+','+(!p.value?1:0)+')">'+(p.value?'OFF':'ON')+'</button> ';
+  if(p.mode===6) acts+='<button class="btn-sm btn-toggle" onclick="promptPwm('+p.slot+')">Set</button> ';
+  acts+='<button class="btn-sm btn-del" onclick="deleteCustomPin('+p.slot+')">Del</button>';
+  var mapBadge=p.inMap?'<span style="background:#4CAF50;color:#fff;font-size:10px;padding:1px 6px;border-radius:8px;margin-left:4px">MAP</span>':'';
+  h+='<tr><td class="pin">'+p.slot+'</td><td>'+p.name+mapBadge+'</td><td class="pin">'+pinLabel(p.pin)+'</td><td>'+mode+'</td><td>'+intv+'</td><td>'+val+'</td><td>'+acts+'</td></tr>';
+ }
+ tb.innerHTML=h;
+}
+
+var _cpEditSlot=-1; // Track which custom pin slot is being edited
+function cpModeChanged(){
+ var m=parseInt(document.getElementById('cpMode').value);
+ var show={1:['cpFieldInterval'],2:['cpFieldEdge'],3:['cpFieldCron'],4:['cpFieldInterval'],5:[],6:['cpFieldPwmFreq','cpFieldPwmRes']};
+ var all=['cpFieldInterval','cpFieldEdge','cpFieldPwmFreq','cpFieldPwmRes','cpFieldCron'];
+ var vis=show[m]||[];
+ all.forEach(function(id){
+  var el=document.getElementById(id);
+  if(vis.indexOf(id)>=0) el.classList.add('show');
+  else el.classList.remove('show');
+ });
+ // Filter pin dropdown by mode, excluding taken pins
+ var sel=document.getElementById('cpPin');
+ var cur=parseInt(sel.value)||0;
+ var pinType='full';
+ if(m===4) pinType='adc';
+ else if(m===6) pinType='gpio';
+ else if(m===2) pinType='gpio';
+ var taken=getTakenPins(_cpEditSlot);
+ sel.innerHTML=buildPinOpts(pinType,cur,taken);
+}
+
+function showCpForm(slot){
+ var f=document.getElementById('cpForm');
+ var sel=document.getElementById('cpPin');
+ _cpEditSlot=slot; // Track for taken-pin filtering
+ if(slot>=0){
+  // Edit existing
+  var p=_customPins.filter(function(x){return x.slot===slot;})[0];
+  if(!p) return;
+  document.getElementById('cpFormTitle').textContent='Edit Custom Pin (Slot '+slot+')';
+  document.getElementById('cpName').value=p.name;
+  document.getElementById('cpMode').value=p.mode;
+  cpModeChanged(); // Filter pins by mode first (uses _cpEditSlot)
+  sel.value=p.pin;
+  document.getElementById('cpInterval').value=p.interval||1000;
+  document.getElementById('cpEdge').value=p.isrEdge||0;
+  document.getElementById('cpPwmFreq').value=p.pwmFreq||25000;
+  document.getElementById('cpPwmRes').value=p.pwmRes||8;
+  document.getElementById('cpCron').value=p.cron||'0 * * * * *';
+  document.getElementById('cpInMap').checked=!!p.inMap;
+  document.getElementById('cpEditSlot').value=slot;
+ } else {
+  document.getElementById('cpFormTitle').textContent='Add Custom Pin';
+  document.getElementById('cpName').value='';
+  document.getElementById('cpMode').value='5';
+  cpModeChanged(); // Filter pins by mode first (uses _cpEditSlot=-1)
+  document.getElementById('cpInterval').value='1000';
+  document.getElementById('cpEdge').value='0';
+  document.getElementById('cpPwmFreq').value='25000';
+  document.getElementById('cpPwmRes').value='8';
+  document.getElementById('cpCron').value='0 * * * * *';
+  document.getElementById('cpInMap').checked=false;
+  document.getElementById('cpEditSlot').value='-1';
+ }
+ f.classList.add('show');
+ f.scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+function hideCpForm(){document.getElementById('cpForm').classList.remove('show');}
+
+function saveCustomPin(){
+ var slot=parseInt(document.getElementById('cpEditSlot').value);
+ var name=document.getElementById('cpName').value.trim();
+ if(!name){alert('Name is required');return;}
+ var obj={
+  slot:slot>=0?slot:nextFreeSlot(_customPins),
+  name:name,
+  pin:parseInt(document.getElementById('cpPin').value),
+  mode:parseInt(document.getElementById('cpMode').value),
+  isrEdge:parseInt(document.getElementById('cpEdge').value),
+  interval:parseInt(document.getElementById('cpInterval').value)||1000,
+  pwmFreq:parseInt(document.getElementById('cpPwmFreq').value)||25000,
+  pwmRes:parseInt(document.getElementById('cpPwmRes').value)||8,
+  cron:document.getElementById('cpCron').value.trim()||'0 * * * * *',
+  inMap:document.getElementById('cpInMap').checked
+ };
+ if(obj.slot>=16){alert('Max 16 custom pins');return;}
+ // Update in-memory array
+ var found=false;
+ for(var i=0;i<_customPins.length;i++){
+  if(_customPins[i].slot===obj.slot){_customPins[i]=obj;found=true;break;}
+ }
+ if(!found) _customPins.push(obj);
+ postCustomPins();
+ hideCpForm();
+}
+
+function deleteCustomPin(slot){
+ if(!confirm('Delete custom pin slot '+slot+'?')) return;
+ _customPins=_customPins.filter(function(p){return p.slot!==slot;});
+ // Also remove any rules targeting this slot
+ _customRules=_customRules.filter(function(r){return r.targetPin!==slot;});
+ postCustomPins();
+}
+
+function toggleCpOutput(slot,val){
+ fetch('/custom-pins/output',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({slot:slot,value:val})}).catch(function(e){console.error(e);});
+}
+function promptPwm(slot){
+ var v=prompt('PWM duty (0-255):','128');
+ if(v===null) return;
+ fetch('/custom-pins/output',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({slot:slot,value:parseInt(v)||0})}).catch(function(e){console.error(e);});
+}
+
+function nextFreeSlot(arr){
+ var used={};
+ arr.forEach(function(p){used[p.slot]=true;});
+ for(var i=0;i<16;i++){if(!used[i]) return i;}
+ return 16;
+}
+
+/* ── Output Rules rendering ── */
+function renderRules(){
+ var tb=document.getElementById('ruleBody'),h='';
+ var active=_customRules.filter(function(r){return r.enabled||r.name;});
+ if(!active.length){tb.innerHTML='<tr><td colspan="7" style="color:var(--text-muted)">No output rules configured</td></tr>';return;}
+ for(var i=0;i<active.length;i++){var r=active[i];
+  var src=srcLabel(r.sourceType,r.sourceSlot);
+  var cond=_opNames[r.op]||'?';
+  cond+=' '+r.thresholdA;
+  if(r.op===2||r.op===3) cond+='..'+r.thresholdB;
+  if(r.hysteresis) cond+=' (\u00b1'+r.hysteresis+')';
+  var tgt=cpSlotName(r.targetPin);
+  var dot=r.active?'dot-active':(r.enabled?'dot-inactive':'dot-disabled');
+  var acts='<button class="btn-sm btn-test" onclick="showSimPanel('+r.slot+')">Test</button> ';
+  acts+='<button class="btn-sm btn-edit" onclick="showRuleForm('+r.slot+')">Edit</button> ';
+  acts+='<button class="btn-sm btn-del" onclick="deleteRule('+r.slot+')">Del</button>';
+  h+='<tr><td class="pin">'+r.slot+'</td><td>'+r.name+'</td><td>'+src+'</td><td>'+cond+'</td><td>'+tgt+'</td><td><span class="status-dot '+dot+'"></span></td><td>'+acts+'</td></tr>';
+ }
+ tb.innerHTML=h;
+}
+
+function srcLabel(type,slot){
+ if(type===0) return 'Sensor #'+slot;
+ if(type===1) return cpSlotName(slot);
+ if(type===2){
+  if(slot>=100) return cpSlotName(slot-100);
+  return _engineChNames[slot]||('Eng #'+slot);
+ }
+ if(type===3) return _outputChNames[slot]||('Out #'+slot);
+ return '?';
+}
+function cpSlotName(slot){
+ for(var i=0;i<_customPins.length;i++){
+  if(_customPins[i].slot===slot) return _customPins[i].name||('Pin #'+slot);
+ }
+ return 'Pin #'+slot;
+}
+
+function getInMapPins(){
+ return _customPins.filter(function(p){return p.inMap&&p.mode>0;});
+}
+function populateSrcSlots(selId,type,curVal){
+ var sel=document.getElementById(selId);
+ sel.innerHTML='';
+ if(type===0){for(var i=0;i<16;i++){var o=document.createElement('option');o.value=i;o.textContent='Sensor #'+i;sel.appendChild(o);}}
+ else if(type===1){
+  for(var i=0;i<_customPins.length;i++){var p=_customPins[i];var o=document.createElement('option');o.value=p.slot;o.textContent=p.name||('Slot '+p.slot);sel.appendChild(o);}
+  if(!_customPins.length){var o=document.createElement('option');o.value=255;o.textContent='(none)';sel.appendChild(o);}
+ }
+ else if(type===2){
+  for(var i=0;i<_engineChNames.length;i++){var o=document.createElement('option');o.value=i;o.textContent=_engineChNames[i];sel.appendChild(o);}
+  // Append inMap custom pins as engine channels (value 100+slot)
+  var mapped=getInMapPins();
+  if(mapped.length){
+   var grp=document.createElement('optgroup');grp.label='Custom (Pin Map)';
+   mapped.forEach(function(p){var o=document.createElement('option');o.value=100+p.slot;o.textContent=p.name;grp.appendChild(o);});
+   sel.appendChild(grp);
+  }
+ }
+ else if(type===3){for(var i=0;i<_outputChNames.length;i++){var o=document.createElement('option');o.value=i;o.textContent=_outputChNames[i];sel.appendChild(o);}}
+ if(curVal!==undefined) sel.value=curVal;
+}
+
+function populateTargets(curVal){
+ var sel=document.getElementById('rlTarget');
+ sel.innerHTML='';
+ for(var i=0;i<_customPins.length;i++){var p=_customPins[i];
+  if(p.mode===5||p.mode===6){var o=document.createElement('option');o.value=p.slot;o.textContent=p.name||('Slot '+p.slot);sel.appendChild(o);}
+ }
+ if(!sel.options.length){var o=document.createElement('option');o.value=255;o.textContent='(no outputs)';sel.appendChild(o);}
+ if(curVal!==undefined) sel.value=curVal;
+}
+
+function rlSrcChanged(){populateSrcSlots('rlSrcSlot',parseInt(document.getElementById('rlSrcType').value));}
+function rlSrcBChanged(){populateSrcSlots('rlSrcSlotB',parseInt(document.getElementById('rlSrcTypeB').value));}
+
+function rlOpChanged(){
+ var op=parseInt(document.getElementById('rlOp').value);
+ var showB=(op===2||op===3); // range/outside need thresholdB
+ var showDelta=(op===4);
+ document.getElementById('rlFieldThreshB').classList.toggle('show',showB);
+ document.getElementById('rlFieldSrcB').classList.toggle('show',showDelta);
+ document.getElementById('rlFieldSlotB').classList.toggle('show',showDelta);
+}
+function populateCurveSrc(curVal){
+ var sel=document.getElementById('rlCurveSrc');
+ sel.innerHTML='';
+ var o=document.createElement('option');o.value=255;o.textContent='Disabled';sel.appendChild(o);
+ var names=['RPM','MAP (kPa)','TPS (%)','CLT (\u00b0F)','IAT (\u00b0F)','Battery (V)'];
+ for(var i=0;i<names.length;i++){o=document.createElement('option');o.value=i;o.textContent=names[i];sel.appendChild(o);}
+ var mapped=getInMapPins();
+ if(mapped.length){
+  var grp=document.createElement('optgroup');grp.label='Custom (Pin Map)';
+  mapped.forEach(function(p){o=document.createElement('option');o.value=100+p.slot;o.textContent=p.name;grp.appendChild(o);});
+  sel.appendChild(grp);
+ }
+ if(curVal!==undefined) sel.value=curVal;
+}
+function rlCurveChanged(){
+ var cs=parseInt(document.getElementById('rlCurveSrc').value);
+ document.getElementById('rlFieldCurve').classList.toggle('show',cs!==255);
+}
+
+function showRuleForm(slot){
+ var f=document.getElementById('ruleForm');
+ populateTargets();
+ if(slot>=0){
+  var r=_customRules.filter(function(x){return x.slot===slot;})[0];
+  if(!r) return;
+  document.getElementById('ruleFormTitle').textContent='Edit Rule (Slot '+slot+')';
+  document.getElementById('rlName').value=r.name;
+  document.getElementById('rlEnabled').value=r.enabled?'1':'0';
+  document.getElementById('rlSrcType').value=r.sourceType;
+  populateSrcSlots('rlSrcSlot',r.sourceType,r.sourceSlot);
+  document.getElementById('rlOp').value=r.op;
+  document.getElementById('rlThreshA').value=r.thresholdA;
+  document.getElementById('rlThreshB').value=r.thresholdB;
+  document.getElementById('rlHyst').value=r.hysteresis;
+  document.getElementById('rlSrcTypeB').value=r.sourceTypeB||0;
+  populateSrcSlots('rlSrcSlotB',r.sourceTypeB||0,r.sourceSlotB);
+  populateTargets(r.targetPin);
+  document.getElementById('rlOnVal').value=r.onValue;
+  document.getElementById('rlOffVal').value=r.offValue;
+  document.getElementById('rlDebounce').value=r.debounce||0;
+  document.getElementById('rlRunning').value=r.running?'1':'0';
+  document.getElementById('rlRpmMin').value=r.gateRpmMin||0;
+  document.getElementById('rlRpmMax').value=r.gateRpmMax||0;
+  document.getElementById('rlMapMin').value=(r.gateMapMin!=null&&!isNaN(r.gateMapMin))?r.gateMapMin:'';
+  document.getElementById('rlMapMax').value=(r.gateMapMax!=null&&!isNaN(r.gateMapMax))?r.gateMapMax:'';
+  populateCurveSrc(r.curveSource!=null?r.curveSource:255);
+  for(var j=0;j<6;j++){
+   document.getElementById('rlCX'+j).value=(r.curveX&&r.curveX[j])||'';
+   document.getElementById('rlCY'+j).value=(r.curveY&&r.curveY[j])||'';
+  }
+  document.getElementById('rlEditSlot').value=slot;
+ } else {
+  document.getElementById('ruleFormTitle').textContent='Add Output Rule';
+  document.getElementById('rlName').value='';
+  document.getElementById('rlEnabled').value='1';
+  document.getElementById('rlSrcType').value='2';
+  populateSrcSlots('rlSrcSlot',2);
+  document.getElementById('rlOp').value='1';
+  document.getElementById('rlThreshA').value='0';
+  document.getElementById('rlThreshB').value='0';
+  document.getElementById('rlHyst').value='0';
+  document.getElementById('rlOnVal').value='1';
+  document.getElementById('rlOffVal').value='0';
+  document.getElementById('rlDebounce').value='0';
+  document.getElementById('rlRunning').value='0';
+  document.getElementById('rlRpmMin').value='0';
+  document.getElementById('rlRpmMax').value='0';
+  document.getElementById('rlMapMin').value='';
+  document.getElementById('rlMapMax').value='';
+  populateCurveSrc(255);
+  for(var j=0;j<6;j++){document.getElementById('rlCX'+j).value='';document.getElementById('rlCY'+j).value='';}
+  document.getElementById('rlEditSlot').value='-1';
+ }
+ rlOpChanged();
+ rlCurveChanged();
+ f.classList.add('show');
+ f.scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+function hideRuleForm(){document.getElementById('ruleForm').classList.remove('show');}
+
+function saveRule(){
+ var slot=parseInt(document.getElementById('rlEditSlot').value);
+ var name=document.getElementById('rlName').value.trim();
+ if(!name){alert('Name is required');return;}
+ var mapMin=document.getElementById('rlMapMin').value;
+ var mapMax=document.getElementById('rlMapMax').value;
+ var obj={
+  slot:slot>=0?slot:nextFreeSlot(_customRules),
+  name:name,
+  enabled:document.getElementById('rlEnabled').value==='1',
+  sourceType:parseInt(document.getElementById('rlSrcType').value),
+  sourceSlot:parseInt(document.getElementById('rlSrcSlot').value),
+  sourceTypeB:parseInt(document.getElementById('rlSrcTypeB').value)||0,
+  sourceSlotB:parseInt(document.getElementById('rlSrcSlotB').value)||255,
+  op:parseInt(document.getElementById('rlOp').value),
+  thresholdA:parseFloat(document.getElementById('rlThreshA').value)||0,
+  thresholdB:parseFloat(document.getElementById('rlThreshB').value)||0,
+  hysteresis:parseFloat(document.getElementById('rlHyst').value)||0,
+  targetPin:parseInt(document.getElementById('rlTarget').value),
+  onValue:parseInt(document.getElementById('rlOnVal').value)||0,
+  offValue:parseInt(document.getElementById('rlOffVal').value)||0,
+  debounce:parseInt(document.getElementById('rlDebounce').value)||0,
+  running:document.getElementById('rlRunning').value==='1',
+  gateRpmMin:parseInt(document.getElementById('rlRpmMin').value)||0,
+  gateRpmMax:parseInt(document.getElementById('rlRpmMax').value)||0,
+  gateMapMin:mapMin!==''?parseFloat(mapMin):null,
+  gateMapMax:mapMax!==''?parseFloat(mapMax):null,
+  curveSource:parseInt(document.getElementById('rlCurveSrc').value)
+ };
+ if(obj.curveSource!==255){
+  obj.curveX=[];obj.curveY=[];
+  for(var j=0;j<6;j++){
+   obj.curveX.push(parseFloat(document.getElementById('rlCX'+j).value)||0);
+   obj.curveY.push(parseFloat(document.getElementById('rlCY'+j).value)||0);
+  }
+ }
+ if(obj.slot>=16){alert('Max 16 output rules');return;}
+ var found=false;
+ for(var i=0;i<_customRules.length;i++){
+  if(_customRules[i].slot===obj.slot){_customRules[i]=obj;found=true;break;}
+ }
+ if(!found) _customRules.push(obj);
+ postCustomPins();
+ hideRuleForm();
+}
+
+function deleteRule(slot){
+ if(!confirm('Delete rule slot '+slot+'?')) return;
+ _customRules=_customRules.filter(function(r){return r.slot!==slot;});
+ postCustomPins();
+}
+
+/* ── Rule Simulator ── */
+var _simRule=null,_simActive=false,_simSweepTimer=null;
+
+function getSourceRange(type,slot){
+ // Returns {min,max,unit} for a given source type+slot
+ if(type===2){ // Engine state
+  switch(slot){
+   case 0: return {min:0,max:8000,unit:'RPM'};
+   case 1: return {min:0,max:250,unit:'kPa'};
+   case 2: return {min:0,max:100,unit:'%'};
+   case 3: return {min:-40,max:300,unit:'\u00b0F'};
+   case 4: return {min:-40,max:300,unit:'\u00b0F'};
+   case 5: return {min:0,max:18,unit:'V'};
+   case 6: case 7: return {min:8,max:22,unit:'AFR'};
+   case 8: return {min:-10,max:60,unit:'\u00b0'};
+   case 9: return {min:0,max:30,unit:'ms'};
+   case 10: return {min:0,max:1,unit:''};
+   case 11: return {min:0,max:100,unit:'PSI'};
+  }
+ }
+ if(type===0) return {min:0,max:4095,unit:'raw'}; // sensor
+ if(type===1) return {min:0,max:4095,unit:''}; // custom pin
+ if(type===3) return {min:0,max:255,unit:''}; // output state
+ return {min:0,max:1000,unit:''};
+}
+
+function simEvaluate(srcA,srcB,rule,wasActive){
+ var thA=rule.thresholdA,thB=rule.thresholdB,hyst=rule.hysteresis||0;
+ switch(rule.op){
+  case 0: return wasActive?(srcA<thA+hyst):(srcA<thA); // LT
+  case 1: return wasActive?(srcA>thA-hyst):(srcA>thA); // GT
+  case 2: return (srcA>=thA&&srcA<=thB); // RANGE
+  case 3: return (srcA<thA||srcA>thB); // OUTSIDE
+  case 4: return wasActive?(Math.abs(srcA-srcB)>thA-hyst):(Math.abs(srcA-srcB)>thA); // DELTA
+ }
+ return false;
+}
+
+function showSimPanel(slot){
+ var r=_customRules.filter(function(x){return x.slot===slot;})[0];
+ if(!r) return;
+ _simRule=r;_simActive=false;
+ var range=getSourceRange(r.sourceType,r.sourceSlot);
+ var sl=document.getElementById('simSlider');
+ var vi=document.getElementById('simVal');
+ sl.min=range.min;sl.max=range.max;
+ // Start at a value near the threshold
+ var start=r.thresholdA||0;
+ sl.value=start;vi.value=start;
+ document.getElementById('simUnit').textContent=range.unit;
+ document.getElementById('simTitle').textContent='Simulator: '+r.name+' — '+srcLabel(r.sourceType,r.sourceSlot)+' '+_opLabels[r.op]+' '+r.thresholdA+(r.op>=2&&r.op<=3?'..'+r.thresholdB:'');
+ // Delta needs source B
+ var rowB=document.getElementById('simRowB');
+ if(r.op===4){
+  rowB.style.display='flex';
+  var rB=getSourceRange(r.sourceTypeB,r.sourceSlotB);
+  var slB=document.getElementById('simSliderB');
+  slB.min=rB.min;slB.max=rB.max;slB.value=0;
+  document.getElementById('simValB').value=0;
+ } else {rowB.style.display='none';}
+ document.getElementById('simPanel').classList.add('show');
+ buildSimMarkers(range,r);
+ simUpdate();
+ document.getElementById('simPanel').scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+
+function hideSimPanel(){
+ document.getElementById('simPanel').classList.remove('show');
+ if(_simSweepTimer){clearInterval(_simSweepTimer);_simSweepTimer=null;}
+ _simRule=null;
+}
+
+function buildSimMarkers(range,r){
+ var mk=document.getElementById('simMarkers');
+ mk.innerHTML='';
+ var span=range.max-range.min;
+ if(span<=0) return;
+ function addMark(val,label,color){
+  var pct=((val-range.min)/span)*100;
+  if(pct<0||pct>100)return;
+  mk.innerHTML+='<span style="position:absolute;left:'+pct+'%;transform:translateX(-50%);font-size:10px;color:'+color+';white-space:nowrap">'+label+'</span>';
+ }
+ addMark(r.thresholdA,'A='+r.thresholdA,'#ff9800');
+ if(r.op===2||r.op===3) addMark(r.thresholdB,'B='+r.thresholdB,'#ff9800');
+ if(r.hysteresis){
+  if(r.op===0) addMark(r.thresholdA+r.hysteresis,'off='+(r.thresholdA+r.hysteresis).toFixed(1),'#999');
+  if(r.op===1) addMark(r.thresholdA-r.hysteresis,'off='+(r.thresholdA-r.hysteresis).toFixed(1),'#999');
+ }
+}
+
+function simUpdate(){
+ if(!_simRule) return;
+ var srcA=parseFloat(document.getElementById('simVal').value)||0;
+ var srcB=parseFloat(document.getElementById('simValB').value)||0;
+ var result=simEvaluate(srcA,srcB,_simRule,_simActive);
+ _simActive=result;
+ var el=document.getElementById('simResult');
+ el.textContent=result?'ACTIVE':'INACTIVE';
+ el.className='sim-result '+(result?'sim-active':'sim-inactive');
+ var outVal=result?_simRule.onValue:_simRule.offValue;
+ document.getElementById('simOutput').textContent='Output \u2192 '+(outVal>0?outVal:'OFF');
+ // Update visual bar
+ var range=getSourceRange(_simRule.sourceType,_simRule.sourceSlot);
+ var span=range.max-range.min;
+ var pct=span>0?((srcA-range.min)/span)*100:0;
+ pct=Math.max(0,Math.min(100,pct));
+ var fill=document.getElementById('simBarFill');
+ fill.style.width=pct+'%';
+ fill.style.background=result?'#4CAF50':'#757575';
+ // Info line
+ var info='Value: '+srcA;
+ if(_simRule.hysteresis){
+  if(_simRule.op===0) info+=' | Activates < '+_simRule.thresholdA+' | Deactivates \u2265 '+(_simRule.thresholdA+_simRule.hysteresis);
+  else if(_simRule.op===1) info+=' | Activates > '+_simRule.thresholdA+' | Deactivates \u2264 '+(_simRule.thresholdA-_simRule.hysteresis);
+  else if(_simRule.op===4) info+=' | Delta='+Math.abs(srcA-srcB).toFixed(1)+' | Activates > '+_simRule.thresholdA+' | Deactivates \u2264 '+(_simRule.thresholdA-_simRule.hysteresis);
+ }
+ document.getElementById('simInfo').textContent=info;
+ // Sync slider
+ document.getElementById('simSlider').value=srcA;
+}
+
+function simSliderToNum(){
+ document.getElementById('simVal').value=parseFloat(document.getElementById('simSlider').value).toFixed(1);
+ simUpdate();
+}
+function simNumToSlider(){
+ document.getElementById('simSlider').value=document.getElementById('simVal').value;
+ simUpdate();
+}
+function simSliderToNumB(){
+ document.getElementById('simValB').value=parseFloat(document.getElementById('simSliderB').value).toFixed(1);
+ simUpdate();
+}
+function simNumToSliderB(){
+ document.getElementById('simSliderB').value=document.getElementById('simValB').value;
+ simUpdate();
+}
+
+function simSweep(){
+ if(_simSweepTimer){clearInterval(_simSweepTimer);_simSweepTimer=null;document.getElementById('simSweepBtn').textContent='Sweep';return;}
+ if(!_simRule) return;
+ var range=getSourceRange(_simRule.sourceType,_simRule.sourceSlot);
+ var sl=document.getElementById('simSlider');
+ var vi=document.getElementById('simVal');
+ var span=range.max-range.min;
+ var step=span/200;
+ var dir=1;
+ _simActive=false; // Reset hysteresis state for clean sweep
+ sl.value=range.min;vi.value=range.min;
+ document.getElementById('simSweepBtn').textContent='Stop';
+ _simSweepTimer=setInterval(function(){
+  var v=parseFloat(sl.value)+step*dir;
+  if(v>=range.max){v=range.max;dir=-1;}
+  if(v<=range.min){v=range.min;dir=1;}
+  sl.value=v;vi.value=v.toFixed(1);
+  simUpdate();
+ },30);
+}
+
+function postCustomPins(){
+ var body={pins:_customPins,rules:_customRules};
+ if(!_authHeader && !promptAuth()) return;
+ authFetch('/custom-pins',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
+ .then(function(r){return r.json();})
+ .then(function(d){if(!d.ok) alert('Error saving custom pins');})
+ .catch(function(e){alert('Error: '+e);});
+}
+
+/* ── Rebuild all tables ── */
+function rebuildTables(){
+ _renderedFields={};
+ if(_liveData.inputs) buildInputs(_liveData.inputs);
+ if(_liveData.outputs) buildOutputs(_liveData.outputs);
+ if(_liveData.bus) buildBus(_liveData.bus);
+ if(_liveData.expanders) buildExpanders(_liveData.expanders);
+ if(_editing) checkPinDups();
+}
+
+/* ── Column toggles ── */
 function toggleCol(){
  var ct=document.querySelector('.content');
- var cols=['voltage','range','mode','desc'];
- cols.forEach(function(c){
+ ['voltage','range','mode','desc'].forEach(function(c){
   var cb=document.getElementById('tog'+c.charAt(0).toUpperCase()+c.slice(1));
   if(cb.checked)ct.classList.remove('hide-'+c);
   else ct.classList.add('hide-'+c);
@@ -197,26 +1162,266 @@ function toggleCol(){
  });
 }
 function restoreCols(){
- var cols=['voltage','range','mode','desc'];
- cols.forEach(function(c){
+ ['voltage','range','mode','desc'].forEach(function(c){
   var saved=localStorage.getItem('pins-col-'+c);
   var cb=document.getElementById('tog'+c.charAt(0).toUpperCase()+c.slice(1));
-  if(saved!==null){cb.checked=saved==='1';}
+  if(saved!==null) cb.checked=saved==='1';
  });
  toggleCol();
 }
 
+/* ── Auth helper ── */
+var _authHeader='';
+function authFetch(url,opts){
+ opts=opts||{};
+ if(!opts.headers) opts.headers={};
+ if(_authHeader) opts.headers['Authorization']=_authHeader;
+ return fetch(url,opts);
+}
+function promptAuth(){
+ var pw=prompt('Admin password:');
+ if(!pw) return null;
+ _authHeader='Basic '+btoa('admin:'+pw);
+ return _authHeader;
+}
+
+/* ── Edit mode (predefined pins) ── */
+function enterEditMode(){
+ if(!_authHeader && !promptAuth()) return;
+ Promise.all([
+  authFetch('/config?format=json').then(function(r){if(r.status===401){_authHeader='';throw new Error('Invalid password');}if(!r.ok)throw new Error('Error '+r.status);return r.json();}),
+  fetch('/presets/pins').then(function(r){return r.json();}).catch(function(){return {};})
+ ]).then(function(results){
+  _pinConfig=results[0];
+  _pinPresets=results[1];
+  _editing=true;
+  document.getElementById('btnEdit').style.display='none';
+  document.getElementById('btnSave').style.display='';
+  document.getElementById('btnCancel').style.display='';
+  document.getElementById('rebootNote').style.display='block';
+
+  // Populate preset dropdown
+  var pp=document.getElementById('pinPreset');
+  pp.innerHTML='<option value="">Custom</option>';
+  for(var name in _pinPresets){
+   var o=document.createElement('option');o.value=name;o.textContent=name;pp.appendChild(o);
+  }
+  matchPinPreset();
+  pp.style.display='';
+
+  // Populate peripherals
+  document.getElementById('forceSafeMode').checked=_pinConfig.forceSafeMode||false;
+  document.getElementById('i2cEnabled').checked=_pinConfig.i2cEnabled!==false;
+  document.getElementById('spiExpandersEnabled').checked=_pinConfig.spiExpandersEnabled!==false;
+  document.getElementById('expander0Enabled').checked=_pinConfig.expander0Enabled!==false;
+  document.getElementById('expander1Enabled').checked=_pinConfig.expander1Enabled!==false;
+  document.getElementById('expander2Enabled').checked=_pinConfig.expander2Enabled!==false;
+  document.getElementById('expander3Enabled').checked=_pinConfig.expander3Enabled!==false;
+  document.getElementById('expander4Enabled').checked=_pinConfig.expander4Enabled!==false;
+  document.getElementById('expander5Enabled').checked=_pinConfig.expander5Enabled!==false;
+  togglePeriphDeps();
+  document.getElementById('periphSection').classList.add('show');
+
+  // Safe mode banner
+  if(_pinConfig.safeMode){
+   document.getElementById('safeBanner').style.display='block';
+   document.getElementById('safeBannerInfo').textContent='Boot count: '+(_pinConfig.bootCount||'?')+', last reset: '+(_pinConfig.resetReason||'?');
+  }
+
+  rebuildTables();
+  document.getElementById('footerText').textContent='Editing pin configuration \u2014 polling paused';
+ }).catch(function(e){alert('Failed to load config: '+e);});
+}
+
+function exitEditMode(){
+ _editing=false;
+ document.getElementById('btnEdit').style.display='';
+ document.getElementById('btnSave').style.display='none';
+ document.getElementById('btnCancel').style.display='none';
+ document.getElementById('pinPreset').style.display='none';
+ document.getElementById('rebootNote').style.display='none';
+ document.getElementById('pinDupWarn').style.display='none';
+ document.getElementById('periphSection').classList.remove('show');
+ document.getElementById('safeBanner').style.display='none';
+ document.getElementById('footerText').textContent='Auto-refreshes every 2s';
+ rebuildTables();
+ refresh();
+}
+
+function savePins(){
+ var data={};
+ // Collect scalar pin selects
+ var sels=document.querySelectorAll('.pinSel[data-field]');
+ for(var i=0;i<sels.length;i++) data[sels[i].dataset.field]=parseInt(sels[i].value);
+ // Include non-visible pin fields from config
+ _pinFields.forEach(function(f){
+  if(data[f]===undefined && _pinConfig[f]!==undefined) data[f]=_pinConfig[f];
+ });
+ // Collect coil/injector arrays
+ var coilSels=document.querySelectorAll('.pinSel[data-array="coilPins"]');
+ if(coilSels.length){
+  data.coilPins=[];
+  for(var i=0;i<coilSels.length;i++) data.coilPins[parseInt(coilSels[i].dataset.index)]=parseInt(coilSels[i].value);
+ } else if(_pinConfig.coilPins) {
+  data.coilPins=_pinConfig.coilPins;
+ }
+ var injSels=document.querySelectorAll('.pinSel[data-array="injectorPins"]');
+ if(injSels.length){
+  data.injectorPins=[];
+  for(var i=0;i<injSels.length;i++) data.injectorPins[parseInt(injSels[i].dataset.index)]=parseInt(injSels[i].value);
+ } else if(_pinConfig.injectorPins) {
+  data.injectorPins=_pinConfig.injectorPins;
+ }
+ // Peripheral flags
+ data.forceSafeMode=document.getElementById('forceSafeMode').checked;
+ data.i2cEnabled=document.getElementById('i2cEnabled').checked;
+ data.spiExpandersEnabled=document.getElementById('spiExpandersEnabled').checked;
+ data.expander0Enabled=document.getElementById('expander0Enabled').checked;
+ data.expander1Enabled=document.getElementById('expander1Enabled').checked;
+ data.expander2Enabled=document.getElementById('expander2Enabled').checked;
+ data.expander3Enabled=document.getElementById('expander3Enabled').checked;
+ data.expander4Enabled=document.getElementById('expander4Enabled').checked;
+ data.expander5Enabled=document.getElementById('expander5Enabled').checked;
+
+ authFetch('/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)})
+ .then(function(r){return r.json();})
+ .then(function(d){
+  if(d.error){alert('Error: '+d.error);}
+  else{
+   document.getElementById('footerText').textContent=d.message||'Saved.';
+   if(d.reboot){
+    document.getElementById('footerText').textContent='Rebooting...';
+    setTimeout(function(){location.reload();},5000);
+   }
+  }
+ })
+ .catch(function(e){alert('Error: '+e);});
+}
+
+/* ── Duplicate detection ── */
+function checkPinDups(){
+ var sels=document.querySelectorAll('.pinSel');
+ // Collect all selected values and their field names
+ var selMap={},used={},dups=[];
+ for(var i=0;i<sels.length;i++){
+  var v=sels[i].value;
+  var f=sels[i].dataset.field||(sels[i].dataset.array+'['+sels[i].dataset.index+']');
+  selMap[v]=f;
+ }
+ // Build combined taken map: static taken + current selections
+ var taken=getTakenPins();
+ for(var v in selMap) taken[v]=selMap[v];
+ // Update disabled state on all options across all selects
+ for(var i=0;i<sels.length;i++){
+  var curVal=sels[i].value;
+  var opts=sels[i].options;
+  for(var j=0;j<opts.length;j++){
+   var ov=opts[j].value;
+   if(ov===curVal||ov==='255'||ov===''){opts[j].disabled=false;continue;}
+   opts[j].disabled=!!taken[ov];
+  }
+ }
+ // Highlight duplicates
+ for(var i=0;i<sels.length;i++){
+  sels[i].classList.remove('dup');
+  var v=sels[i].value;
+  var f=sels[i].dataset.field||(sels[i].dataset.array+'['+sels[i].dataset.index+']');
+  if(used[v]){
+   dups.push(f+' and '+used[v]+' both use pin '+v);
+   sels[i].classList.add('dup');
+   var firstSel=document.querySelector('.pinSel[data-field="'+used[v]+'"]')||
+    document.querySelector('.pinSel[data-array="'+used[v].split('[')[0]+'"][data-index="'+used[v].match(/\[(\d+)\]/)?.[1]+'"]');
+   if(firstSel) firstSel.classList.add('dup');
+  }
+  used[v]=f;
+ }
+ var w=document.getElementById('pinDupWarn');
+ if(dups.length){w.style.display='block';w.textContent='Duplicate pins: '+dups.join('; ');}
+ else{w.style.display='none';}
+}
+
+/* ── Pin presets ── */
+function matchPinPreset(){
+ var pp=document.getElementById('pinPreset');
+ for(var name in _pinPresets){
+  var p=_pinPresets[name];var match=true;
+  for(var i=0;i<_pinFields.length;i++){
+   if(String(_pinConfig[_pinFields[i]])!==String(p[_pinFields[i]])){match=false;break;}
+  }
+  if(match){pp.value=name;return;}
+ }
+ pp.value='';
+}
+
+function applyPinPreset(){
+ var name=document.getElementById('pinPreset').value;
+ if(!name||!_pinPresets[name])return;
+ var p=_pinPresets[name];
+ // Update scalar selects
+ var sels=document.querySelectorAll('.pinSel[data-field]');
+ for(var i=0;i<sels.length;i++){
+  var f=sels[i].dataset.field;
+  if(p[f]!==undefined) sels[i].value=p[f];
+ }
+ // Update coil/injector selects
+ if(p.coilPins){
+  var cs=document.querySelectorAll('.pinSel[data-array="coilPins"]');
+  for(var i=0;i<cs.length;i++){var idx=parseInt(cs[i].dataset.index);if(p.coilPins[idx]!==undefined)cs[i].value=p.coilPins[idx];}
+ }
+ if(p.injectorPins){
+  var is=document.querySelectorAll('.pinSel[data-array="injectorPins"]');
+  for(var i=0;i<is.length;i++){var idx=parseInt(is[i].dataset.index);if(p.injectorPins[idx]!==undefined)is[i].value=p.injectorPins[idx];}
+ }
+ // Update _pinConfig for non-visible fields
+ _pinFields.forEach(function(f){if(p[f]!==undefined) _pinConfig[f]=p[f];});
+ if(p.coilPins) _pinConfig.coilPins=p.coilPins.slice();
+ if(p.injectorPins) _pinConfig.injectorPins=p.injectorPins.slice();
+ checkPinDups();
+}
+
+/* ── Peripheral deps ── */
+function togglePeriphDeps(){
+ var i2c=document.getElementById('i2cEnabled').checked;
+ var spi=document.getElementById('spiExpandersEnabled').checked;
+ var deps=document.querySelectorAll('.i2cDep');
+ for(var x=0;x<deps.length;x++){deps[x].disabled=!i2c;deps[x].style.opacity=i2c?'1':'0.5';}
+ var sdeps=document.querySelectorAll('.spiDep');
+ for(var x=0;x<sdeps.length;x++){sdeps[x].disabled=!spi;sdeps[x].style.opacity=spi?'1':'0.5';}
+}
+
+/* ── Safe mode ── */
+function clearSafeMode(){
+ if(!confirm('Clear safe mode and reboot?'))return;
+ fetch('/safemode/clear',{method:'POST',headers:{'Content-Type':'application/json'}}).then(function(r){return r.json()}).then(function(d){
+  alert(d.message||'Rebooting...');
+ }).catch(function(e){alert('Error: '+e);});
+}
+
+/* ── Refresh / polling ── */
 function refresh(){
+ if(_editing) return;
  fetch('/pins?format=json').then(function(r){return r.json();}).then(function(d){
+  _liveData=d;
+  _renderedFields={};
   buildInputs(d.inputs||[]);buildOutputs(d.outputs||[]);buildBus(d.bus||[]);buildExpanders(d.expanders||[]);
   var el=document.getElementById('crankSync'),s=d.crankSync||'LOST';
   el.textContent=s;el.className='sync-badge sync-'+s;
   document.getElementById('rpm').textContent=d.rpm||0;
  }).catch(function(e){console.error(e);});
+
+ fetch('/custom-pins?format=json').then(function(r){return r.json();}).then(function(d){
+  _customPins=d.pins||[];
+  _customRules=d.rules||[];
+  renderCustomPins();
+  renderRules();
+ }).catch(function(e){console.error(e);});
 }
+
+/* ── Init ── */
 fetch('/theme').then(function(r){return r.json();}).then(function(d){
  if(d.theme){document.documentElement.dataset.theme=d.theme;localStorage.setItem('hp-theme',d.theme);}
 });
 restoreCols();
-refresh();setInterval(refresh,2000);
+refresh();
+_pollTimer=setInterval(refresh,2000);
 </script></body></html>

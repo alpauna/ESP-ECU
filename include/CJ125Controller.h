@@ -19,7 +19,7 @@ public:
 
     CJ125Controller(SPIClass* spi);
 
-    void begin(uint8_t spiSS1, uint8_t spiSS2,
+    void begin(uint16_t spiSS1, uint16_t spiSS2,
                uint8_t heaterOut1, uint8_t heaterOut2,
                uint8_t uaPin1, uint8_t uaPin2);
     void setADS1115(ADS1115Reader* ads) { _ads = ads; }
@@ -74,7 +74,7 @@ private:
         uint16_t urValue = 0;      // Current UR ADC (10-bit equiv)
         uint16_t uaValue = 0;      // Current UA ADC (10-bit equiv)
         uint16_t diagStatus = 0;
-        uint8_t spiSS = 0;         // Chip select pin (MCP23017)
+        uint16_t spiSS = 0;        // Chip select pin (MCP23S17)
         uint8_t heaterPin = 0;     // LEDC PWM output
         uint8_t ledcChannel = 0;   // LEDC channel number
         uint8_t uaPin = 0;         // ADC input

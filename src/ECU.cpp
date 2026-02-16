@@ -11,48 +11,41 @@
 #include "ADS1115Reader.h"
 #include "MCP3204Reader.h"
 #include "TransmissionManager.h"
+#include "CustomPin.h"
 #include "TuneTable.h"
 #include "Config.h"
 #include "Logger.h"
 #include "PinExpander.h"
 #include <esp_task_wdt.h>
+#include <esp_log.h>
 
 // Locked GPIO pin assignments — time-critical, not configurable
 static const uint8_t PIN_CRANK        = 1;
 static const uint8_t PIN_CAM          = 2;
 
-// MCP23017 #0 outputs — fixed expander pin assignments
-static const uint8_t PIN_FUEL_PUMP    = 100; // MCP23017 #0 P0
-static const uint8_t PIN_TACH_OUT     = 101; // MCP23017 #0 P1
-static const uint8_t PIN_CEL          = 102; // MCP23017 #0 P2
-static const uint8_t PIN_SPI_SS_1     = 108; // MCP23017 P8 — CJ125 Bank 1 CS
-static const uint8_t PIN_SPI_SS_2     = 109; // MCP23017 P9 — CJ125 Bank 2 CS
-
-// Transmission shift solenoids — fixed MCP23017 #1 assignments
-static const uint8_t PIN_SS_A        = 116; // MCP23017 #1 P0
-static const uint8_t PIN_SS_B        = 117; // MCP23017 #1 P1
-static const uint8_t PIN_SS_C        = 118; // MCP23017 #1 P2 (4R100 only)
-static const uint8_t PIN_SS_D        = 119; // MCP23017 #1 P3 (4R100 only)
-
 static SPIClass hspi(HSPI);
-
-// Coils on MCP23S17 #0 (SPI, pins 200-207)
-static const uint8_t COIL_PINS[]     = {200, 201, 202, 203, 204, 205, 206, 207};
-// Injectors on MCP23S17 #1 (SPI, pins 216-223)
-static const uint8_t INJECTOR_PINS[] = {216, 217, 218, 219, 220, 221, 222, 223};
 
 ECU::ECU(Scheduler* ts)
     : _ts(ts), _tUpdate(nullptr), _crankTeeth(36), _crankMissing(1),
       _realtimeTaskHandle(nullptr), _cj125(nullptr), _ads1115(nullptr),
-      _ads1115_2(nullptr), _mcp3204(nullptr), _trans(nullptr), _cj125Enabled(false), _transType(0),
+      _ads1115_2(nullptr), _mcp3204(nullptr), _trans(nullptr), _customPins(nullptr),
+      _cj125Enabled(false), _transType(0),
       _pinAlternator(41), _pinI2cSda(0), _pinI2cScl(42),
       _pinHeater1(19), _pinHeater2(20), _pinCj125Ua1(3), _pinCj125Ua2(4),
-      _pinCj125Ss1(108), _pinCj125Ss2(109),
+      _pinCj125Ss1(208), _pinCj125Ss2(209),
       _pinTcc(45), _pinEpc(46),
       _pinHspiSck(10), _pinHspiMosi(11), _pinHspiMiso(12),
-      _pinHspiCsCoils(13), _pinHspiCsInj(14), _pinMcp3204Cs(15) {
+      _pinHspiCs(13), _pinMcp3204Cs(15),
+      _pinFuelPump(200), _pinTachOut(201), _pinCel(202),
+      _pinSsA(216), _pinSsB(217), _pinSsC(218), _pinSsD(219),
+      _pinSharedInt(0xFF) {
     memset(&_state, 0, sizeof(_state));
     memset(_firingOrder, 0, sizeof(_firingOrder));
+    // Default coil/injector pins (MCP23S17 #4 and #5)
+    for (uint8_t i = 0; i < 12; i++) {
+        _coilPins[i] = (i < 8) ? 264 + i : 0;     // MCP23S17 #4: 264-271
+        _injectorPins[i] = (i < 8) ? 280 + i : 0;  // MCP23S17 #5: 280-287
+    }
     // Default SBC V8 firing order
     static const uint8_t defaultOrder[] = {1,8,4,3,6,5,7,2};
     memcpy(_firingOrder, defaultOrder, 8);
@@ -80,6 +73,8 @@ ECU::~ECU() {
     delete _ads1115_2;
     delete _mcp3204;
     delete _trans;
+    delete _customPins;
+    delete _cltRevLimitTable;
 }
 
 void ECU::configure(const ProjectInfo& proj) {
@@ -102,6 +97,7 @@ void ECU::configure(const ProjectInfo& proj) {
 
     // Configure ignition
     _ignition->setRevLimit(proj.revLimitRpm);
+    _ignition->setConfigRevLimit(proj.revLimitRpm);
     _ignition->setMaxDwellMs(proj.maxDwellMs);
 
     // Configure injection
@@ -123,13 +119,25 @@ void ECU::configure(const ProjectInfo& proj) {
     _pinHspiSck = proj.pinHspiSck;
     _pinHspiMosi = proj.pinHspiMosi;
     _pinHspiMiso = proj.pinHspiMiso;
-    _pinHspiCsCoils = proj.pinHspiCsCoils;
-    _pinHspiCsInj = proj.pinHspiCsInj;
+    _pinHspiCs = proj.pinHspiCs;
     _pinMcp3204Cs = proj.pinMcp3204Cs;
 
     // Configure sensor pin assignments
     _sensors->setPins(proj.pinO2Bank1, proj.pinO2Bank2, proj.pinMap, proj.pinTps,
                       proj.pinClt, proj.pinIat, proj.pinVbat);
+
+    // Configurable expander/output pins
+    _pinFuelPump = proj.pinFuelPump;
+    _pinTachOut = proj.pinTachOut;
+    _pinCel = proj.pinCel;
+    _pinSsA = proj.pinSsA;
+    _pinSsB = proj.pinSsB;
+    _pinSsC = proj.pinSsC;
+    _pinSsD = proj.pinSsD;
+    memcpy(_coilPins, proj.coilPins, sizeof(_coilPins));
+    memcpy(_injectorPins, proj.injectorPins, sizeof(_injectorPins));
+    // Shared expander interrupt GPIO
+    _pinSharedInt = proj.pinSharedInt;
 
     // CJ125 wideband O2
     _cj125Enabled = proj.cj125Enabled;
@@ -155,7 +163,23 @@ void ECU::configure(const ProjectInfo& proj) {
     _oilPressureMinPsi = proj.oilPressureMinPsi;
     _oilPressureMaxPsi = proj.oilPressureMaxPsi;
     _oilPressureMcpChannel = proj.oilPressureMcpChannel;
-    _oilPressureStartupMs = proj.oilPressureStartupMs;
+    // Fuel pump priming
+    _fuelPumpPrimeMs = proj.fuelPumpPrimeMs;
+
+    // ASE
+    _fuel->setAseParams(proj.aseInitialPct, proj.aseDurationMs, proj.aseMinCltF);
+
+    // DFCO
+    _fuel->setDfcoParams(proj.dfcoRpmThreshold, proj.dfcoTpsThreshold,
+                         proj.dfcoEntryDelayMs, proj.dfcoExitRpm, proj.dfcoExitTps);
+
+    // CLT-dependent rev limit
+    _cltRevLimitTable = new TuneTable2D();
+    _cltRevLimitTable->init(6);
+    _cltRevLimitTable->setAxis(proj.cltRevLimitAxis);
+    _cltRevLimitTable->setValues(proj.cltRevLimitValues);
+
+    // oilPressureStartupMs handled by rule debounce in SensorManager
 
     // Create 16x16 tune tables with defaults
     static const float defaultRpmAxis[16] = {
@@ -208,44 +232,44 @@ void ECU::setPeripheralFlags(const ProjectInfo& proj) {
     _expander1Enabled = proj.expander1Enabled;
     _expander2Enabled = proj.expander2Enabled;
     _expander3Enabled = proj.expander3Enabled;
-    _spiExp0Enabled = proj.spiExp0Enabled;
-    _spiExp1Enabled = proj.spiExp1Enabled;
+    _expander4Enabled = proj.expander4Enabled;
+    _expander5Enabled = proj.expander5Enabled;
 }
 
 void ECU::begin() {
-    // I2C bus and MCP23017 expanders
+    // I2C bus — retained for ADS1115 ADCs only (no MCP23017 expanders)
     if (_i2cEnabled) {
-        if (_expander0Enabled) {
-            PinExpander::instance().begin(_pinI2cSda, _pinI2cScl, 0x20);
-        } else {
-            // Still need Wire.begin for other I2C devices (ADS1115)
-            Wire.begin(_pinI2cSda, _pinI2cScl);
-            Wire.setTimeOut(10);  // 10ms I2C bus timeout (capital O = I2C, not Stream)
-            Log.info("ECU", "MCP23017 #0 disabled via config");
-        }
-        if (_expander2Enabled) PinExpander::instance().begin(2, _pinI2cSda, _pinI2cScl, 0x22);
-        if (_expander3Enabled) PinExpander::instance().begin(3, _pinI2cSda, _pinI2cScl, 0x23);
+        Wire.begin(_pinI2cSda, _pinI2cScl);
+        Wire.setTimeOut(10);  // 10ms I2C bus timeout (capital O = I2C, not Stream)
+        // Suppress Wire I2C error spam during probe
+        esp_log_level_set("Wire", ESP_LOG_NONE);
+        Log.info("ECU", "I2C bus initialized (SDA=%d, SCL=%d) — ADS1115 only", _pinI2cSda, _pinI2cScl);
     } else {
-        Log.warn("ECU", "I2C bus disabled — all MCP23017 + ADS1115 skipped");
+        Log.warn("ECU", "I2C bus disabled — ADS1115 skipped");
     }
 
-    // HSPI bus for MCP23S17 coil/injector expanders
+    // HSPI bus for 6x MCP23S17 expanders (shared CS, HAEN hardware addressing)
     if (_spiExpandersEnabled) {
         hspi.begin(_pinHspiSck, _pinHspiMiso, _pinHspiMosi);
-        if (_spiExp0Enabled) {
-            if (!PinExpander::instance().beginSPI(0, &hspi, _pinHspiCsCoils, 0))
-                Log.error("ECU", "MCP23S17 #0 (coils) not detected on HSPI — coil outputs disabled");
-        } else {
-            Log.info("ECU", "MCP23S17 #0 (coils) disabled via config");
+        PinExpander& exp = PinExpander::instance();
+        static const char* expNames[] = {"general I/O", "transmission", "expansion",
+                                          "expansion", "coils", "injectors"};
+        bool enabled[] = {_expander0Enabled, _expander1Enabled, _expander2Enabled,
+                         _expander3Enabled, _expander4Enabled, _expander5Enabled};
+        for (uint8_t i = 0; i < SPI_EXP_MAX; i++) {
+            if (enabled[i]) {
+                if (!exp.begin(i, &hspi, _pinHspiCs, i))
+                    Log.warn("ECU", "MCP23S17 #%d (%s) not detected", i, expNames[i]);
+            } else {
+                Log.info("ECU", "MCP23S17 #%d (%s) disabled via config", i, expNames[i]);
+            }
         }
-        if (_spiExp1Enabled) {
-            if (!PinExpander::instance().beginSPI(1, &hspi, _pinHspiCsInj, 0))
-                Log.error("ECU", "MCP23S17 #1 (injectors) not detected on HSPI — injector outputs disabled");
-        } else {
-            Log.info("ECU", "MCP23S17 #1 (injectors) disabled via config");
-        }
+
+        // Attach shared interrupt line (open-drain wired-OR, all INTA → one GPIO)
+        if (_pinSharedInt != 0xFF)
+            exp.attachSharedInterrupt(_pinSharedInt);
     } else {
-        Log.warn("ECU", "SPI expanders disabled — coil/injector MCP23S17 skipped");
+        Log.warn("ECU", "SPI expanders disabled — all MCP23S17 skipped");
     }
 
     // Initialize subsystems
@@ -255,8 +279,8 @@ void ECU::begin() {
         _cam->begin(PIN_CAM);
     }
 
-    _ignition->begin(_state.numCylinders, COIL_PINS, _firingOrder);
-    _injection->begin(_state.numCylinders, INJECTOR_PINS, _firingOrder);
+    _ignition->begin(_state.numCylinders, _coilPins, _firingOrder);
+    _injection->begin(_state.numCylinders, _injectorPins, _firingOrder);
     _fuel->begin();
     _alternator->begin(_pinAlternator);
 
@@ -289,39 +313,44 @@ void ECU::begin() {
 
     _sensors->begin();
 
-    // Fuel pump relay ON (PCF P0) — only if expander #0 enabled
-    if (_i2cEnabled && _expander0Enabled) {
-        xPinMode(PIN_FUEL_PUMP, OUTPUT);
-        xDigitalWrite(PIN_FUEL_PUMP, HIGH);
+    // Wire manager pointers for virtual sensor sources (SRC_ENGINE_STATE, SRC_OUTPUT_STATE)
+    _sensors->setEngineStatePtr(&_state);
+    _sensors->setIgnitionManager(_ignition);
+    _sensors->setInjectionManager(_injection);
+    _sensors->setAlternatorControl(_alternator);
 
-        // Tach output (PCF P1)
-        xPinMode(PIN_TACH_OUT, OUTPUT);
-        xDigitalWrite(PIN_TACH_OUT, LOW);
+    // Fuel pump relay — prime on startup, then off until engine runs
+    if (_spiExpandersEnabled && _expander0Enabled) {
+        xPinMode(_pinFuelPump, OUTPUT);
+        xDigitalWrite(_pinFuelPump, HIGH);
+        _fuelPumpPriming = true;
+        _fuelPumpRunning = true;
+        _fuelPumpPrimeStart = millis();
 
-        // CEL / check engine light (PCF P2)
-        xPinMode(PIN_CEL, OUTPUT);
-        xDigitalWrite(PIN_CEL, LOW);
-    }
+        // Tach output
+        xPinMode(_pinTachOut, OUTPUT);
+        xDigitalWrite(_pinTachOut, LOW);
 
-    // Initialize second MCP23017 for transmission (0x21, 5V via level shifter)
-    if (_transType > 0 && _i2cEnabled && _expander1Enabled) {
-        PinExpander::instance().begin(1, _pinI2cSda, _pinI2cScl, 0x21);
+        // CEL / check engine light
+        xPinMode(_pinCel, OUTPUT);
+        xDigitalWrite(_pinCel, LOW);
     }
 
     // CJ125 wideband O2 controller — requires I2C (ADS1115) and expander #0 (SPI CS pins)
-    if (_cj125Enabled && _i2cEnabled && _expander0Enabled) {
-        // SPI chip selects via MCP23017 — deselect before init
-        xPinMode(PIN_SPI_SS_1, OUTPUT);
-        xDigitalWrite(PIN_SPI_SS_1, HIGH);
-        xPinMode(PIN_SPI_SS_2, OUTPUT);
-        xDigitalWrite(PIN_SPI_SS_2, HIGH);
+    if (_cj125Enabled && _i2cEnabled && _spiExpandersEnabled && _expander0Enabled) {
+        // SPI chip selects via MCP23S17 #0 — deselect before init
+        xPinMode(_pinCj125Ss1, OUTPUT);
+        xDigitalWrite(_pinCj125Ss1, HIGH);
+        xPinMode(_pinCj125Ss2, OUTPUT);
+        xDigitalWrite(_pinCj125Ss2, HIGH);
 
         _ads1115 = new ADS1115Reader();
         _ads1115->begin(0x48);
+        _sensors->setADS1115(_ads1115);
 
         _cj125 = new CJ125Controller(&SPI);
         _cj125->setADS1115(_ads1115);
-        _cj125->begin(PIN_SPI_SS_1, PIN_SPI_SS_2,
+        _cj125->begin(_pinCj125Ss1, _pinCj125Ss2,
                        _pinHeater1, _pinHeater2,
                        _pinCj125Ua1, _pinCj125Ua2);
 
@@ -329,40 +358,44 @@ void ECU::begin() {
         Log.info("ECU", "CJ125 wideband O2 enabled");
     }
 
-    // Transmission controller — requires I2C (ADS1115 for TFT/MLPS, MCP23017 #1 for solenoids)
-    if (_trans && _i2cEnabled && _expander1Enabled) {
+    // Transmission controller — requires I2C (ADS1115 for TFT/MLPS) and MCP23S17 #1 (solenoids)
+    if (_trans && _i2cEnabled && _spiExpandersEnabled && _expander1Enabled) {
         // ADS1115 shared: CJ125 uses CH0/CH1, transmission uses CH2/CH3
         if (!_ads1115) {
             _ads1115 = new ADS1115Reader();
             _ads1115->begin(0x48);
+            _sensors->setADS1115(_ads1115);
         }
         _trans->setADS1115(_ads1115);
         // OSS/TSS: MAP/TPS pins available only if external ADC (MCP3204 or ADS1115) took over
         bool extAdc = _sensors->hasExternalMapTps();
         uint8_t ossPin = extAdc ? _sensors->getPin(2) : 0xFF;
         uint8_t tssPin = extAdc ? _sensors->getPin(3) : 0xFF;
-        _trans->begin(PIN_SS_A, PIN_SS_B, PIN_SS_C, PIN_SS_D,
+        _trans->begin(_pinSsA, _pinSsB, _pinSsC, _pinSsD,
                       _pinTcc, _pinEpc, ossPin, tssPin);
         Log.info("ECU", "Transmission controller enabled: %s, OSS=%s, TSS=%s",
                  TransmissionManager::typeToString(_trans->getType()),
                  ossPin != 0xFF ? String(String("GPIO") + String(ossPin)).c_str() : "DISABLED",
                  tssPin != 0xFF ? String(String("GPIO") + String(tssPin)).c_str() : "DISABLED");
-    } else if (_trans && (!_i2cEnabled || !_expander1Enabled)) {
+    } else if (_trans && (!_i2cEnabled || !_spiExpandersEnabled || !_expander1Enabled)) {
         Log.warn("ECU", "Transmission controller skipped — I2C or expander #1 disabled");
     }
 
-    // Oil pressure pin setup
-    if (_oilPressureMode == 1 && _pinOilPressure > 0) {
-        pinMode(_pinOilPressure, INPUT_PULLUP);
-        Log.info("ECU", "Oil pressure: digital switch on GPIO %d (active %s)",
-                 _pinOilPressure, _oilPressureActiveLow ? "LOW" : "HIGH");
-    } else if (_oilPressureMode == 2 && _pinOilPressure > 0 && !(_mcp3204 && _mcp3204->isReady())) {
-        pinMode(_pinOilPressure, INPUT);
-        analogSetPinAttenuation(_pinOilPressure, ADC_11db);
-        Log.info("ECU", "Oil pressure: analog sender on GPIO %d (native ADC fallback)", _pinOilPressure);
-    } else if (_oilPressureMode == 2 && _mcp3204 && _mcp3204->isReady()) {
-        Log.info("ECU", "Oil pressure: analog sender on MCP3204 CH%d", _oilPressureMcpChannel);
+    // Oil pressure via sensor descriptor (slot 7)
+    _sensors->configureOilPressure(_oilPressureMode, _pinOilPressure, _oilPressureActiveLow,
+                                    _oilPressureMinPsi, _oilPressureMaxPsi, _oilPressureMcpChannel);
+    if (_oilPressureMode > 0) {
+        Log.info("ECU", "Oil pressure: %s on %s",
+                 _oilPressureMode == 1 ? "digital switch" : "analog sender",
+                 (_oilPressureMode == 2 && _mcp3204 && _mcp3204->isReady())
+                     ? String(String("MCP3204 CH") + String(_oilPressureMcpChannel)).c_str()
+                     : String(String("GPIO ") + String(_pinOilPressure)).c_str());
     }
+
+    // Custom pin manager (begin() called from main after loading config)
+    _customPins = new CustomPinManager();
+    _customPins->setSensorManager(_sensors);
+    _customPins->setEngineState(&_state);
 
     // Sensor + fuel calc update task (10ms on Core 0)
     _tUpdate = new Task(10 * TASK_MILLISECOND, TASK_FOREVER, [this]() { update(); }, _ts, true);
@@ -405,14 +438,28 @@ void ECU::update() {
     _state.engineRunning = (_state.rpm >= 400);
     _state.sequentialMode = _cam->hasCamSignal();
 
+    // Pass engine running state to sensor manager (needed for rule evaluation)
+    _sensors->setEngineRunning(_state.engineRunning);
+
+    // Fuel pump priming logic
+    updateFuelPump();
+
+    // Oil pressure from sensor descriptor slot 7
+    _state.oilPressurePsi = _sensors->getOilPressurePsi();
+    _state.oilPressureLow = _sensors->isOilPressureLow();
+
     // Expander health check (every 100 cycles = ~1s at 10ms)
     if (++_expanderHealthCounter >= 100) {
         _expanderHealthCounter = 0;
         checkExpanderHealth();
     }
 
-    // Oil pressure check
-    checkOilPressure();
+    // CLT-dependent rev limit (before limp — limp has its own limit)
+    if (!_limpActive && _cltRevLimitTable && _cltRevLimitTable->isInitialized()) {
+        uint16_t cltLimit = (uint16_t)_cltRevLimitTable->lookup(_state.coolantTempF);
+        uint16_t configLimit = _ignition->getConfigRevLimit();
+        _ignition->setRevLimit(min(cltLimit, configLimit));
+    }
 
     // Limp mode check (before fuel calc to set rev limit)
     checkLimpMode();
@@ -424,6 +471,12 @@ void ECU::update() {
     if (_limpActive) {
         _state.sparkAdvanceDeg = constrain(_state.sparkAdvanceDeg, -10.0f, _limpAdvanceCap);
     }
+
+    // Copy subsystem state to shared EngineState
+    _state.overdwellCount = _ignition->getOverdwellCount();
+    _state.aseActive = _fuel->isAseActive();
+    _state.asePct = _fuel->getAsePct();
+    _state.dfcoActive = _fuel->isDfcoActive();
 
     // Push calculated values to ignition and injection
     _ignition->setAdvance(_state.sparkAdvanceDeg);
@@ -441,25 +494,28 @@ void ECU::update() {
     if (_trans) {
         _trans->update(_state.rpm, _state.tps, _state.batteryVoltage);
     }
+    // Custom pin I/O and output rules
+    if (_customPins) {
+        _customPins->update();
+    }
     uint32_t t2 = micros();
     _updateTimeUs = t2 - t0;
     _sensorTimeUs = t1 - t0;
 }
 
 void ECU::checkLimpMode() {
+    // Rules engine separates limp (rev limit + advance cap) from CEL-only faults
     uint8_t faults = _sensors->getLimpFaults();
     if (_expanderFaults) faults |= SensorManager::FAULT_EXPANDER;
-    if (_oilPressureFault) faults |= SensorManager::FAULT_OIL;
+    uint8_t celOnly = _sensors->getCelFaults();
 
+    // --- Limp mode logic (rev limit, advance cap, trans lock) ---
     if (faults != 0) {
         _limpRecoveryStart = 0;  // reset recovery timer
         if (!_limpActive) {
-            // Enter limp
             _limpActive = true;
             _normalRevLimit = _ignition->getRevLimit();
             _ignition->setRevLimit(_limpRevLimit);
-            if (_i2cEnabled && _expander0Enabled)
-                xDigitalWrite(PIN_CEL, HIGH);
             if (_trans) _trans->setLimpMode(true);
             Log.warn("ECU", "LIMP MODE: faults=0x%02X", faults);
             if (_faultCb) {
@@ -470,25 +526,29 @@ void ECU::checkLimpMode() {
         }
         _limpFaults = faults;
     } else if (_limpActive) {
-        // All faults clear — run recovery timer
+        // All limp faults clear — run recovery timer
         if (_limpRecoveryStart == 0) {
             _limpRecoveryStart = millis();
         } else if (millis() - _limpRecoveryStart >= _limpRecoveryMs) {
-            // Recovery complete
             _limpActive = false;
             _limpFaults = 0;
             _ignition->setRevLimit(_normalRevLimit);
-            if (_i2cEnabled && _expander0Enabled)
-                xDigitalWrite(PIN_CEL, LOW);
             if (_trans) _trans->setLimpMode(false);
             Log.info("ECU", "LIMP MODE cleared — sensors recovered");
             if (_faultCb) _faultCb("LIMP", "All sensors recovered", false);
         }
     }
 
+    // --- CEL control: ON for any limp OR cel-only fault, OFF when both clear ---
+    _celFaults = celOnly;
+    bool celNeeded = (_limpActive || celOnly != 0);
+    if (_i2cEnabled && _expander0Enabled)
+        xDigitalWrite(_pinCel, celNeeded ? HIGH : LOW);
+
     // Update shared state
     _state.limpMode = _limpActive;
     _state.limpFaults = _limpFaults;
+    _state.celFaults = _celFaults;
 }
 
 void ECU::checkExpanderHealth() {
@@ -496,57 +556,28 @@ void ECU::checkExpanderHealth() {
     _state.expanderFaults = _expanderFaults;
 }
 
-void ECU::checkOilPressure() {
-    if (_oilPressureMode == 0) return;
-
-    // Track engine start for startup delay
-    if (_state.engineRunning) {
-        if (!_engineWasRunning) {
-            _engineRunStartMs = millis();
-            _engineWasRunning = true;
+void ECU::updateFuelPump() {
+    if (!_i2cEnabled || !_expander0Enabled) return;
+    if (_fuelPumpPriming) {
+        if (millis() - _fuelPumpPrimeStart >= _fuelPumpPrimeMs) {
+            _fuelPumpPriming = false;
+            if (!_state.engineRunning) {
+                xDigitalWrite(_pinFuelPump, LOW);
+                _fuelPumpRunning = false;
+            }
         }
-    } else {
-        _engineWasRunning = false;
-        _oilPressureFault = false;
-        _oilPressureLow = false;
-        _state.oilPressurePsi = 0.0f;
-        _state.oilPressureLow = false;
-        return;
+    } else if (_state.engineRunning && !_fuelPumpRunning) {
+        xDigitalWrite(_pinFuelPump, HIGH);
+        _fuelPumpRunning = true;
+    } else if (!_state.engineRunning && !_fuelPumpPriming && _fuelPumpRunning) {
+        xDigitalWrite(_pinFuelPump, LOW);
+        _fuelPumpRunning = false;
     }
-
-    // Skip during startup delay
-    if (millis() - _engineRunStartMs < _oilPressureStartupMs) return;
-
-    if (_oilPressureMode == 1) {
-        // Digital switch
-        bool pinState = digitalRead(_pinOilPressure);
-        _oilPressureLow = _oilPressureActiveLow ? (pinState == LOW) : (pinState == HIGH);
-        _oilPressureFault = _oilPressureLow;
-        _state.oilPressurePsi = _oilPressureLow ? 0.0f : _oilPressureMaxPsi;
-        _state.oilPressureLow = _oilPressureLow;
-    } else if (_oilPressureMode == 2) {
-        // Analog sender
-        float voltage;
-        if (_mcp3204 && _mcp3204->isReady()) {
-            uint16_t raw = _mcp3204->readChannel(_oilPressureMcpChannel);
-            voltage = (float)raw / 4095.0f * 5.0f;
-        } else if (_pinOilPressure > 0) {
-            uint16_t raw = analogRead(_pinOilPressure);
-            // Native ADC 0-3.3V with 2:3 divider → 0-5V sensor range
-            voltage = ((float)raw / 4095.0f) * 3.3f * (5.0f / 3.3f);
-        } else {
-            return;
-        }
-        // Linear: 0.5V = 0 PSI, 4.5V = maxPsi
-        _oilPressurePsi = (voltage - 0.5f) / 4.0f * _oilPressureMaxPsi;
-        if (_oilPressurePsi < 0.0f) _oilPressurePsi = 0.0f;
-        if (_oilPressurePsi > _oilPressureMaxPsi) _oilPressurePsi = _oilPressureMaxPsi;
-        _oilPressureLow = (_oilPressurePsi < _oilPressureMinPsi);
-        _oilPressureFault = _oilPressureLow;
-        _state.oilPressurePsi = _oilPressurePsi;
-        _state.oilPressureLow = _oilPressureLow;
-    }
+    _state.fuelPumpOn = _fuelPumpRunning;
+    _state.fuelPumpPriming = _fuelPumpPriming;
 }
+
+// Oil pressure is now handled by SensorManager descriptor slot 7 + fault rules
 
 void ECU::realtimeTask(void* param) {
     ECU* ecu = (ECU*)param;

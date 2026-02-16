@@ -13,9 +13,9 @@ InjectionManager::InjectionManager()
 
 InjectionManager::~InjectionManager() {}
 
-void InjectionManager::begin(uint8_t numCylinders, const uint8_t* injectorPins, const uint8_t* firingOrder) {
+void InjectionManager::begin(uint8_t numCylinders, const uint16_t* injectorPins, const uint8_t* firingOrder) {
     _numCylinders = min(numCylinders, (uint8_t)MAX_CYLINDERS);
-    memcpy(_injectorPins, injectorPins, _numCylinders);
+    memcpy(_injectorPins, injectorPins, _numCylinders * sizeof(uint16_t));
     memcpy(_firingOrder, firingOrder, _numCylinders);
 
     for (uint8_t i = 0; i < _numCylinders; i++) {

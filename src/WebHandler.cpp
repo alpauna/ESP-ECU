@@ -4,6 +4,8 @@
 #include "ECU.h"
 #include "CrankSensor.h"
 #include "AlternatorControl.h"
+#include "IgnitionManager.h"
+#include "InjectionManager.h"
 #include "SensorManager.h"
 #include "CJ125Controller.h"
 #include "TransmissionManager.h"
@@ -12,7 +14,9 @@
 #include "PinExpander.h"
 #include "ADS1115Reader.h"
 #include "MCP3204Reader.h"
+#include "CustomPin.h"
 #include "OtaUtils.h"
+#include <Preferences.h>
 
 extern const char compile_date[];
 extern uint8_t getCpuLoadCore0();
@@ -152,6 +156,69 @@ void WebHandler::setupRoutes() {
     _server.on("/theme.css", HTTP_GET, [this](AsyncWebServerRequest* r) { serveFile(r, "/theme.css"); });
     _server.on("/", HTTP_GET, [this](AsyncWebServerRequest* r) { serveFile(r, "/index.html"); });
     _server.on("/dashboard", HTTP_GET, [this](AsyncWebServerRequest* r) { serveFile(r, "/dashboard.html"); });
+    _server.on("/sensors", HTTP_GET, [this](AsyncWebServerRequest* r) {
+        if (r->hasParam("format") && r->getParam("format")->value() == "json") {
+            if (!checkAuth(r)) return;
+            if (!_ecu || !_ecu->getSensorManager()) {
+                r->send(500, "application/json", "{\"error\":\"ECU not available\"}");
+                return;
+            }
+            SensorManager* sm = _ecu->getSensorManager();
+            JsonDocument doc;
+            JsonArray sensors = doc["sensors"].to<JsonArray>();
+            for (uint8_t i = 0; i < MAX_SENSORS; i++) {
+                const SensorDescriptor* d = sm->getDescriptor(i);
+                if (!d) continue;
+                JsonObject s = sensors.add<JsonObject>();
+                s["name"] = d->name;
+                s["unit"] = d->unit;
+                JsonObject src = s["source"].to<JsonObject>();
+                src["type"] = (int)d->sourceType;
+                src["device"] = d->sourceDevice;
+                src["channel"] = d->sourceChannel;
+                src["pin"] = d->sourcePin;
+                JsonObject cal = s["cal"].to<JsonObject>();
+                cal["type"] = (int)d->calType;
+                cal["a"] = d->calA; cal["b"] = d->calB;
+                cal["c"] = d->calC; cal["d"] = d->calD;
+                JsonObject filt = s["filter"].to<JsonObject>();
+                filt["ema"] = d->emaAlpha;
+                filt["avg"] = d->avgSamples;
+                JsonObject val = s["validate"].to<JsonObject>();
+                if (!isnan(d->errorMin)) val["errorMin"] = d->errorMin;
+                if (!isnan(d->errorMax)) val["errorMax"] = d->errorMax;
+                if (!isnan(d->warnMin)) val["warnMin"] = d->warnMin;
+                if (!isnan(d->warnMax)) val["warnMax"] = d->warnMax;
+                val["settle"] = d->settleGuard;
+                JsonObject fault = s["fault"].to<JsonObject>();
+                fault["bit"] = d->faultBit;
+                fault["action"] = (int)d->faultAction;
+                s["activeStates"] = d->activeStates;
+            }
+            JsonArray rules = doc["rules"].to<JsonArray>();
+            for (uint8_t i = 0; i < MAX_RULES; i++) {
+                const FaultRule* rule = sm->getRule(i);
+                if (!rule) continue;
+                JsonObject ro = rules.add<JsonObject>();
+                ro["name"] = rule->name;
+                ro["sensor"] = rule->sensorSlot;
+                ro["sensorB"] = rule->sensorSlotB;
+                ro["op"] = (int)rule->op;
+                ro["a"] = rule->thresholdA;
+                ro["b"] = rule->thresholdB;
+                ro["bit"] = rule->faultBit;
+                ro["action"] = (int)rule->faultAction;
+                ro["debounce"] = rule->debounceMs;
+                ro["running"] = rule->requireRunning;
+            }
+            String out;
+            out.reserve(4096);
+            serializeJson(doc, out);
+            r->send(200, "application/json", out);
+        } else {
+            serveFile(r, "/sensors.html");
+        }
+    });
     _server.on("/tune", HTTP_GET, [this](AsyncWebServerRequest* r) {
         if (!checkAuth(r)) return;
         if (!r->hasParam("table")) { serveFile(r, "/tune.html"); return; }
@@ -310,10 +377,57 @@ void WebHandler::setupRoutes() {
         if (_ecu) {
             doc["limpMode"] = _ecu->isLimpActive();
             doc["limpFaults"] = _ecu->getLimpFaults();
+            doc["celFaults"] = _ecu->getCelFaults();
             const EngineState& es = _ecu->getState();
             doc["oilPressurePsi"] = es.oilPressurePsi;
             doc["oilPressureLow"] = es.oilPressureLow;
             doc["expanderFaults"] = es.expanderFaults;
+
+            // Sensor descriptors array
+            SensorManager* sm = _ecu->getSensorManager();
+            if (sm) {
+                JsonArray sensors = doc["sensors"].to<JsonArray>();
+                for (uint8_t i = 0; i < MAX_SENSORS; i++) {
+                    const SensorDescriptor* d = sm->getDescriptor(i);
+                    if (!d || d->sourceType == SRC_DISABLED) continue;
+                    JsonObject so = sensors.add<JsonObject>();
+                    so["slot"] = i;
+                    so["name"] = d->name;
+                    so["value"] = d->value;
+                    so["unit"] = d->unit;
+                    so["raw"] = d->rawAdc;
+                    so["error"] = d->inError;
+                    so["warn"] = d->inWarning;
+                    so["srcType"] = (int)d->sourceType;
+                    so["activeStates"] = d->activeStates;
+                }
+                // Active fault rules
+                JsonArray activeRules = doc["activeRules"].to<JsonArray>();
+                for (uint8_t i = 0; i < MAX_RULES; i++) {
+                    const FaultRule* r = sm->getRule(i);
+                    if (r && r->active) activeRules.add(r->name);
+                }
+            }
+            // Output state fields
+            if (IgnitionManager* ign = _ecu->getIgnitionManager()) {
+                doc["revLimiting"] = ign->isRevLimiting();
+                doc["dwellMs"] = ign->getDwellMs();
+                doc["overdwellCount"] = ign->getOverdwellCount();
+            }
+            if (InjectionManager* inj = _ecu->getInjectionManager()) {
+                doc["fuelCut"] = inj->isFuelCut();
+            }
+            if (AlternatorControl* alt = _ecu->getAlternator()) {
+                doc["altDuty"] = alt->getDuty();
+                doc["altTarget"] = alt->getTargetVoltage();
+                doc["altOvervoltage"] = alt->isOvervoltage();
+            }
+            // Fuel pump, ASE, DFCO
+            doc["fuelPumpOn"] = es.fuelPumpOn;
+            doc["fuelPumpPriming"] = es.fuelPumpPriming;
+            doc["aseActive"] = es.aseActive;
+            doc["asePct"] = es.asePct;
+            doc["dfcoActive"] = es.dfcoActive;
         }
         doc["cpuLoad0"] = getCpuLoadCore0();
         doc["cpuLoad1"] = getCpuLoadCore1();
@@ -477,9 +591,10 @@ void WebHandler::setupRoutes() {
 
     // Config page
     _server.on("/config", HTTP_GET, [this](AsyncWebServerRequest* request) {
-        if (_config && !_config->hasAdminPassword()) { request->redirect("/admin/setup"); return; }
+        bool isJson = request->hasParam("format") && request->getParam("format")->value() == "json";
+        if (_config && !_config->hasAdminPassword() && !isJson) { request->redirect("/admin/setup"); return; }
         if (!checkAuth(request)) return;
-        if (request->hasParam("format") && request->getParam("format")->value() == "json") {
+        if (isJson) {
             if (!_config || !_config->getProjectInfo()) { request->send(500); return; }
             ProjectInfo* proj = _config->getProjectInfo();
             JsonDocument doc;
@@ -522,6 +637,25 @@ void WebHandler::setupRoutes() {
             doc["closedLoopMaxRpm"] = proj->closedLoopMaxRpm;
             doc["closedLoopMaxMapKpa"] = proj->closedLoopMaxMapKpa;
             doc["cj125Enabled"] = proj->cj125Enabled;
+            // Fuel pump / ASE / DFCO
+            doc["fuelPumpPrimeMs"] = proj->fuelPumpPrimeMs;
+            doc["aseInitialPct"] = proj->aseInitialPct;
+            doc["aseDurationMs"] = proj->aseDurationMs;
+            doc["aseMinCltF"] = proj->aseMinCltF;
+            doc["dfcoRpmThreshold"] = proj->dfcoRpmThreshold;
+            doc["dfcoTpsThreshold"] = proj->dfcoTpsThreshold;
+            doc["dfcoEntryDelayMs"] = proj->dfcoEntryDelayMs;
+            doc["dfcoExitRpm"] = proj->dfcoExitRpm;
+            doc["dfcoExitTps"] = proj->dfcoExitTps;
+            // CLT rev limit
+            {
+                JsonArray cltAxis = doc["cltRevLimitAxis"].to<JsonArray>();
+                JsonArray cltVals = doc["cltRevLimitValues"].to<JsonArray>();
+                for (uint8_t i = 0; i < 6; i++) {
+                    cltAxis.add(proj->cltRevLimitAxis[i]);
+                    cltVals.add(proj->cltRevLimitValues[i]);
+                }
+            }
             // Transmission
             doc["transType"] = proj->transType;
             doc["upshift12Rpm"] = proj->upshift12Rpm;
@@ -554,11 +688,30 @@ void WebHandler::setupRoutes() {
             doc["pinHspiSck"] = proj->pinHspiSck;
             doc["pinHspiMosi"] = proj->pinHspiMosi;
             doc["pinHspiMiso"] = proj->pinHspiMiso;
-            doc["pinHspiCsCoils"] = proj->pinHspiCsCoils;
-            doc["pinHspiCsInj"] = proj->pinHspiCsInj;
+            doc["pinHspiCs"] = proj->pinHspiCs;
             doc["pinMcp3204Cs"] = proj->pinMcp3204Cs;
             doc["pinI2cSda"] = proj->pinI2cSda;
             doc["pinI2cScl"] = proj->pinI2cScl;
+            doc["pinFuelPump"] = proj->pinFuelPump;
+            doc["pinTachOut"] = proj->pinTachOut;
+            doc["pinCel"] = proj->pinCel;
+            doc["pinCj125Ss1"] = proj->pinCj125Ss1;
+            doc["pinCj125Ss2"] = proj->pinCj125Ss2;
+            doc["pinSsA"] = proj->pinSsA;
+            doc["pinSsB"] = proj->pinSsB;
+            doc["pinSsC"] = proj->pinSsC;
+            doc["pinSsD"] = proj->pinSsD;
+            doc["pinSdClk"] = proj->pinSdClk;
+            doc["pinSdMiso"] = proj->pinSdMiso;
+            doc["pinSdMosi"] = proj->pinSdMosi;
+            doc["pinSdCs"] = proj->pinSdCs;
+            doc["pinSharedInt"] = proj->pinSharedInt;
+            {
+                JsonArray ca = doc["coilPins"].to<JsonArray>();
+                JsonArray ia = doc["injectorPins"].to<JsonArray>();
+                for (int i = 0; i < 12; i++) ca.add(proj->coilPins[i]);
+                for (int i = 0; i < 12; i++) ia.add(proj->injectorPins[i]);
+            }
 
             // Peripherals & safe mode
             doc["forceSafeMode"] = proj->forceSafeMode;
@@ -568,8 +721,8 @@ void WebHandler::setupRoutes() {
             doc["expander1Enabled"] = proj->expander1Enabled;
             doc["expander2Enabled"] = proj->expander2Enabled;
             doc["expander3Enabled"] = proj->expander3Enabled;
-            doc["spiExp0Enabled"] = proj->spiExp0Enabled;
-            doc["spiExp1Enabled"] = proj->spiExp1Enabled;
+            doc["expander4Enabled"] = proj->expander4Enabled;
+            doc["expander5Enabled"] = proj->expander5Enabled;
             doc["safeMode"] = _safeMode;
             doc["bootCount"] = _bootCountExposed;
             doc["resetReason"] = _resetReasonStr;
@@ -595,6 +748,59 @@ void WebHandler::setupRoutes() {
             doc["oilPressureMcpChannel"] = proj->oilPressureMcpChannel;
             doc["oilPressureStartupSec"] = proj->oilPressureStartupMs / 1000;
 
+            // Sensor descriptors and fault rules
+            if (_ecu) {
+                SensorManager* sm = _ecu->getSensorManager();
+                if (sm) {
+                    JsonArray sensors = doc["sensors"].to<JsonArray>();
+                    for (uint8_t i = 0; i < MAX_SENSORS; i++) {
+                        const SensorDescriptor* d = sm->getDescriptor(i);
+                        if (!d) continue;
+                        JsonObject s = sensors.add<JsonObject>();
+                        s["name"] = d->name;
+                        s["unit"] = d->unit;
+                        JsonObject src = s["source"].to<JsonObject>();
+                        src["type"] = (int)d->sourceType;
+                        src["device"] = d->sourceDevice;
+                        src["channel"] = d->sourceChannel;
+                        src["pin"] = d->sourcePin;
+                        JsonObject cal = s["cal"].to<JsonObject>();
+                        cal["type"] = (int)d->calType;
+                        cal["a"] = d->calA; cal["b"] = d->calB;
+                        cal["c"] = d->calC; cal["d"] = d->calD;
+                        JsonObject filt = s["filter"].to<JsonObject>();
+                        filt["ema"] = d->emaAlpha;
+                        filt["avg"] = d->avgSamples;
+                        JsonObject val = s["validate"].to<JsonObject>();
+                        if (!isnan(d->errorMin)) val["errorMin"] = d->errorMin;
+                        if (!isnan(d->errorMax)) val["errorMax"] = d->errorMax;
+                        if (!isnan(d->warnMin)) val["warnMin"] = d->warnMin;
+                        if (!isnan(d->warnMax)) val["warnMax"] = d->warnMax;
+                        val["settle"] = d->settleGuard;
+                        JsonObject fault = s["fault"].to<JsonObject>();
+                        fault["bit"] = d->faultBit;
+                        fault["action"] = (int)d->faultAction;
+                        s["activeStates"] = d->activeStates;
+                    }
+                    JsonArray rules = doc["rules"].to<JsonArray>();
+                    for (uint8_t i = 0; i < MAX_RULES; i++) {
+                        const FaultRule* r = sm->getRule(i);
+                        if (!r || (r->sensorSlot >= MAX_SENSORS && r->faultBit == 0xFF)) continue;
+                        JsonObject ro = rules.add<JsonObject>();
+                        ro["name"] = r->name;
+                        ro["sensor"] = r->sensorSlot;
+                        ro["sensorB"] = r->sensorSlotB;
+                        ro["op"] = (int)r->op;
+                        ro["a"] = r->thresholdA;
+                        ro["b"] = r->thresholdB;
+                        ro["bit"] = r->faultBit;
+                        ro["action"] = (int)r->faultAction;
+                        ro["debounce"] = r->debounceMs;
+                        ro["running"] = r->requireRunning;
+                    }
+                }
+            }
+
             String json;
             serializeJson(doc, json);
             request->send(200, "application/json", json);
@@ -602,6 +808,105 @@ void WebHandler::setupRoutes() {
         }
         serveFile(request, "/config.html");
     });
+
+    // POST /sensors — dedicated sensor/rule config endpoint
+    auto* sensorsPostHandler = new AsyncCallbackJsonWebHandler("/sensors", [this](AsyncWebServerRequest* request, JsonVariant& json) {
+        if (!checkAuth(request)) return;
+        if (!_ecu || !_ecu->getSensorManager() || !_config) {
+            request->send(500, "application/json", "{\"error\":\"ECU not available\"}");
+            return;
+        }
+        SensorManager* sm = _ecu->getSensorManager();
+        JsonObject data = json.as<JsonObject>();
+        bool changed = false;
+
+        // Update sensor descriptors
+        if (data["sensors"].is<JsonArray>()) {
+            JsonArray sensors = data["sensors"];
+            for (uint8_t i = 0; i < MAX_SENSORS && i < sensors.size(); i++) {
+                JsonObject s = sensors[i];
+                SensorDescriptor* d = sm->getDescriptor(i);
+                if (!d) continue;
+                const char* name = s["name"];
+                if (name) strncpy(d->name, name, sizeof(d->name) - 1);
+                const char* unit = s["unit"];
+                if (unit) strncpy(d->unit, unit, sizeof(d->unit) - 1);
+                if (s["source"].is<JsonObject>()) {
+                    d->sourceType = (SourceType)(int)(s["source"]["type"] | (int)d->sourceType);
+                    d->sourceDevice = s["source"]["device"] | d->sourceDevice;
+                    d->sourceChannel = s["source"]["channel"] | d->sourceChannel;
+                    d->sourcePin = s["source"]["pin"] | d->sourcePin;
+                }
+                if (s["cal"].is<JsonObject>()) {
+                    d->calType = (CalType)(int)(s["cal"]["type"] | (int)d->calType);
+                    d->calA = s["cal"]["a"] | d->calA;
+                    d->calB = s["cal"]["b"] | d->calB;
+                    d->calC = s["cal"]["c"] | d->calC;
+                    d->calD = s["cal"]["d"] | d->calD;
+                }
+                if (s["filter"].is<JsonObject>()) {
+                    d->emaAlpha = s["filter"]["ema"] | d->emaAlpha;
+                    d->avgSamples = s["filter"]["avg"] | d->avgSamples;
+                    if (d->avgSamples > MAX_AVG_SAMPLES) d->avgSamples = MAX_AVG_SAMPLES;
+                }
+                if (s["validate"].is<JsonObject>()) {
+                    d->errorMin = s["validate"]["errorMin"].is<float>() ? (float)s["validate"]["errorMin"] : NAN;
+                    d->errorMax = s["validate"]["errorMax"].is<float>() ? (float)s["validate"]["errorMax"] : NAN;
+                    d->warnMin = s["validate"]["warnMin"].is<float>() ? (float)s["validate"]["warnMin"] : NAN;
+                    d->warnMax = s["validate"]["warnMax"].is<float>() ? (float)s["validate"]["warnMax"] : NAN;
+                    d->settleGuard = s["validate"]["settle"] | d->settleGuard;
+                }
+                if (s["fault"].is<JsonObject>()) {
+                    d->faultBit = s["fault"]["bit"] | d->faultBit;
+                    d->faultAction = (FaultAction)(int)(s["fault"]["action"] | (int)d->faultAction);
+                }
+                d->activeStates = s["activeStates"] | d->activeStates;
+                changed = true;
+            }
+        }
+
+        // Update fault rules
+        if (data["rules"].is<JsonArray>()) {
+            JsonArray rulesArr = data["rules"];
+            for (uint8_t i = 0; i < MAX_RULES && i < rulesArr.size(); i++) {
+                JsonObject ro = rulesArr[i];
+                FaultRule* r = sm->getRule(i);
+                if (!r) continue;
+                const char* rname = ro["name"];
+                if (rname) strncpy(r->name, rname, sizeof(r->name) - 1);
+                r->sensorSlot = ro["sensor"] | r->sensorSlot;
+                r->sensorSlotB = ro["sensorB"] | r->sensorSlotB;
+                r->op = (RuleOp)(int)(ro["op"] | (int)r->op);
+                r->thresholdA = ro["a"] | r->thresholdA;
+                r->thresholdB = ro["b"] | r->thresholdB;
+                r->faultBit = ro["bit"] | r->faultBit;
+                r->faultAction = (FaultAction)(int)(ro["action"] | (int)r->faultAction);
+                r->debounceMs = ro["debounce"] | r->debounceMs;
+                r->requireRunning = ro["running"] | r->requireRunning;
+                r->debounceStart = 0;
+                r->active = false;
+                changed = true;
+            }
+        }
+
+        // Reset defaults
+        if (data["resetSensors"] | false) {
+            sm->initDefaultDescriptors();
+            changed = true;
+        }
+        if (data["resetRules"] | false) {
+            sm->initDefaultRules();
+            changed = true;
+        }
+
+        if (changed) {
+            _config->saveSensorConfig("/config.txt", sm->getDescriptor(0), MAX_SENSORS,
+                                       sm->getRule(0), MAX_RULES);
+        }
+        request->send(200, "application/json", "{\"ok\":true}");
+    });
+    sensorsPostHandler->setMaxContentLength(8192);
+    _server.addHandler(sensorsPostHandler);
 
     auto* configPostHandler = new AsyncCallbackJsonWebHandler("/config", [this](AsyncWebServerRequest* request, JsonVariant& json) {
         if (!checkAuth(request)) return;
@@ -677,6 +982,29 @@ void WebHandler::setupRoutes() {
         proj->closedLoopMaxMapKpa = data["closedLoopMaxMapKpa"] | proj->closedLoopMaxMapKpa;
         if (data["cj125Enabled"].is<bool>()) proj->cj125Enabled = data["cj125Enabled"].as<bool>();
 
+        // Fuel pump / ASE / DFCO
+        proj->fuelPumpPrimeMs = data["fuelPumpPrimeMs"] | proj->fuelPumpPrimeMs;
+        proj->aseInitialPct = data["aseInitialPct"] | proj->aseInitialPct;
+        proj->aseDurationMs = data["aseDurationMs"] | proj->aseDurationMs;
+        proj->aseMinCltF = data["aseMinCltF"] | proj->aseMinCltF;
+        proj->dfcoRpmThreshold = data["dfcoRpmThreshold"] | proj->dfcoRpmThreshold;
+        proj->dfcoTpsThreshold = data["dfcoTpsThreshold"] | proj->dfcoTpsThreshold;
+        proj->dfcoEntryDelayMs = data["dfcoEntryDelayMs"] | proj->dfcoEntryDelayMs;
+        proj->dfcoExitRpm = data["dfcoExitRpm"] | proj->dfcoExitRpm;
+        proj->dfcoExitTps = data["dfcoExitTps"] | proj->dfcoExitTps;
+
+        // CLT rev limit
+        {
+            JsonArray cltAxis = data["cltRevLimitAxis"];
+            JsonArray cltVals = data["cltRevLimitValues"];
+            if (cltAxis && cltVals) {
+                for (uint8_t i = 0; i < 6 && i < cltAxis.size(); i++)
+                    proj->cltRevLimitAxis[i] = cltAxis[i];
+                for (uint8_t i = 0; i < 6 && i < cltVals.size(); i++)
+                    proj->cltRevLimitValues[i] = cltVals[i];
+            }
+        }
+
         // Transmission config
         {
             uint8_t newTransType = data["transType"] | proj->transType;
@@ -705,14 +1033,14 @@ void WebHandler::setupRoutes() {
                 data["expander1Enabled"] | proj->expander1Enabled,
                 data["expander2Enabled"] | proj->expander2Enabled,
                 data["expander3Enabled"] | proj->expander3Enabled,
-                data["spiExp0Enabled"] | proj->spiExp0Enabled,
-                data["spiExp1Enabled"] | proj->spiExp1Enabled,
+                data["expander4Enabled"] | proj->expander4Enabled,
+                data["expander5Enabled"] | proj->expander5Enabled,
             };
             bool* cur[] = {
                 &proj->i2cEnabled, &proj->spiExpandersEnabled,
                 &proj->expander0Enabled, &proj->expander1Enabled,
                 &proj->expander2Enabled, &proj->expander3Enabled,
-                &proj->spiExp0Enabled, &proj->spiExp1Enabled,
+                &proj->expander4Enabled, &proj->expander5Enabled,
             };
             for (int i = 0; i < 8; i++) {
                 if (flags[i] != *cur[i]) { *cur[i] = flags[i]; needsReboot = true; }
@@ -725,7 +1053,8 @@ void WebHandler::setupRoutes() {
 
         // Pin assignments (all require reboot)
         {
-            uint8_t pins[] = {
+            // GPIO-only pins (uint8_t, max 48)
+            uint8_t gpioPins[] = {
                 data["pinO2Bank1"] | proj->pinO2Bank1,
                 data["pinO2Bank2"] | proj->pinO2Bank2,
                 data["pinMap"] | proj->pinMap,
@@ -741,22 +1070,74 @@ void WebHandler::setupRoutes() {
                 data["pinHspiSck"] | proj->pinHspiSck,
                 data["pinHspiMosi"] | proj->pinHspiMosi,
                 data["pinHspiMiso"] | proj->pinHspiMiso,
-                data["pinHspiCsCoils"] | proj->pinHspiCsCoils,
-                data["pinHspiCsInj"] | proj->pinHspiCsInj,
+                data["pinHspiCs"] | proj->pinHspiCs,
                 data["pinMcp3204Cs"] | proj->pinMcp3204Cs,
                 data["pinI2cSda"] | proj->pinI2cSda,
-                data["pinI2cScl"] | proj->pinI2cScl
+                data["pinI2cScl"] | proj->pinI2cScl,
+                data["pinSdClk"] | proj->pinSdClk,
+                data["pinSdMiso"] | proj->pinSdMiso,
+                data["pinSdMosi"] | proj->pinSdMosi,
+                data["pinSdCs"] | proj->pinSdCs,
+                (uint8_t)(data["pinSharedInt"] | proj->pinSharedInt)
             };
-            uint8_t* cur[] = {
+            uint8_t* gpioCur[] = {
                 &proj->pinO2Bank1, &proj->pinO2Bank2, &proj->pinMap, &proj->pinTps,
                 &proj->pinClt, &proj->pinIat, &proj->pinVbat, &proj->pinAlternator,
                 &proj->pinHeater1, &proj->pinHeater2, &proj->pinTcc, &proj->pinEpc,
                 &proj->pinHspiSck, &proj->pinHspiMosi, &proj->pinHspiMiso,
-                &proj->pinHspiCsCoils, &proj->pinHspiCsInj, &proj->pinMcp3204Cs,
-                &proj->pinI2cSda, &proj->pinI2cScl
+                &proj->pinHspiCs, &proj->pinMcp3204Cs,
+                &proj->pinI2cSda, &proj->pinI2cScl,
+                &proj->pinSdClk, &proj->pinSdMiso, &proj->pinSdMosi, &proj->pinSdCs,
+                &proj->pinSharedInt
             };
-            for (int i = 0; i < 20; i++) {
-                if (pins[i] != *cur[i]) { *cur[i] = pins[i]; needsReboot = true; }
+            for (int i = 0; i < 24; i++) {
+                if (gpioPins[i] != *gpioCur[i]) { *gpioCur[i] = gpioPins[i]; needsReboot = true; }
+            }
+            // Expander-capable pins (uint16_t, values 200-295)
+            uint16_t expPins[] = {
+                (uint16_t)(data["pinFuelPump"] | (int)proj->pinFuelPump),
+                (uint16_t)(data["pinTachOut"] | (int)proj->pinTachOut),
+                (uint16_t)(data["pinCel"] | (int)proj->pinCel),
+                (uint16_t)(data["pinCj125Ss1"] | (int)proj->pinCj125Ss1),
+                (uint16_t)(data["pinCj125Ss2"] | (int)proj->pinCj125Ss2),
+                (uint16_t)(data["pinSsA"] | (int)proj->pinSsA),
+                (uint16_t)(data["pinSsB"] | (int)proj->pinSsB),
+                (uint16_t)(data["pinSsC"] | (int)proj->pinSsC),
+                (uint16_t)(data["pinSsD"] | (int)proj->pinSsD),
+            };
+            uint16_t* expCur[] = {
+                &proj->pinFuelPump, &proj->pinTachOut, &proj->pinCel,
+                &proj->pinCj125Ss1, &proj->pinCj125Ss2,
+                &proj->pinSsA, &proj->pinSsB, &proj->pinSsC, &proj->pinSsD,
+            };
+            for (int i = 0; i < 9; i++) {
+                if (expPins[i] != *expCur[i]) { *expCur[i] = expPins[i]; needsReboot = true; }
+            }
+            // Coil/injector arrays (uint16_t)
+            if (data["coilPins"].is<JsonArray>()) {
+                JsonArray ca = data["coilPins"];
+                for (int i = 0; i < min((int)ca.size(), 12); i++) {
+                    uint16_t v = (uint16_t)(int)ca[i];
+                    if (v != proj->coilPins[i]) { proj->coilPins[i] = v; needsReboot = true; }
+                }
+            }
+            if (data["injectorPins"].is<JsonArray>()) {
+                JsonArray ia = data["injectorPins"];
+                for (int i = 0; i < min((int)ia.size(), 12); i++) {
+                    uint16_t v = (uint16_t)(int)ia[i];
+                    if (v != proj->injectorPins[i]) { proj->injectorPins[i] = v; needsReboot = true; }
+                }
+            }
+            // Write SD pin changes to NVS for bootstrap
+            if (data["pinSdClk"].is<uint8_t>() || data["pinSdMiso"].is<uint8_t>() ||
+                data["pinSdMosi"].is<uint8_t>() || data["pinSdCs"].is<uint8_t>()) {
+                Preferences prefs;
+                prefs.begin("sdpins", false);
+                prefs.putUChar("clk",  proj->pinSdClk);
+                prefs.putUChar("miso", proj->pinSdMiso);
+                prefs.putUChar("mosi", proj->pinSdMosi);
+                prefs.putUChar("cs",   proj->pinSdCs);
+                prefs.end();
             }
         }
 
@@ -792,6 +1173,81 @@ void WebHandler::setupRoutes() {
             _ecu->getSensorManager()->setLimpThresholds(
                 proj->limpMapMin, proj->limpMapMax, proj->limpTpsMin, proj->limpTpsMax,
                 proj->limpCltMax, proj->limpIatMax, proj->limpVbatMin);
+        }
+
+        // Update sensor descriptors (live — applies immediately)
+        if (_ecu && _ecu->getSensorManager() && data["sensors"].is<JsonArray>()) {
+            SensorManager* sm = _ecu->getSensorManager();
+            JsonArray sensors = data["sensors"];
+            for (uint8_t i = 0; i < MAX_SENSORS && i < sensors.size(); i++) {
+                JsonObject s = sensors[i];
+                SensorDescriptor* d = sm->getDescriptor(i);
+                if (!d) continue;
+                const char* name = s["name"];
+                if (name) strncpy(d->name, name, sizeof(d->name) - 1);
+                const char* unit = s["unit"];
+                if (unit) strncpy(d->unit, unit, sizeof(d->unit) - 1);
+                if (s["source"].is<JsonObject>()) {
+                    d->sourceType = (SourceType)(int)(s["source"]["type"] | (int)d->sourceType);
+                    d->sourceDevice = s["source"]["device"] | d->sourceDevice;
+                    d->sourceChannel = s["source"]["channel"] | d->sourceChannel;
+                    d->sourcePin = s["source"]["pin"] | d->sourcePin;
+                }
+                if (s["cal"].is<JsonObject>()) {
+                    d->calType = (CalType)(int)(s["cal"]["type"] | (int)d->calType);
+                    d->calA = s["cal"]["a"] | d->calA;
+                    d->calB = s["cal"]["b"] | d->calB;
+                    d->calC = s["cal"]["c"] | d->calC;
+                    d->calD = s["cal"]["d"] | d->calD;
+                }
+                if (s["filter"].is<JsonObject>()) {
+                    d->emaAlpha = s["filter"]["ema"] | d->emaAlpha;
+                    d->avgSamples = s["filter"]["avg"] | d->avgSamples;
+                    if (d->avgSamples > MAX_AVG_SAMPLES) d->avgSamples = MAX_AVG_SAMPLES;
+                }
+                if (s["validate"].is<JsonObject>()) {
+                    d->errorMin = s["validate"]["errorMin"].is<float>() ? (float)s["validate"]["errorMin"] : NAN;
+                    d->errorMax = s["validate"]["errorMax"].is<float>() ? (float)s["validate"]["errorMax"] : NAN;
+                    d->warnMin = s["validate"]["warnMin"].is<float>() ? (float)s["validate"]["warnMin"] : NAN;
+                    d->warnMax = s["validate"]["warnMax"].is<float>() ? (float)s["validate"]["warnMax"] : NAN;
+                    d->settleGuard = s["validate"]["settle"] | d->settleGuard;
+                }
+                if (s["fault"].is<JsonObject>()) {
+                    d->faultBit = s["fault"]["bit"] | d->faultBit;
+                    d->faultAction = (FaultAction)(int)(s["fault"]["action"] | (int)d->faultAction);
+                }
+                d->activeStates = s["activeStates"] | d->activeStates;
+            }
+            // Save sensor config to SD
+            _config->saveSensorConfig("/config.txt", sm->getDescriptor(0), MAX_SENSORS,
+                                       sm->getRule(0), MAX_RULES);
+        }
+
+        // Update fault rules (live)
+        if (_ecu && _ecu->getSensorManager() && data["rules"].is<JsonArray>()) {
+            SensorManager* sm = _ecu->getSensorManager();
+            JsonArray rulesArr = data["rules"];
+            for (uint8_t i = 0; i < MAX_RULES && i < rulesArr.size(); i++) {
+                JsonObject ro = rulesArr[i];
+                FaultRule* r = sm->getRule(i);
+                if (!r) continue;
+                const char* rname = ro["name"];
+                if (rname) strncpy(r->name, rname, sizeof(r->name) - 1);
+                r->sensorSlot = ro["sensor"] | r->sensorSlot;
+                r->sensorSlotB = ro["sensorB"] | r->sensorSlotB;
+                r->op = (RuleOp)(int)(ro["op"] | (int)r->op);
+                r->thresholdA = ro["a"] | r->thresholdA;
+                r->thresholdB = ro["b"] | r->thresholdB;
+                r->faultBit = ro["bit"] | r->faultBit;
+                r->faultAction = (FaultAction)(int)(ro["action"] | (int)r->faultAction);
+                r->debounceMs = ro["debounce"] | r->debounceMs;
+                r->requireRunning = ro["running"] | r->requireRunning;
+                // Reset runtime state
+                r->debounceStart = 0;
+                r->active = false;
+            }
+            _config->saveSensorConfig("/config.txt", sm->getDescriptor(0), MAX_SENSORS,
+                                       sm->getRule(0), MAX_RULES);
         }
 
         bool saved = _config->updateConfig("/config.txt", *proj);
@@ -884,6 +1340,38 @@ void WebHandler::setupRoutes() {
     });
 
     // Reboot
+    // Tooth logging
+    _server.on("/teeth", HTTP_POST, [this](AsyncWebServerRequest* r) {
+        if (!_ecu || !_ecu->getCrankSensor()) { r->send(503); return; }
+        _ecu->getCrankSensor()->startToothLog();
+        r->send(200, "text/plain", "Capturing");
+    });
+    _server.on("/teeth", HTTP_GET, [this](AsyncWebServerRequest* r) {
+        if (!_ecu || !_ecu->getCrankSensor()) { r->send(503); return; }
+        CrankSensor* cs = _ecu->getCrankSensor();
+        if (cs->isToothLogCapturing()) {
+            r->send(202, "application/json", "{\"status\":\"capturing\",\"count\":" + String(cs->getToothLogSize()) + "}");
+            return;
+        }
+        uint16_t count = cs->getToothLogSize();
+        if (count == 0) {
+            r->send(200, "application/json", "{\"status\":\"empty\",\"data\":[]}");
+            return;
+        }
+        const volatile CrankSensor::ToothLogEntry* log = cs->getToothLog();
+        // Stream as chunked JSON
+        AsyncResponseStream* response = r->beginResponseStream("application/json");
+        response->print("{\"status\":\"complete\",\"count\":");
+        response->print(count);
+        response->print(",\"data\":[");
+        for (uint16_t i = 0; i < count; i++) {
+            if (i > 0) response->print(',');
+            response->printf("{\"p\":%lu,\"t\":%u}", (unsigned long)log[i].periodUs, log[i].toothNum);
+        }
+        response->print("]}");
+        r->send(response);
+    });
+
     _server.on("/reboot", HTTP_POST, [this](AsyncWebServerRequest* r) {
         if (!checkAuth(r)) return;
         r->send(200, "text/plain", "OK");
@@ -971,30 +1459,38 @@ void WebHandler::setupRoutes() {
             addAnalog(pVbat, "VBAT", 6, "Battery via 47k/10k divider (5.7:1). 0-3.3V ADC = 0-18.8V actual",
                       "0-18.8V", "5V\xe2\x86\x92" "3.3V");
 
-            // Digital outputs — coils (MCP23S17 #0, SPI HSPI 10MHz)
-            for (uint8_t i = 0; i < 8; i++) {
-                uint8_t pin = 200 + i;
-                JsonObject o = outputs.add<JsonObject>();
-                o["pin"] = pin;
-                char nm[8]; snprintf(nm, sizeof(nm), "COIL_%d", i+1);
-                o["name"] = nm; o["type"] = "digital"; o["mode"] = "OUTPUT";
-                o["desc"] = "COP coil driver via MCP23S17. HIGH=charging, LOW=fire. Dwell max 4.0ms";
-                o["value"] = xDigitalRead(pin) ? "ON" : "OFF";
-                o["bus"] = "SPI (HSPI 10MHz)";
-                o["range"] = "HIGH / LOW"; o["voltage"] = "5V";
+            // Digital outputs — coils (dynamic count based on cylinders)
+            {
+                uint8_t cyl = proj ? proj->cylinders : 8;
+                for (uint8_t i = 0; i < cyl; i++) {
+                    uint16_t pin = proj ? proj->coilPins[i] : (264 + i);
+                    if (pin == 0) continue;
+                    JsonObject o = outputs.add<JsonObject>();
+                    o["pin"] = pin;
+                    char nm[8]; snprintf(nm, sizeof(nm), "COIL_%d", i+1);
+                    o["name"] = nm; o["type"] = "digital"; o["mode"] = "OUTPUT";
+                    o["desc"] = "COP coil driver via MCP23S17. HIGH=charging, LOW=fire. Dwell max 4.0ms";
+                    o["value"] = xDigitalRead(pin) ? "ON" : "OFF";
+                    o["bus"] = (pin >= 200) ? "SPI" : "GPIO";
+                    o["range"] = "HIGH / LOW"; o["voltage"] = (pin >= 200) ? "5V" : "3.3V";
+                }
             }
 
-            // Digital outputs — injectors (MCP23S17 #1, SPI HSPI 10MHz)
-            for (uint8_t i = 0; i < 8; i++) {
-                uint8_t pin = 216 + i;
-                JsonObject o = outputs.add<JsonObject>();
-                o["pin"] = pin;
-                char nm[8]; snprintf(nm, sizeof(nm), "INJ_%d", i+1);
-                o["name"] = nm; o["type"] = "digital"; o["mode"] = "OUTPUT";
-                o["desc"] = "High-Z injector via MCP23S17. HIGH=open, LOW=closed. Dead time 1.0ms";
-                o["value"] = xDigitalRead(pin) ? "ON" : "OFF";
-                o["bus"] = "SPI (HSPI 10MHz)";
-                o["range"] = "HIGH / LOW"; o["voltage"] = "5V";
+            // Digital outputs — injectors (dynamic count based on cylinders)
+            {
+                uint8_t cyl = proj ? proj->cylinders : 8;
+                for (uint8_t i = 0; i < cyl; i++) {
+                    uint16_t pin = proj ? proj->injectorPins[i] : (280 + i);
+                    if (pin == 0) continue;
+                    JsonObject o = outputs.add<JsonObject>();
+                    o["pin"] = pin;
+                    char nm[8]; snprintf(nm, sizeof(nm), "INJ_%d", i+1);
+                    o["name"] = nm; o["type"] = "digital"; o["mode"] = "OUTPUT";
+                    o["desc"] = "High-Z injector via MCP23S17. HIGH=open, LOW=closed. Dead time 1.0ms";
+                    o["value"] = xDigitalRead(pin) ? "ON" : "OFF";
+                    o["bus"] = (pin >= 200) ? "SPI" : "GPIO";
+                    o["range"] = "HIGH / LOW"; o["voltage"] = (pin >= 200) ? "5V" : "3.3V";
+                }
             }
 
             // PWM output — alternator
@@ -1008,31 +1504,37 @@ void WebHandler::setupRoutes() {
                 o["range"] = "0-95%"; o["voltage"] = "3.3V";
             }
 
-            // Digital output — fuel pump (PCF P0)
+            // Digital output — fuel pump
             {
+                uint16_t pin = proj ? proj->pinFuelPump : 200;
                 JsonObject o = outputs.add<JsonObject>();
-                o["pin"] = 100; o["name"] = "FUEL_PUMP"; o["type"] = "digital"; o["mode"] = "OUTPUT";
-                o["desc"] = "Fuel pump relay via MCP23017 P0. HIGH=pump on. Always on when ECU running";
-                o["value"] = xDigitalRead(100) ? "ON" : "OFF";
-                o["bus"] = "I2C"; o["range"] = "HIGH / LOW"; o["voltage"] = "5V";
+                o["pin"] = pin; o["name"] = "FUEL_PUMP"; o["type"] = "digital"; o["mode"] = "OUTPUT";
+                o["desc"] = "Fuel pump relay. HIGH=pump on. Always on when ECU running";
+                o["value"] = xDigitalRead(pin) ? "ON" : "OFF";
+                o["bus"] = (pin >= 200) ? "SPI" : "GPIO"; o["range"] = "HIGH / LOW";
+                o["voltage"] = (pin >= 200) ? "5V" : "3.3V";
             }
 
-            // Tach output (PCF P1)
+            // Tach output
             {
+                uint16_t pin = proj ? proj->pinTachOut : 201;
                 JsonObject o = outputs.add<JsonObject>();
-                o["pin"] = 101; o["name"] = "TACH_OUT"; o["type"] = "digital"; o["mode"] = "OUTPUT";
-                o["desc"] = "Tachometer square wave output via MCP23017 P1";
-                o["value"] = xDigitalRead(101) ? "ON" : "OFF";
-                o["bus"] = "I2C"; o["range"] = "HIGH / LOW"; o["voltage"] = "5V";
+                o["pin"] = pin; o["name"] = "TACH_OUT"; o["type"] = "digital"; o["mode"] = "OUTPUT";
+                o["desc"] = "Tachometer square wave output";
+                o["value"] = xDigitalRead(pin) ? "ON" : "OFF";
+                o["bus"] = (pin >= 200) ? "SPI" : "GPIO"; o["range"] = "HIGH / LOW";
+                o["voltage"] = (pin >= 200) ? "5V" : "3.3V";
             }
 
-            // CEL (PCF P2)
+            // CEL / check engine light
             {
+                uint16_t pin = proj ? proj->pinCel : 202;
                 JsonObject o = outputs.add<JsonObject>();
-                o["pin"] = 102; o["name"] = "CEL"; o["type"] = "digital"; o["mode"] = "OUTPUT";
-                o["desc"] = "Check engine light via MCP23017 P2. HIGH=fault active";
-                o["value"] = xDigitalRead(102) ? "ON" : "OFF";
-                o["bus"] = "I2C"; o["range"] = "HIGH / LOW"; o["voltage"] = "5V";
+                o["pin"] = pin; o["name"] = "CEL"; o["type"] = "digital"; o["mode"] = "OUTPUT";
+                o["desc"] = "Check engine light. HIGH=fault active";
+                o["value"] = xDigitalRead(pin) ? "ON" : "OFF";
+                o["bus"] = (pin >= 200) ? "SPI" : "GPIO"; o["range"] = "HIGH / LOW";
+                o["voltage"] = (pin >= 200) ? "5V" : "3.3V";
             }
 
             // SPI bus — FSPI (SD card + CJ125)
@@ -1040,21 +1542,19 @@ void WebHandler::setupRoutes() {
                 JsonObject o = bus.add<JsonObject>();
                 o["pin"] = pin; o["name"] = name; o["type"] = "SPI"; o["mode"] = mode; o["voltage"] = voltage;
             };
-            addSpi(47, "SD_CLK", "FSPI \xe2\x80\x94 SD Card", "3.3V");
-            addSpi(48, "SD_MISO", "FSPI \xe2\x80\x94 SD Card", "3.3V");
-            addSpi(38, "SD_MOSI", "FSPI \xe2\x80\x94 SD Card", "3.3V");
-            addSpi(39, "SD_CS", "FSPI \xe2\x80\x94 SD Card", "3.3V");
-            // SPI bus — HSPI (MCP23S17 coils + injectors, 5V via TXB0108)
+            addSpi(proj ? proj->pinSdClk : 47, "SD_CLK", "FSPI \xe2\x80\x94 SD Card", "3.3V");
+            addSpi(proj ? proj->pinSdMiso : 48, "SD_MISO", "FSPI \xe2\x80\x94 SD Card", "3.3V");
+            addSpi(proj ? proj->pinSdMosi : 38, "SD_MOSI", "FSPI \xe2\x80\x94 SD Card", "3.3V");
+            addSpi(proj ? proj->pinSdCs : 39, "SD_CS", "FSPI \xe2\x80\x94 SD Card", "3.3V");
+            // SPI bus — HSPI (6x MCP23S17 shared CS + HAEN, 5V via level shifter)
             uint8_t pHspiSck = proj ? proj->pinHspiSck : 10;
             uint8_t pHspiMosi = proj ? proj->pinHspiMosi : 11;
             uint8_t pHspiMiso = proj ? proj->pinHspiMiso : 12;
-            uint8_t pHspiCsCoils = proj ? proj->pinHspiCsCoils : 13;
-            uint8_t pHspiCsInj = proj ? proj->pinHspiCsInj : 14;
+            uint8_t pHspiCs = proj ? proj->pinHspiCs : 13;
             addSpi(pHspiSck, "HSPI_SCK", "HSPI \xe2\x80\x94 MCP23S17 10MHz", "5V");
             addSpi(pHspiMosi, "HSPI_MOSI", "HSPI \xe2\x80\x94 MCP23S17 10MHz", "5V");
             addSpi(pHspiMiso, "HSPI_MISO", "HSPI \xe2\x80\x94 MCP23S17 10MHz", "5V");
-            addSpi(pHspiCsCoils, "HSPI_CS0", "HSPI \xe2\x80\x94 MCP23S17 #0 (coils)", "5V");
-            addSpi(pHspiCsInj, "HSPI_CS1", "HSPI \xe2\x80\x94 MCP23S17 #1 (injectors)", "5V");
+            addSpi(pHspiCs, "HSPI_CS", "HSPI \xe2\x80\x94 shared CS (6 devices, HAEN)", "5V");
             // MCP3204 CS pin (show if configured, even in safe mode)
             {
                 uint8_t pMcp3204Cs = proj ? proj->pinMcp3204Cs : 15;
@@ -1080,173 +1580,84 @@ void WebHandler::setupRoutes() {
                 o["range"] = "0-100%"; o["voltage"] = "3.3V";
             }
 
-            // I2C bus (all 5V via TXB0108 level shifter)
+            // I2C bus (ADS1115 only, 5V via TXB0108 level shifter)
             PinExpander& pcf = PinExpander::instance();
+            uint8_t pI2cSda = proj ? proj->pinI2cSda : 0;
+            uint8_t pI2cScl = proj ? proj->pinI2cScl : 42;
             {
                 JsonObject o = bus.add<JsonObject>();
-                o["pin"] = pcf.getSDA(); o["name"] = "I2C_SDA"; o["type"] = "I2C";
-                o["mode"] = "MCP23017 @ 0x20"; o["voltage"] = "5V";
+                o["pin"] = pI2cSda; o["name"] = "I2C_SDA"; o["type"] = "I2C";
+                o["mode"] = "ADS1115 @ 0x48"; o["voltage"] = "5V";
             }
             {
                 JsonObject o = bus.add<JsonObject>();
-                o["pin"] = pcf.getSCL(); o["name"] = "I2C_SCL"; o["type"] = "I2C";
-                o["mode"] = "MCP23017 @ 0x20"; o["voltage"] = "5V";
-            }
-            {
-                JsonObject o = bus.add<JsonObject>();
-                o["pin"] = pcf.getSDA(); o["name"] = "I2C_SDA"; o["type"] = "I2C";
-                o["mode"] = "ADS1115 @ 0x48 (CJ125_UR)"; o["voltage"] = "5V";
+                o["pin"] = pI2cScl; o["name"] = "I2C_SCL"; o["type"] = "I2C";
+                o["mode"] = "ADS1115 @ 0x48"; o["voltage"] = "5V";
             }
             if (sens && sens->hasMapTpsADS1115() && !sens->hasMapTpsMCP3204()) {
                 JsonObject o = bus.add<JsonObject>();
-                o["pin"] = pcf.getSDA(); o["name"] = "I2C_SDA"; o["type"] = "I2C";
+                o["pin"] = pI2cSda; o["name"] = "I2C_SDA"; o["type"] = "I2C";
                 o["mode"] = "ADS1115 @ 0x49 (MAP/TPS)"; o["voltage"] = "5V";
             }
 
-            // MCP23017 expander #0
+            // 6x MCP23S17 SPI expanders (shared CS, HAEN hardware addressing)
             JsonArray expanders = doc["expanders"].to<JsonArray>();
             {
-                JsonObject exp0 = expanders.add<JsonObject>();
-                exp0["index"] = 0;
-                exp0["type"] = "MCP23017";
-                char addrStr[6]; snprintf(addrStr, sizeof(addrStr), "0x%02X", pcf.getAddress(0));
-                exp0["address"] = addrStr;
-                exp0["ready"] = pcf.isReady(0);
-                exp0["sda"] = pcf.getSDA();
-                exp0["scl"] = pcf.getSCL();
-                if (pcf.isReady(0)) {
-                    uint16_t raw = pcf.readAll(0);
-                    JsonArray pins = exp0["pins"].to<JsonArray>();
-                    const char* pcfNames[] = {"FUEL_PUMP","TACH_OUT","CEL","SPARE_3","SPARE_4","SPARE_5","SPARE_6","SPARE_7",
-                                               "SPI_SS_1","SPI_SS_2","SPARE_10","SPARE_11","SPARE_12","SPARE_13","SPARE_14","SPARE_15"};
-                    for (uint8_t i = 0; i < 16; i++) {
-                        JsonObject p = pins.add<JsonObject>();
-                        p["pcfPin"] = i;
-                        p["globalPin"] = PCF_PIN_OFFSET + i;
-                        p["name"] = pcfNames[i];
-                        p["value"] = (raw & (1 << i)) ? "HIGH" : "LOW";
-                    }
-                }
-            }
-            // MCP23017 expander #1 (transmission, 5V via PCA9306)
-            {
-                JsonObject exp1 = expanders.add<JsonObject>();
-                exp1["index"] = 1;
-                exp1["type"] = "MCP23017";
-                char addrStr[6]; snprintf(addrStr, sizeof(addrStr), "0x%02X", pcf.getAddress(1));
-                exp1["address"] = addrStr;
-                exp1["ready"] = pcf.isReady(1);
-                exp1["sda"] = pcf.getSDA();
-                exp1["scl"] = pcf.getSCL();
-                exp1["note"] = "5V via PCA9306DCUR level shifter";
-                if (pcf.isReady(1)) {
-                    uint16_t raw = pcf.readAll(1);
-                    JsonArray pins = exp1["pins"].to<JsonArray>();
-                    const char* exp1Names[] = {"SS_A","SS_B","SS_C","SS_D",
-                                                "SPARE_4","SPARE_5","SPARE_6","SPARE_7",
-                                                "SPARE_8","SPARE_9","SPARE_10","SPARE_11",
-                                                "SPARE_12","SPARE_13","SPARE_14","SPARE_15"};
-                    for (uint8_t i = 0; i < 16; i++) {
-                        JsonObject p = pins.add<JsonObject>();
-                        p["pcfPin"] = i;
-                        p["globalPin"] = PCF_PIN_OFFSET + 16 + i;
-                        p["name"] = exp1Names[i];
-                        p["value"] = (raw & (1 << i)) ? "HIGH" : "LOW";
-                    }
-                }
-            }
+                // Pin names per device
+                const char* devNames[][16] = {
+                    // #0 (200-215) — general I/O
+                    {"FUEL_PUMP","TACH_OUT","CEL","SPARE_3","SPARE_4","SPARE_5","SPARE_6","SPARE_7",
+                     "CJ125_SS1","CJ125_SS2","SPARE_10","SPARE_11","SPARE_12","SPARE_13","SPARE_14","SPARE_15"},
+                    // #1 (216-231) — transmission
+                    {"SS_A","SS_B","SS_C","SS_D","SPARE_4","SPARE_5","SPARE_6","SPARE_7",
+                     "SPARE_8","SPARE_9","SPARE_10","SPARE_11","SPARE_12","SPARE_13","SPARE_14","SPARE_15"},
+                    // #2 (232-247) — expansion
+                    {nullptr}, // all SPARE
+                    // #3 (248-263) — expansion
+                    {nullptr}, // all SPARE
+                    // #4 (264-279) — coils (names generated dynamically)
+                    {nullptr},
+                    // #5 (280-295) — injectors (names generated dynamically)
+                    {nullptr},
+                };
+                const char* devDesc[] = {
+                    "General I/O", "Transmission", "Expansion", "Expansion", "Coils", "Injectors"
+                };
+                uint8_t sharedIntGpio = pcf.getIntGpio();
 
-            // MCP23017 expander #2 (0x22, future expansion)
-            {
-                JsonObject exp2 = expanders.add<JsonObject>();
-                exp2["index"] = 2;
-                exp2["type"] = "MCP23017";
-                char addrStr2[6]; snprintf(addrStr2, sizeof(addrStr2), "0x%02X", pcf.getAddress(2));
-                exp2["address"] = addrStr2;
-                exp2["ready"] = pcf.isReady(2);
-                exp2["sda"] = pcf.getSDA();
-                exp2["scl"] = pcf.getSCL();
-                if (pcf.isReady(2)) {
-                    uint16_t raw = pcf.readAll(2);
-                    JsonArray pins = exp2["pins"].to<JsonArray>();
-                    for (uint8_t i = 0; i < 16; i++) {
-                        JsonObject p = pins.add<JsonObject>();
-                        p["pcfPin"] = i;
-                        p["globalPin"] = PCF_PIN_OFFSET + 32 + i;
-                        char nm[10]; snprintf(nm, sizeof(nm), "SPARE_%d", i);
-                        p["name"] = nm;
-                        p["value"] = (raw & (1 << i)) ? "HIGH" : "LOW";
-                    }
-                }
-            }
-            // MCP23017 expander #3 (0x23, future expansion)
-            {
-                JsonObject exp3 = expanders.add<JsonObject>();
-                exp3["index"] = 3;
-                exp3["type"] = "MCP23017";
-                char addrStr3[6]; snprintf(addrStr3, sizeof(addrStr3), "0x%02X", pcf.getAddress(3));
-                exp3["address"] = addrStr3;
-                exp3["ready"] = pcf.isReady(3);
-                exp3["sda"] = pcf.getSDA();
-                exp3["scl"] = pcf.getSCL();
-                if (pcf.isReady(3)) {
-                    uint16_t raw = pcf.readAll(3);
-                    JsonArray pins = exp3["pins"].to<JsonArray>();
-                    for (uint8_t i = 0; i < 16; i++) {
-                        JsonObject p = pins.add<JsonObject>();
-                        p["pcfPin"] = i;
-                        p["globalPin"] = PCF_PIN_OFFSET + 48 + i;
-                        char nm[10]; snprintf(nm, sizeof(nm), "SPARE_%d", i);
-                        p["name"] = nm;
-                        p["value"] = (raw & (1 << i)) ? "HIGH" : "LOW";
-                    }
-                }
-            }
-            // MCP23S17 expander #0 (SPI, coils)
-            {
-                JsonObject spiExp0 = expanders.add<JsonObject>();
-                spiExp0["index"] = 4;
-                spiExp0["type"] = "MCP23S17";
-                spiExp0["bus"] = "HSPI 10MHz";
-                spiExp0["cs"] = pcf.getSpiCS(0);
-                spiExp0["hwAddr"] = pcf.getSpiHwAddr(0);
-                spiExp0["ready"] = pcf.isSpiReady(0);
-                if (pcf.isSpiReady(0)) {
-                    uint16_t raw = pcf.readAllSpi(0);
-                    JsonArray pins = spiExp0["pins"].to<JsonArray>();
-                    for (uint8_t i = 0; i < 16; i++) {
-                        JsonObject p = pins.add<JsonObject>();
-                        p["spiPin"] = i;
-                        p["globalPin"] = SPI_EXP_PIN_OFFSET + i;
-                        char nm[10];
-                        if (i < 8) snprintf(nm, sizeof(nm), "COIL_%d", i+1);
-                        else snprintf(nm, sizeof(nm), "SPARE_%d", i);
-                        p["name"] = nm;
-                        p["value"] = (raw & (1 << i)) ? "HIGH" : "LOW";
-                    }
-                }
-            }
-            // MCP23S17 expander #1 (SPI, injectors)
-            {
-                JsonObject spiExp1 = expanders.add<JsonObject>();
-                spiExp1["index"] = 5;
-                spiExp1["type"] = "MCP23S17";
-                spiExp1["bus"] = "HSPI 10MHz";
-                spiExp1["cs"] = pcf.getSpiCS(1);
-                spiExp1["hwAddr"] = pcf.getSpiHwAddr(1);
-                spiExp1["ready"] = pcf.isSpiReady(1);
-                if (pcf.isSpiReady(1)) {
-                    uint16_t raw = pcf.readAllSpi(1);
-                    JsonArray pins = spiExp1["pins"].to<JsonArray>();
-                    for (uint8_t i = 0; i < 16; i++) {
-                        JsonObject p = pins.add<JsonObject>();
-                        p["spiPin"] = i;
-                        p["globalPin"] = SPI_EXP_PIN_OFFSET + 16 + i;
-                        char nm[10];
-                        if (i < 8) snprintf(nm, sizeof(nm), "INJ_%d", i+1);
-                        else snprintf(nm, sizeof(nm), "SPARE_%d", i);
-                        p["name"] = nm;
-                        p["value"] = (raw & (1 << i)) ? "HIGH" : "LOW";
+                for (uint8_t d = 0; d < SPI_EXP_MAX; d++) {
+                    JsonObject eo = expanders.add<JsonObject>();
+                    eo["index"] = d;
+                    eo["type"] = "MCP23S17";
+                    eo["bus"] = "HSPI 10MHz";
+                    eo["cs"] = pcf.getCS();
+                    eo["hwAddr"] = pcf.getHwAddr(d);
+                    eo["ready"] = pcf.isReady(d);
+                    eo["desc"] = devDesc[d];
+                    if (sharedIntGpio != 0xFF) eo["intGpio"] = sharedIntGpio;
+                    if (pcf.isReady(d)) {
+                        uint16_t raw = pcf.readAll(d);
+                        JsonArray pins = eo["pins"].to<JsonArray>();
+                        for (uint8_t i = 0; i < 16; i++) {
+                            JsonObject p = pins.add<JsonObject>();
+                            p["pin"] = i;
+                            p["globalPin"] = SPI_EXP_PIN_OFFSET + d * 16 + i;
+                            // Name logic
+                            char nm[12];
+                            if (d <= 1 && devNames[d][0] != nullptr) {
+                                p["name"] = devNames[d][i];
+                            } else if (d == 4 && i < 8) {
+                                snprintf(nm, sizeof(nm), "COIL_%d", i + 1);
+                                p["name"] = nm;
+                            } else if (d == 5 && i < 8) {
+                                snprintf(nm, sizeof(nm), "INJ_%d", i + 1);
+                                p["name"] = nm;
+                            } else {
+                                snprintf(nm, sizeof(nm), "SPARE_%d", i);
+                                p["name"] = nm;
+                            }
+                            p["value"] = (raw & (1 << i)) ? "HIGH" : "LOW";
+                        }
                     }
                 }
             }
@@ -1259,8 +1670,8 @@ void WebHandler::setupRoutes() {
                 adsExp0["type"] = "ADS1115";
                 adsExp0["address"] = "0x48";
                 adsExp0["ready"] = ads0->isReady();
-                adsExp0["sda"] = pcf.getSDA();
-                adsExp0["scl"] = pcf.getSCL();
+                adsExp0["sda"] = pI2cSda;
+                adsExp0["scl"] = pI2cScl;
                 adsExp0["gain"] = "\xc2\xb1" "4.096V";
                 adsExp0["rate"] = "128 SPS";
                 if (ads0->isReady()) {
@@ -1282,8 +1693,8 @@ void WebHandler::setupRoutes() {
                 adsExp1["type"] = "ADS1115";
                 adsExp1["address"] = "0x49";
                 adsExp1["ready"] = ads1->isReady();
-                adsExp1["sda"] = pcf.getSDA();
-                adsExp1["scl"] = pcf.getSCL();
+                adsExp1["sda"] = pI2cSda;
+                adsExp1["scl"] = pI2cScl;
                 adsExp1["gain"] = "\xc2\xb1" "6.144V";
                 adsExp1["rate"] = "860 SPS";
                 if (ads1->isReady()) {
@@ -1385,6 +1796,43 @@ void WebHandler::setupRoutes() {
                 }
             }
 
+            // Custom pins with inMap flag → inject into inputs/outputs tables
+            {
+                CustomPinManager* cpm = _ecu ? _ecu->getCustomPins() : nullptr;
+                if (cpm) {
+                    for (uint8_t i = 0; i < MAX_CUSTOM_PINS; i++) {
+                        const CustomPinDescriptor* cp = cpm->getDescriptor(i);
+                        if (cp->mode == CPIN_DISABLED || !cp->inMap) continue;
+                        bool isInput = (cp->mode <= CPIN_ANALOG_IN);  // poll, isr, timer, analog
+                        JsonArray& arr = isInput ? inputs : outputs;
+                        JsonObject o = arr.add<JsonObject>();
+                        o["pin"] = cp->pin;
+                        o["name"] = cp->name;
+                        o["custom"] = true;
+                        if (cp->mode == CPIN_ANALOG_IN) {
+                            o["type"] = "analog"; o["mode"] = "Custom ADC";
+                            o["raw"] = (int)cp->value; o["mV"] = (int)(cp->value * 3300.0f / 4095.0f);
+                        } else if (cp->mode == CPIN_PWM_OUT) {
+                            o["type"] = "pwm"; o["mode"] = "Custom PWM";
+                            uint32_t maxDuty = (1 << cp->pwmResolution) - 1;
+                            o["percent"] = maxDuty > 0 ? (cp->value / maxDuty) * 100.0f : 0;
+                        } else if (cp->mode == CPIN_INPUT_ISR) {
+                            o["type"] = "digital"; o["mode"] = "Custom ISR";
+                            o["value"] = String((uint32_t)cp->value) + " pulses";
+                        } else if (cp->mode == CPIN_OUTPUT) {
+                            o["type"] = "digital"; o["mode"] = "Custom OUT";
+                            o["value"] = cp->value > 0.5f ? "ON" : "OFF";
+                        } else {
+                            o["type"] = "digital";
+                            o["mode"] = cp->mode == CPIN_INPUT_TIMER ? "Custom Timer" : "Custom Poll";
+                            o["value"] = cp->value > 0.5f ? "HIGH" : "LOW";
+                        }
+                        const char* vlt = (cp->pin >= 200) ? "5V" : "3.3V";
+                        o["voltage"] = vlt;
+                    }
+                }
+            }
+
             // Crank sync state
             if (_ecu) {
                 CrankSensor* crank = _ecu->getCrankSensor();
@@ -1402,6 +1850,171 @@ void WebHandler::setupRoutes() {
         }
         serveFile(r, "/pins.html");
     });
+
+    // Custom pins — GET all descriptors + rules + live values
+    _server.on("/custom-pins", HTTP_GET, [this](AsyncWebServerRequest* r) {
+        if (r->hasParam("format") && r->getParam("format")->value() == "json") {
+            CustomPinManager* cpm = _ecu ? _ecu->getCustomPins() : nullptr;
+            JsonDocument doc;
+            JsonArray pinsArr = doc["pins"].to<JsonArray>();
+            JsonArray rulesArr = doc["rules"].to<JsonArray>();
+            if (cpm) {
+                for (uint8_t i = 0; i < MAX_CUSTOM_PINS; i++) {
+                    const CustomPinDescriptor* p = cpm->getDescriptor(i);
+                    if (p->mode == CPIN_DISABLED && p->name[0] == 0) continue;
+                    JsonObject po = pinsArr.add<JsonObject>();
+                    po["slot"] = i;
+                    po["name"] = p->name;
+                    po["pin"] = p->pin;
+                    po["mode"] = (int)p->mode;
+                    po["isrEdge"] = (int)p->isrEdge;
+                    po["interval"] = p->intervalMs;
+                    po["pwmFreq"] = p->pwmFreq;
+                    po["pwmRes"] = p->pwmResolution;
+                    po["cron"] = p->cron;
+                    po["inMap"] = p->inMap;
+                    po["value"] = p->value;
+                    po["isrCount"] = (uint32_t)p->isrCount;
+                    po["initialized"] = p->initialized;
+                }
+                for (uint8_t i = 0; i < MAX_OUTPUT_RULES; i++) {
+                    const OutputRule* rl = cpm->getRule(i);
+                    if (!rl->enabled && rl->targetPin >= MAX_CUSTOM_PINS) continue;
+                    JsonObject ro = rulesArr.add<JsonObject>();
+                    ro["slot"] = i;
+                    ro["name"] = rl->name;
+                    ro["enabled"] = rl->enabled;
+                    ro["sourceType"] = (int)rl->sourceType;
+                    ro["sourceSlot"] = rl->sourceSlot;
+                    ro["sourceTypeB"] = (int)rl->sourceTypeB;
+                    ro["sourceSlotB"] = rl->sourceSlotB;
+                    ro["op"] = (int)rl->op;
+                    ro["thresholdA"] = rl->thresholdA;
+                    ro["thresholdB"] = rl->thresholdB;
+                    ro["hysteresis"] = rl->hysteresis;
+                    ro["targetPin"] = rl->targetPin;
+                    ro["onValue"] = rl->onValue;
+                    ro["offValue"] = rl->offValue;
+                    ro["debounce"] = rl->debounceMs;
+                    ro["running"] = rl->requireRunning;
+                    ro["gateRpmMin"] = rl->gateRpmMin;
+                    ro["gateRpmMax"] = rl->gateRpmMax;
+                    if (!isnan(rl->gateMapMin)) ro["gateMapMin"] = rl->gateMapMin;
+                    if (!isnan(rl->gateMapMax)) ro["gateMapMax"] = rl->gateMapMax;
+                    ro["curveSource"] = rl->curveSource;
+                    ro["active"] = rl->active;
+                }
+            }
+            String json;
+            serializeJson(doc, json);
+            r->send(200, "application/json", json);
+            return;
+        }
+        serveFile(r, "/pins.html");
+    });
+    // Custom pins — POST save config
+    auto* cpinPostHandler = new AsyncCallbackJsonWebHandler("/custom-pins", [this](AsyncWebServerRequest* r, JsonVariant& json) {
+        if (!checkAuth(r)) return;
+        CustomPinManager* cpm = _ecu ? _ecu->getCustomPins() : nullptr;
+        if (!cpm) { r->send(503, "text/plain", "ECU not available"); return; }
+        JsonObject data = json.as<JsonObject>();
+
+        // Update pin descriptors
+        JsonArray pinsArr = data["pins"];
+        if (pinsArr) {
+            cpm->stop();
+            for (uint8_t i = 0; i < MAX_CUSTOM_PINS; i++) {
+                CustomPinDescriptor* p = cpm->getDescriptor(i);
+                p->clear();
+            }
+            for (uint8_t i = 0; i < MAX_CUSTOM_PINS && i < pinsArr.size(); i++) {
+                JsonObject po = pinsArr[i];
+                uint8_t slot = po["slot"] | i;
+                if (slot >= MAX_CUSTOM_PINS) continue;
+                CustomPinDescriptor* p = cpm->getDescriptor(slot);
+                const char* nm = po["name"];
+                if (nm) strncpy(p->name, nm, sizeof(p->name) - 1);
+                p->pin = po["pin"] | 0;
+                p->mode = (CustomPinMode)(int)(po["mode"] | 0);
+                p->isrEdge = (IsrEdge)(int)(po["isrEdge"] | 0);
+                p->intervalMs = po["interval"] | 1000;
+                p->pwmFreq = po["pwmFreq"] | 25000;
+                p->pwmResolution = po["pwmRes"] | 8;
+                const char* cr = po["cron"];
+                if (cr) strncpy(p->cron, cr, sizeof(p->cron) - 1);
+                p->inMap = po["inMap"] | false;
+            }
+            // Update output rules
+            JsonArray rulesArr = data["rules"];
+            if (rulesArr) {
+                for (uint8_t i = 0; i < MAX_OUTPUT_RULES; i++) {
+                    OutputRule* rl = cpm->getRule(i);
+                    rl->clear();
+                }
+                for (uint8_t i = 0; i < MAX_OUTPUT_RULES && i < rulesArr.size(); i++) {
+                    JsonObject ro = rulesArr[i];
+                    uint8_t slot = ro["slot"] | i;
+                    if (slot >= MAX_OUTPUT_RULES) continue;
+                    OutputRule* rl = cpm->getRule(slot);
+                    const char* rname = ro["name"];
+                    if (rname) strncpy(rl->name, rname, sizeof(rl->name) - 1);
+                    rl->enabled = ro["enabled"] | false;
+                    rl->sourceType = (OutputRuleSource)(int)(ro["sourceType"] | 0);
+                    rl->sourceSlot = ro["sourceSlot"] | 0xFF;
+                    rl->sourceTypeB = (OutputRuleSource)(int)(ro["sourceTypeB"] | 0);
+                    rl->sourceSlotB = ro["sourceSlotB"] | 0xFF;
+                    rl->op = (OutputRuleOp)(int)(ro["op"] | 0);
+                    rl->thresholdA = ro["thresholdA"] | 0.0f;
+                    rl->thresholdB = ro["thresholdB"] | 0.0f;
+                    rl->hysteresis = ro["hysteresis"] | 0.0f;
+                    rl->targetPin = ro["targetPin"] | 0xFF;
+                    rl->onValue = ro["onValue"] | 1;
+                    rl->offValue = ro["offValue"] | 0;
+                    rl->debounceMs = ro["debounce"] | 0;
+                    rl->requireRunning = ro["running"] | false;
+                    rl->gateRpmMin = ro["gateRpmMin"] | 0;
+                    rl->gateRpmMax = ro["gateRpmMax"] | 0;
+                    rl->gateMapMin = ro["gateMapMin"].is<float>() ? (float)ro["gateMapMin"] : NAN;
+                    rl->gateMapMax = ro["gateMapMax"].is<float>() ? (float)ro["gateMapMax"] : NAN;
+                    rl->curveSource = ro["curveSource"] | 0xFF;
+                    if (rl->curveSource != 0xFF) {
+                        JsonArray cx = ro["curveX"];
+                        JsonArray cy = ro["curveY"];
+                        for (uint8_t j = 0; j < 6; j++) {
+                            rl->curveX[j] = (cx && j < cx.size()) ? (float)cx[j] : 0.0f;
+                            rl->curveY[j] = (cy && j < cy.size()) ? (float)cy[j] : 0.0f;
+                        }
+                    }
+                }
+            }
+            cpm->begin();
+            // Save to SD
+            if (_config) {
+                _config->saveCustomPins("/custom-pins.json",
+                    cpm->getDescriptors(), MAX_CUSTOM_PINS,
+                    cpm->getRules(), MAX_OUTPUT_RULES);
+            }
+        }
+        r->send(200, "application/json", "{\"ok\":true}");
+    });
+    _server.addHandler(cpinPostHandler);
+
+    // Custom pins — manual output control
+    auto* cpinOutputHandler = new AsyncCallbackJsonWebHandler("/custom-pins/output", [this](AsyncWebServerRequest* r, JsonVariant& json) {
+        if (!checkAuth(r)) return;
+        CustomPinManager* cpm = _ecu ? _ecu->getCustomPins() : nullptr;
+        if (!cpm) { r->send(503, "text/plain", "ECU not available"); return; }
+        JsonObject data = json.as<JsonObject>();
+        uint8_t slot = data["slot"] | 0xFF;
+        float value = data["value"] | 0.0f;
+        if (slot < MAX_CUSTOM_PINS) {
+            cpm->setOutput(slot, value);
+            r->send(200, "application/json", "{\"ok\":true}");
+        } else {
+            r->send(400, "text/plain", "Invalid slot");
+        }
+    });
+    _server.addHandler(cpinOutputHandler);
 
     // FTP
     _server.on("/ftp", HTTP_GET, [this](AsyncWebServerRequest* r) {

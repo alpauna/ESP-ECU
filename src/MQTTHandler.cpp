@@ -1,6 +1,9 @@
 #include "MQTTHandler.h"
 #include "ECU.h"
 #include "TransmissionManager.h"
+#include "IgnitionManager.h"
+#include "InjectionManager.h"
+#include "AlternatorControl.h"
 #include <ArduinoJson.h>
 
 MQTTHandler::MQTTHandler(Scheduler* ts)
@@ -54,6 +57,7 @@ void MQTTHandler::publishState() {
     doc["sequential"] = s.sequentialMode;
     doc["limp"] = s.limpMode;
     doc["limpFaults"] = s.limpFaults;
+    doc["celFaults"] = s.celFaults;
     doc["oilPsi"] = s.oilPressurePsi;
     doc["oilLow"] = s.oilPressureLow;
     doc["expFaults"] = s.expanderFaults;
@@ -74,7 +78,27 @@ void MQTTHandler::publishState() {
         transObj["slip"] = ts.slipRpm;
     }
 
-    char buf[768];
+    // Output states
+    if (IgnitionManager* ign = _ecu->getIgnitionManager()) {
+        doc["revLim"] = ign->isRevLimiting();
+        doc["dwell"] = ign->getDwellMs();
+    }
+    if (InjectionManager* inj = _ecu->getInjectionManager()) {
+        doc["fuelCut"] = inj->isFuelCut();
+    }
+    if (AlternatorControl* alt = _ecu->getAlternator()) {
+        doc["altDuty"] = alt->getDuty();
+        doc["altOV"] = alt->isOvervoltage();
+    }
+    // Fuel pump / ASE / DFCO / overdwell
+    const EngineState& es = _ecu->getState();
+    doc["fuelPump"] = es.fuelPumpOn;
+    doc["ase"] = es.aseActive;
+    doc["asePct"] = es.asePct;
+    doc["dfco"] = es.dfcoActive;
+    doc["overdwell"] = es.overdwellCount;
+
+    char buf[1024];
     size_t len = serializeJson(doc, buf, sizeof(buf));
     _client.publish("ecu/state", 0, false, buf, len);
 }

@@ -12,6 +12,9 @@
 #include "WebHandler.h"
 #include "MQTTHandler.h"
 #include "ECU.h"
+#include "CustomPin.h"
+#include "SensorManager.h"
+#include <Preferences.h>
 #include "FuelManager.h"
 #include "TuneTable.h"
 #include <esp_log.h>
@@ -53,12 +56,11 @@ static const char* getResetReasonStr(esp_reset_reason_t r) {
 
 extern const char compile_date[] = __DATE__ " " __TIME__;
 
-// SD card SPI pins (ESP32-S3)
-// GPIO45/46 are strapping pins, OK after boot. GPIO33-37 reserved by OPI PSRAM
-static const uint8_t SD_CLK  = 47;
-static const uint8_t SD_MISO = 48;
-static const uint8_t SD_MOSI = 38;
-static const uint8_t SD_CS   = 39;
+// SD card SPI pins — read from NVS on boot (bootstrap before SD card init)
+static uint8_t SD_CLK  = 47;
+static uint8_t SD_MISO = 48;
+static uint8_t SD_MOSI = 38;
+static uint8_t SD_CS   = 39;
 
 // Config and networking
 Config config;
@@ -151,10 +153,32 @@ ProjectInfo proj = {
     10,                          // pinHspiSck
     11,                          // pinHspiMosi
     12,                          // pinHspiMiso
-    13,                          // pinHspiCsCoils
-    14,                          // pinHspiCsInj
+    13,                          // pinHspiCs (shared CS for all MCP23S17)
+    15,                          // pinMcp3204Cs
     0,                           // pinI2cSda
     42,                          // pinI2cScl
+    // Expander outputs (MCP23S17 #0)
+    200,                         // pinFuelPump
+    201,                         // pinTachOut
+    202,                         // pinCel
+    208,                         // pinCj125Ss1
+    209,                         // pinCj125Ss2
+    // Transmission solenoids (MCP23S17 #1)
+    216,                         // pinSsA
+    217,                         // pinSsB
+    218,                         // pinSsC
+    219,                         // pinSsD
+    // SD card SPI
+    47,                          // pinSdClk
+    48,                          // pinSdMiso
+    38,                          // pinSdMosi
+    39,                          // pinSdCs
+    // Shared expander interrupt GPIO (0xFF = not connected)
+    0xFF,                        // pinSharedInt
+    // Coil pins — MCP23S17 #4 (8 active + 4 spare)
+    {264,265,266,267,268,269,270,271,0,0,0,0},
+    // Injector pins — MCP23S17 #5 (8 active + 4 spare)
+    {280,281,282,283,284,285,286,287,0,0,0,0},
     // Safe mode / peripheral control
     false,                       // forceSafeMode
     true,                        // i2cEnabled
@@ -163,8 +187,8 @@ ProjectInfo proj = {
     true,                        // expander1Enabled
     true,                        // expander2Enabled
     true,                        // expander3Enabled
-    true,                        // spiExp0Enabled
-    true                         // spiExp1Enabled
+    true,                        // expander4Enabled
+    true                         // expander5Enabled
 };
 
 // Core objects
@@ -223,6 +247,12 @@ Task tWifiSignal(TASK_MINUTE, TASK_FOREVER, []() {
 // Save config to SD every 5 minutes
 Task tSaveConfig(5 * TASK_MINUTE, TASK_FOREVER, []() {
     config.updateConfig(_filename, proj);
+    // Also save sensor descriptors and fault rules
+    if (!_safeMode) {
+        SensorManager* sm = ecu.getSensorManager();
+        config.saveSensorConfig(_filename, sm->getDescriptor(0), MAX_SENSORS,
+                                sm->getRule(0), MAX_RULES);
+    }
     Log.debug("MAIN", "Config saved to SD");
 }, &ts, false);
 
@@ -314,6 +344,17 @@ void setup() {
                       _bootCount, _resetReasonStr);
     } else {
         Serial.printf("[BOOT] Reset: %s, boot count: %lu\n", _resetReasonStr, _bootCount);
+    }
+
+    // Read SD card pins from NVS (bootstrap — config is ON the SD card)
+    {
+        Preferences prefs;
+        prefs.begin("sdpins", true);  // read-only
+        SD_CLK  = prefs.getUChar("clk",  47);
+        SD_MISO = prefs.getUChar("miso", 48);
+        SD_MOSI = prefs.getUChar("mosi", 38);
+        SD_CS   = prefs.getUChar("cs",   39);
+        prefs.end();
     }
 
     // Initialize SD card with custom SPI pins
@@ -441,11 +482,32 @@ void setup() {
             }
         }
 
+        // Load sensor descriptors and fault rules from config (overrides defaults if present)
+        {
+            SensorManager* sm = ecu.getSensorManager();
+            if (!config.loadSensorConfig(_filename, sm->getDescriptor(0), MAX_SENSORS,
+                                          sm->getRule(0), MAX_RULES)) {
+                // No sensors[] in config — defaults from initDefaultDescriptors() are used
+                // First updateConfig will write the new sensors[] array
+            }
+        }
+
         ecu.setFaultCallback([](const char* fault, const char* msg, bool active) {
             mqttHandler.publishFault(fault, msg, active);
         });
 
         ecu.begin();
+
+        // Load custom pin descriptors and output rules
+        {
+            CustomPinManager* cpm = ecu.getCustomPins();
+            if (cpm) {
+                config.loadCustomPins("/custom-pins.json",
+                    cpm->getDescriptor(0), MAX_CUSTOM_PINS,
+                    cpm->getRule(0), MAX_OUTPUT_RULES);
+                cpm->begin();
+            }
+        }
 
         // Suppress Wire I2C error spam globally — non-present I2C devices generate noise
         esp_log_level_set("Wire", ESP_LOG_NONE);

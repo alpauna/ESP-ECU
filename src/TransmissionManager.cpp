@@ -36,7 +36,7 @@ void TransmissionManager::configure(const ProjectInfo& proj) {
     Log.info("TRANS", "Configured: %s", typeToString(_type));
 }
 
-void TransmissionManager::begin(uint8_t ssAPin, uint8_t ssBPin, uint8_t ssCPin, uint8_t ssDPin,
+void TransmissionManager::begin(uint16_t ssAPin, uint16_t ssBPin, uint16_t ssCPin, uint16_t ssDPin,
                                  uint8_t tccPin, uint8_t epcPin, uint8_t ossPin, uint8_t tssPin) {
     _ssAPin = ssAPin;
     _ssBPin = ssBPin;
@@ -47,7 +47,7 @@ void TransmissionManager::begin(uint8_t ssAPin, uint8_t ssBPin, uint8_t ssCPin, 
     _ossPin = ossPin;
     _tssPin = tssPin;
 
-    // Shift solenoids — MCP23017 outputs
+    // Shift solenoids — MCP23S17 outputs
     xPinMode(_ssAPin, OUTPUT);
     xDigitalWrite(_ssAPin, LOW);
     xPinMode(_ssBPin, OUTPUT);
@@ -375,7 +375,7 @@ void TransmissionManager::updateEPC(float tps) {
     }
 }
 
-void TransmissionManager::setSolenoid(uint8_t pin, bool on) {
+void TransmissionManager::setSolenoid(uint16_t pin, bool on) {
     xDigitalWrite(pin, on ? HIGH : LOW);
 }
 

@@ -1,0 +1,156 @@
+{
+  "sensors": [
+    {
+      "name": "Oil PSI",
+      "unit": "PSI",
+      "source": { "type": 4, "device": 0, "channel": 2, "pin": 0 },
+      "cal": { "type": 0, "a": 0.5, "b": 4.5, "c": 0, "d": 100 },
+      "filter": { "ema": 0.3, "avg": 2 },
+      "validate": { "errorMin": null, "errorMax": null, "warnMin": 15, "warnMax": null },
+      "fault": { "bit": 6, "action": 1 },
+      "activeStates": 4
+    },
+    {
+      "name": "Oil SW",
+      "unit": "bool",
+      "source": { "type": 5, "device": 0, "channel": 0, "pin": 0 },
+      "cal": { "type": 4, "a": 0, "b": 0, "c": 0, "d": 0 },
+      "filter": { "ema": 0, "avg": 1 },
+      "validate": { "errorMin": null, "errorMax": null, "warnMin": null, "warnMax": null },
+      "fault": { "bit": 6, "action": 2 },
+      "activeStates": 4
+    },
+    {
+      "name": "Fuel Pump",
+      "unit": "bool",
+      "source": { "type": 5, "device": 0, "channel": 1, "pin": 0 },
+      "cal": { "type": 4, "a": 0, "b": 0, "c": 0, "d": 0 },
+      "filter": { "ema": 0, "avg": 1 },
+      "validate": { "errorMin": null, "errorMax": null, "warnMin": null, "warnMax": null },
+      "fault": { "bit": 255, "action": 0 },
+      "activeStates": 7
+    },
+    {
+      "name": "RPM",
+      "unit": "RPM",
+      "source": { "type": 6, "device": 0, "channel": 0, "pin": 0 },
+      "cal": { "type": 4, "a": 0, "b": 0, "c": 0, "d": 0 },
+      "filter": { "ema": 0, "avg": 1 },
+      "validate": { "errorMin": null, "errorMax": null, "warnMin": null, "warnMax": 6500 },
+      "fault": { "bit": 255, "action": 0 },
+      "activeStates": 6
+    },
+    {
+      "name": "MAP",
+      "unit": "kPa",
+      "source": { "type": 6, "device": 0, "channel": 1, "pin": 0 },
+      "cal": { "type": 4, "a": 0, "b": 0, "c": 0, "d": 0 },
+      "filter": { "ema": 0, "avg": 1 },
+      "validate": { "errorMin": null, "errorMax": null, "warnMin": null, "warnMax": null },
+      "fault": { "bit": 255, "action": 0 },
+      "activeStates": 7
+    },
+    {
+      "name": "TPS",
+      "unit": "%",
+      "source": { "type": 6, "device": 0, "channel": 2, "pin": 0 },
+      "cal": { "type": 4, "a": 0, "b": 0, "c": 0, "d": 0 },
+      "filter": { "ema": 0, "avg": 1 },
+      "validate": { "errorMin": null, "errorMax": null, "warnMin": null, "warnMax": null },
+      "fault": { "bit": 255, "action": 0 },
+      "activeStates": 7
+    },
+    {
+      "name": "CLT",
+      "unit": "\u00b0F",
+      "source": { "type": 6, "device": 0, "channel": 5, "pin": 0 },
+      "cal": { "type": 4, "a": 0, "b": 0, "c": 0, "d": 0 },
+      "filter": { "ema": 0, "avg": 1 },
+      "validate": { "errorMin": null, "errorMax": null, "warnMin": null, "warnMax": null },
+      "fault": { "bit": 255, "action": 0 },
+      "activeStates": 7
+    },
+    {
+      "name": "VBAT",
+      "unit": "V",
+      "source": { "type": 6, "device": 0, "channel": 7, "pin": 0 },
+      "cal": { "type": 4, "a": 0, "b": 0, "c": 0, "d": 0 },
+      "filter": { "ema": 0, "avg": 1 },
+      "validate": { "errorMin": null, "errorMax": null, "warnMin": null, "warnMax": null },
+      "fault": { "bit": 255, "action": 0 },
+      "activeStates": 7
+    },
+    {
+      "name": "Alt Duty",
+      "unit": "%",
+      "source": { "type": 7, "device": 0, "channel": 0, "pin": 0 },
+      "cal": { "type": 4, "a": 0, "b": 0, "c": 0, "d": 0 },
+      "filter": { "ema": 0, "avg": 1 },
+      "validate": { "errorMin": null, "errorMax": null, "warnMin": null, "warnMax": null },
+      "fault": { "bit": 255, "action": 0 },
+      "activeStates": 4
+    },
+    {
+      "name": "Rev Lim",
+      "unit": "bool",
+      "source": { "type": 7, "device": 0, "channel": 2, "pin": 0 },
+      "cal": { "type": 4, "a": 0, "b": 0, "c": 0, "d": 0 },
+      "filter": { "ema": 0, "avg": 1 },
+      "validate": { "errorMin": null, "errorMax": null, "warnMin": null, "warnMax": null },
+      "fault": { "bit": 255, "action": 0 },
+      "activeStates": 4
+    },
+    {
+      "name": "Fuel Cut",
+      "unit": "bool",
+      "source": { "type": 7, "device": 0, "channel": 3, "pin": 0 },
+      "cal": { "type": 4, "a": 0, "b": 0, "c": 0, "d": 0 },
+      "filter": { "ema": 0, "avg": 1 },
+      "validate": { "errorMin": null, "errorMax": null, "warnMin": null, "warnMax": null },
+      "fault": { "bit": 255, "action": 0 },
+      "activeStates": 4
+    },
+    {
+      "name": "Limp",
+      "unit": "bool",
+      "source": { "type": 6, "device": 0, "channel": 13, "pin": 0 },
+      "cal": { "type": 4, "a": 0, "b": 0, "c": 0, "d": 0 },
+      "filter": { "ema": 0, "avg": 1 },
+      "validate": { "errorMin": null, "errorMax": null, "warnMin": null, "warnMax": null },
+      "fault": { "bit": 255, "action": 0 },
+      "activeStates": 7
+    },
+    { "name": "", "unit": "", "source": { "type": 0, "device": 0, "channel": 0, "pin": 0 }, "cal": { "type": 4, "a": 0, "b": 0, "c": 0, "d": 0 }, "filter": { "ema": 0.3, "avg": 1 }, "validate": {}, "fault": { "bit": 255, "action": 0 }, "activeStates": 7 },
+    { "name": "", "unit": "", "source": { "type": 0, "device": 0, "channel": 0, "pin": 0 }, "cal": { "type": 4, "a": 0, "b": 0, "c": 0, "d": 0 }, "filter": { "ema": 0.3, "avg": 1 }, "validate": {}, "fault": { "bit": 255, "action": 0 }, "activeStates": 7 },
+    { "name": "", "unit": "", "source": { "type": 0, "device": 0, "channel": 0, "pin": 0 }, "cal": { "type": 4, "a": 0, "b": 0, "c": 0, "d": 0 }, "filter": { "ema": 0.3, "avg": 1 }, "validate": {}, "fault": { "bit": 255, "action": 0 }, "activeStates": 7 },
+    { "name": "", "unit": "", "source": { "type": 0, "device": 0, "channel": 0, "pin": 0 }, "cal": { "type": 4, "a": 0, "b": 0, "c": 0, "d": 0 }, "filter": { "ema": 0.3, "avg": 1 }, "validate": {}, "fault": { "bit": 255, "action": 0 }, "activeStates": 7 }
+  ],
+  "rules": [
+    {
+      "name": "Low Oil Run",
+      "sensor": 0, "sensorB": 255, "op": 0,
+      "a": 10, "b": 0,
+      "bit": 6, "action": 1, "debounce": 3000, "running": true,
+      "gateRpmMin": 1000, "gateRpmMax": 0,
+      "gateMapMin": null, "gateMapMax": null,
+      "curveSource": 0,
+      "curveX": [1000, 2000, 3000, 4000, 5000, 6000],
+      "curveY": [10, 18, 25, 32, 40, 48]
+    },
+    {
+      "name": "Oil SW Off",
+      "sensor": 1, "sensorB": 255, "op": 0,
+      "a": 1, "b": 0,
+      "bit": 6, "action": 2, "debounce": 5000, "running": true,
+      "gateRpmMin": 800, "gateRpmMax": 0,
+      "gateMapMin": null, "gateMapMax": null,
+      "curveSource": 255
+    },
+    { "name": "", "sensor": 255, "sensorB": 255, "op": 0, "a": 0, "b": 0, "bit": 255, "action": 0, "debounce": 0, "running": false, "gateRpmMin": 0, "gateRpmMax": 0, "gateMapMin": null, "gateMapMax": null, "curveSource": 255 },
+    { "name": "", "sensor": 255, "sensorB": 255, "op": 0, "a": 0, "b": 0, "bit": 255, "action": 0, "debounce": 0, "running": false, "gateRpmMin": 0, "gateRpmMax": 0, "gateMapMin": null, "gateMapMax": null, "curveSource": 255 },
+    { "name": "", "sensor": 255, "sensorB": 255, "op": 0, "a": 0, "b": 0, "bit": 255, "action": 0, "debounce": 0, "running": false, "gateRpmMin": 0, "gateRpmMax": 0, "gateMapMin": null, "gateMapMax": null, "curveSource": 255 },
+    { "name": "", "sensor": 255, "sensorB": 255, "op": 0, "a": 0, "b": 0, "bit": 255, "action": 0, "debounce": 0, "running": false, "gateRpmMin": 0, "gateRpmMax": 0, "gateMapMin": null, "gateMapMax": null, "curveSource": 255 },
+    { "name": "", "sensor": 255, "sensorB": 255, "op": 0, "a": 0, "b": 0, "bit": 255, "action": 0, "debounce": 0, "running": false, "gateRpmMin": 0, "gateRpmMax": 0, "gateMapMin": null, "gateMapMax": null, "curveSource": 255 },
+    { "name": "", "sensor": 255, "sensorB": 255, "op": 0, "a": 0, "b": 0, "bit": 255, "action": 0, "debounce": 0, "running": false, "gateRpmMin": 0, "gateRpmMax": 0, "gateMapMin": null, "gateMapMax": null, "curveSource": 255 }
+  ]
+}

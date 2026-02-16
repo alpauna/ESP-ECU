@@ -11,7 +11,7 @@ public:
     InjectionManager();
     ~InjectionManager();
 
-    void begin(uint8_t numCylinders, const uint8_t* injectorPins, const uint8_t* firingOrder);
+    void begin(uint8_t numCylinders, const uint16_t* injectorPins, const uint8_t* firingOrder);
 
     void setPulseWidthUs(float pw);
     void setDeadTimeMs(float dt);
@@ -29,7 +29,7 @@ public:
 
 private:
     uint8_t _numCylinders;
-    uint8_t _injectorPins[MAX_CYLINDERS];
+    uint16_t _injectorPins[MAX_CYLINDERS];
     uint8_t _firingOrder[MAX_CYLINDERS];
     float _basePulseWidthUs;
     float _deadTimeMs;

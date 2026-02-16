@@ -57,7 +57,20 @@ void FuelManager::update(EngineState& state) {
         state.targetAfr = _targetAfr;
         state.injPulseWidthUs = _basePulseWidthUs;
         _prevTps = tps;
+        _wasCranking = true;
+        _aseActive = false;
+        _aseStartMs = 0;
         return;
+    }
+
+    // ASE: trigger on cranking→running transition when CLT below threshold
+    if (_wasCranking && state.engineRunning) {
+        _wasCranking = false;
+        if (state.coolantTempF < _aseMinCltF) {
+            _aseActive = true;
+            _aseStartMs = millis();
+            _aseCurrentPct = _aseInitialPct;
+        }
     }
 
     // VE table lookup
@@ -86,6 +99,18 @@ void FuelManager::update(EngineState& state) {
     float warmupMult = calculateWarmupEnrichment(state.coolantTempF);
     _basePulseWidthUs *= warmupMult;
 
+    // After-Start Enrichment (linear decay)
+    if (_aseActive) {
+        uint32_t elapsed = millis() - _aseStartMs;
+        if (elapsed >= _aseDurationMs) {
+            _aseActive = false;
+            _aseCurrentPct = 0.0f;
+        } else {
+            _aseCurrentPct = _aseInitialPct * (1.0f - (float)elapsed / _aseDurationMs);
+        }
+        _basePulseWidthUs *= (1.0f + _aseCurrentPct / 100.0f);
+    }
+
     // Acceleration enrichment (TPS-based)
     float accelAdd = calculateAccelEnrichment(tps);
     _basePulseWidthUs += accelAdd;
@@ -97,6 +122,27 @@ void FuelManager::update(EngineState& state) {
         // Average correction from both banks
         float avgCorrection = (_o2Bank[0].correction + _o2Bank[1].correction) / 2.0f;
         _basePulseWidthUs *= (1.0f + avgCorrection);
+    }
+
+    // DFCO: cut fuel on deceleration (high RPM + closed throttle)
+    if (!state.cranking && _dfcoRpmThreshold > 0) {
+        bool dfcoCondition = (rpm >= _dfcoRpmThreshold && tps < _dfcoTpsThreshold);
+        bool exitCondition = (rpm < _dfcoExitRpm || tps > _dfcoExitTps);
+        if (_dfcoActive) {
+            if (exitCondition) {
+                _dfcoActive = false;
+                _dfcoEntryStart = 0;
+            } else {
+                _basePulseWidthUs = 0;
+            }
+        } else if (dfcoCondition) {
+            if (_dfcoEntryStart == 0) _dfcoEntryStart = millis();
+            if (millis() - _dfcoEntryStart >= _dfcoEntryDelayMs) {
+                _dfcoActive = true;
+            }
+        } else {
+            _dfcoEntryStart = 0;
+        }
     }
 
     // Clamp and update state
@@ -145,4 +191,19 @@ bool FuelManager::isInClosedLoopWindow(uint16_t rpm, float mapKpa) const {
     return rpm >= _closedLoopMinRpm &&
            rpm <= _closedLoopMaxRpm &&
            mapKpa <= _closedLoopMaxMapKpa;
+}
+
+void FuelManager::setAseParams(float initialPct, uint32_t durationMs, float minCltF) {
+    _aseInitialPct = initialPct;
+    _aseDurationMs = durationMs;
+    _aseMinCltF = minCltF;
+}
+
+void FuelManager::setDfcoParams(uint16_t rpmThresh, float tpsThresh, uint32_t delayMs,
+                                 uint16_t exitRpm, float exitTps) {
+    _dfcoRpmThreshold = rpmThresh;
+    _dfcoTpsThreshold = tpsThresh;
+    _dfcoEntryDelayMs = delayMs;
+    _dfcoExitRpm = exitRpm;
+    _dfcoExitTps = exitTps;
 }

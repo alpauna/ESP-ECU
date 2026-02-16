@@ -15,9 +15,25 @@
     "pinHspiSck": 10,
     "pinHspiMosi": 11,
     "pinHspiMiso": 12,
-    "pinHspiCsCoils": 13,
-    "pinHspiCsInj": 14,
+    "pinHspiCs": 13,
+    "pinMcp3204Cs": 15,
     "pinI2cSda": 0,
-    "pinI2cScl": 42
+    "pinI2cScl": 42,
+    "pinFuelPump": 200,
+    "pinTachOut": 201,
+    "pinCel": 202,
+    "pinCj125Ss1": 208,
+    "pinCj125Ss2": 209,
+    "pinSsA": 216,
+    "pinSsB": 217,
+    "pinSsC": 218,
+    "pinSsD": 219,
+    "pinSdClk": 47,
+    "pinSdMiso": 48,
+    "pinSdMosi": 38,
+    "pinSdCs": 39,
+    "pinSharedInt": 255,
+    "coilPins": [264, 265, 266, 267, 268, 269, 270, 271],
+    "injectorPins": [280, 281, 282, 283, 284, 285, 286, 287]
   }
 }

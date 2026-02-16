@@ -1,0 +1,521 @@
+<html><head><title>Sensors - ESP-ECU</title>
+<meta name='viewport' content='width=device-width,initial-scale=1'>
+<link rel='stylesheet' href='/theme.css'>
+<script>document.documentElement.dataset.theme=localStorage.getItem('hp-theme')||'dark'</script>
+<style>
+body{font-family:Arial,sans-serif;margin:0;padding:0;background:var(--bg);color:var(--text);}
+nav{background:var(--nav-bg);padding:10px 20px;display:flex;align-items:center;gap:18px;}
+nav a{color:#fff;text-decoration:none;font-size:14px;padding:6px 12px;border-radius:4px;}
+nav a:hover,nav a.active{background:#4CAF50;}
+nav .brand{font-weight:bold;font-size:16px;margin-right:auto;color:#fff;}
+.content{max-width:1400px;margin:10px auto;padding:0 15px;}
+h2{color:var(--text);margin:18px 0 8px;font-size:15px;border-bottom:2px solid #4CAF50;padding-bottom:4px;text-transform:uppercase;letter-spacing:0.5px;}
+fieldset{border:1px solid var(--border);border-radius:6px;padding:12px;margin:12px 0;background:var(--surface);}
+legend{color:#4CAF50;font-weight:bold;font-size:13px;padding:0 6px;}
+table{width:100%;border-collapse:collapse;font-size:12px;}
+th{text-align:left;padding:4px 6px;background:var(--surface);color:#4CAF50;border-bottom:2px solid var(--border);font-size:11px;text-transform:uppercase;letter-spacing:0.3px;white-space:nowrap;}
+td{padding:3px 6px;border-bottom:1px solid var(--border-light);color:var(--text);vertical-align:middle;}
+tr:hover td{background:var(--hover-bg);}
+input[type=text],input[type=number],select{background:var(--input-bg);color:var(--text);border:1px solid var(--border);border-radius:3px;padding:3px 4px;font-size:12px;box-sizing:border-box;}
+input[type=number]{-moz-appearance:textfield;}
+input[type=number]::-webkit-outer-spin-button,input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0;}
+.toolbar{display:flex;gap:8px;margin:12px 0;flex-wrap:wrap;}
+.toolbar button{padding:8px 16px;border:none;border-radius:4px;cursor:pointer;font-size:13px;font-weight:bold;}
+.btn-save{background:#4CAF50;color:#fff;}
+.btn-save:hover{background:#388E3C;}
+.btn-export{background:#1976D2;color:#fff;}
+.btn-import{background:#7B1FA2;color:#fff;}
+.btn-reset{background:#d32f2f;color:#fff;}
+.sensor-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:6px;margin:8px 0;}
+.sensor-card{border-radius:6px;padding:6px 8px;text-align:center;border:1px solid var(--border);}
+.sensor-card .sn{font-size:10px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.5px;}
+.sensor-card .sv{font-size:18px;font-weight:bold;}
+.sensor-card .su{font-size:10px;color:var(--text-secondary);}
+.badge{display:inline-block;padding:1px 5px;border-radius:8px;font-size:9px;font-weight:bold;margin-left:4px;vertical-align:middle;}
+.badge-eng{background:#1976D2;color:#fff;}
+.badge-out{background:#7B1FA2;color:#fff;}
+.live-val{font-weight:bold;min-width:50px;text-align:center;display:inline-block;}
+.ck{width:auto!important;vertical-align:middle;}
+.status-active{background:rgba(76,175,80,0.2);color:#4CAF50;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:bold;}
+.status-inactive{color:var(--text-muted);font-size:11px;}
+.footer{text-align:center;color:var(--text-muted);font-size:11px;margin-top:8px;}
+.ref-chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;}
+.ref-chip{padding:4px 10px;border:1px solid var(--border);border-radius:12px;background:var(--surface);color:var(--text);cursor:pointer;font-size:12px;}
+.ref-chip:hover{background:var(--hover-bg);}
+.ref-chip.active{background:#4CAF50;color:#fff;border-color:#4CAF50;}
+.ref-content{font-size:13px;line-height:1.5;padding:10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);min-height:60px;display:none;}
+.ref-content b{color:#4CAF50;}
+.ref-content code{background:var(--input-bg);padding:1px 4px;border-radius:3px;font-size:12px;}
+.dash{color:var(--text-muted);}
+.tree-toggle{cursor:pointer;display:inline-block;width:16px;text-align:center;font-weight:bold;color:#4CAF50;user-select:none;font-size:14px;}
+.tree-indent{display:inline-block;width:16px;}
+.group-child>td:first-child{padding-left:22px;}
+tr.empty-row{opacity:0.4;}
+tr.empty-row:hover{opacity:0.7;}
+.btn-del{background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:16px;padding:0 4px;line-height:1;}
+.btn-del:hover{color:#d32f2f;}
+</style></head><body>
+<nav><span class='brand'>ESP-ECU</span>
+<button class='hamburger' onclick='this.nextElementSibling.classList.toggle("open")'><span></span><span></span><span></span></button>
+<div class='nav-links'>
+<a href='/'>Home</a>
+<a href='/dashboard'>Dashboard</a>
+<a href='/tune'>Tune</a>
+<a href='/pins'>Pins</a>
+<a href='/sensors' class='active'>Sensors</a>
+<a href='/config'>Config</a>
+<a href='/update'>Update</a>
+<a href='/log/view'>Log</a>
+<a href='/heap/view'>Heap</a>
+<a href='#' class='reboot' onclick="if(confirm('Reboot device?')){fetch('/reboot',{method:'POST',headers:{'Authorization':'Basic '+btoa(prompt('user:pass','admin:'))}}).then(r=>r.ok?alert('Rebooting...'):alert('Failed'))};return false">Reboot</a>
+</div></nav>
+<div class='content'>
+
+<h2>Live Sensors</h2>
+<div id='sensorGrid' class='sensor-grid'></div>
+
+<div class='toolbar'>
+<button class='btn-save' onclick='save()'>Save</button>
+<button class='btn-export' onclick='exportJSON()'>Export JSON</button>
+<button class='btn-import' onclick='document.getElementById("importFile").click()'>Import JSON</button>
+<input type='file' id='importFile' accept='.json' style='display:none' onchange='importJSON(this)'>
+<button class='btn-reset' onclick='resetDefaults()'>Reset Defaults</button>
+</div>
+
+<fieldset><legend>Sensor Descriptors</legend>
+<div style='overflow-x:auto'>
+<table id='sensorTable'>
+<thead><tr>
+<th>#</th><th>Name</th><th>Unit</th><th>Source</th><th>Dev</th><th>Ch</th><th>Pin</th>
+<th>Cal</th><th>A</th><th>B</th><th>C</th><th>D</th>
+<th>EMA</th><th>Avg</th><th>ErrMin</th><th>ErrMax</th><th>WnMin</th><th>WnMax</th>
+<th>Active</th><th>Fault</th><th>Action</th><th>Value</th><th></th>
+</tr></thead>
+<tbody id='sensorBody'></tbody>
+</table>
+</div>
+</fieldset>
+
+<fieldset><legend>Fault Rules</legend>
+<div style='overflow-x:auto'>
+<table id='ruleTable'>
+<thead><tr>
+<th>#</th><th>Name</th><th>Sensor</th><th>SensorB</th><th>Op</th>
+<th>Thresh A</th><th>Thresh B</th><th>Bit</th><th>Action</th><th>Debounce</th><th>Running</th>
+<th>Gate RPM</th><th>Gate MAP</th><th>Curve</th><th>Status</th>
+</tr></thead>
+<tbody id='ruleBody'></tbody>
+</table>
+</div>
+</fieldset>
+
+<fieldset><legend>Field Reference</legend>
+<div class='ref-chips' id='refChips'></div>
+<div id='refContent' class='ref-content'></div>
+</fieldset>
+
+<p class='footer'>Sensor configuration — changes apply live after Save</p>
+</div>
+<script>
+var _srcTypes=[[0,'Disabled'],[1,'GPIO ADC'],[2,'GPIO Digital'],[3,'ADS1115'],[4,'MCP3204'],[5,'Expander'],[6,'Engine State'],[7,'Output State']];
+var _calTypes=[[0,'Linear'],[1,'NTC'],[2,'VDivider'],[3,'Lookup'],[4,'None']];
+var _actTypes=[[0,'None'],[1,'Limp'],[2,'Shutdown'],[3,'CEL']];
+var _opTypes=[[0,'<'],[1,'>'],[2,'Range'],[3,'Delta']];
+var _engChannels=['RPM','MAP','TPS','AFR B1','AFR B2','CLT','IAT','VBAT','Advance','Pulse Width','Target AFR','Running','Cranking','Limp Mode','Exp Faults','Oil PSI'];
+var _outChannels=['Alt Duty','Alt Overvoltage','Rev Limiting','Fuel Cut','Dwell','Coil Health','Injector Health'];
+var _cfgData=null;
+var _adcPins=[[3,'GPIO 3'],[4,'GPIO 4'],[5,'GPIO 5'],[6,'GPIO 6'],[7,'GPIO 7'],[8,'GPIO 8'],[9,'GPIO 9'],[10,'GPIO 10']];
+var _allGpio=(function(){var a=[];for(var i=0;i<=48;i++){if(i>=33&&i<=37)continue;a.push([i,'GPIO '+i]);}return a;})();
+var _ads1115Devs=[[0,'0x48'],[1,'0x49']];
+var _ads1115Chs=[[0,'CH0'],[1,'CH1'],[2,'CH2'],[3,'CH3']];
+var _mcp3204Chs=[[0,'CH0'],[1,'CH1'],[2,'CH2'],[3,'CH3']];
+var _expanderDevs=[[0,'I2C #0 (0x20)'],[1,'I2C #1 (0x21)'],[2,'I2C #2 (0x22)'],[3,'I2C #3 (0x23)'],[4,'SPI #0 (Coils)'],[5,'SPI #1 (Inj)']];
+var _expanderChs=(function(){var a=[];for(var i=0;i<16;i++)a.push([i,'P'+i]);return a;})();
+var _hidden='<span class="dash">&mdash;</span>';
+
+function esc(s){return s?String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'):''}
+function optSel(arr,sel){var h='';for(var i=0;i<arr.length;i++)h+='<option value="'+arr[i][0]+'"'+(arr[i][0]==sel?' selected':'')+'>'+arr[i][1]+'</option>';return h}
+
+function buildSourceCells(idx,srcT,dev,ch,pin){
+  var devH,chH,pinH;
+  switch(srcT){
+    case 0: devH=_hidden;chH=_hidden;pinH=_hidden;break;
+    case 1: devH=_hidden;chH=_hidden;
+      pinH='<select data-s="'+idx+'" data-f="srcPin" style="width:70px">'+optSel(_adcPins,pin)+'</select>';break;
+    case 2: devH=_hidden;chH=_hidden;
+      pinH='<select data-s="'+idx+'" data-f="srcPin" style="width:75px">'+optSel(_allGpio,pin)+'</select>';break;
+    case 3: devH='<select data-s="'+idx+'" data-f="srcDev" style="width:55px">'+optSel(_ads1115Devs,dev)+'</select>';
+      chH='<select data-s="'+idx+'" data-f="srcCh" style="width:55px">'+optSel(_ads1115Chs,ch)+'</select>';pinH=_hidden;break;
+    case 4: devH='<span data-s="'+idx+'" data-f="srcDev" data-val="0" style="font-size:11px;color:var(--text-muted)">0</span>';
+      chH='<select data-s="'+idx+'" data-f="srcCh" style="width:55px">'+optSel(_mcp3204Chs,ch)+'</select>';pinH=_hidden;break;
+    case 5: devH='<select data-s="'+idx+'" data-f="srcDev" style="width:110px">'+optSel(_expanderDevs,dev)+'</select>';
+      chH='<select data-s="'+idx+'" data-f="srcCh" style="width:50px">'+optSel(_expanderChs,ch)+'</select>';pinH=_hidden;break;
+    case 6: devH=_hidden;
+      chH='<select data-s="'+idx+'" data-f="srcCh" style="width:85px">';
+      for(var i=0;i<_engChannels.length;i++)chH+='<option value="'+i+'"'+(i==ch?' selected':'')+'>'+_engChannels[i]+'</option>';
+      chH+='</select>';pinH=_hidden;break;
+    case 7: devH=_hidden;
+      chH='<select data-s="'+idx+'" data-f="srcCh" style="width:100px">';
+      for(var i=0;i<_outChannels.length;i++)chH+='<option value="'+i+'"'+(i==ch?' selected':'')+'>'+_outChannels[i]+'</option>';
+      chH+='</select>';pinH=_hidden;break;
+    default: devH=_hidden;chH=_hidden;pinH=_hidden;
+  }
+  return{dev:devH,ch:chH,pin:pinH};
+}
+
+function populateSensorTable(sensors){
+  var tb=document.getElementById('sensorBody');
+  tb.innerHTML='';
+  for(var i=0;i<16;i++){
+    var s=sensors[i]||{name:'',unit:'',source:{type:0,device:0,channel:0,pin:0},cal:{type:4,a:0,b:0,c:0,d:0},filter:{ema:0.3,avg:1},validate:{},fault:{bit:255,action:0},activeStates:7};
+    var tr=document.createElement('tr');
+    tr.style.borderBottom='1px solid var(--border)';
+    tr.setAttribute('data-slot',String(i));
+    var srcT=s.source?s.source.type:0;
+    var calT=s.cal?s.cal.type:4;
+    var v=s.validate||{};
+    var fBit=s.fault?s.fault.bit:255;
+    var fAct=s.fault?s.fault.action:0;
+    var as=s.activeStates!=null?s.activeStates:7;
+    var sc=buildSourceCells(i,srcT,s.source?s.source.device:0,s.source?s.source.channel:0,s.source?s.source.pin:0);
+    tr.innerHTML='<td>'+i+'</td>'+
+      '<td><input type="text" data-s="'+i+'" data-f="name" value="'+esc(s.name)+'" style="width:55px" onblur="regroupTable()"></td>'+
+      '<td><input type="text" data-s="'+i+'" data-f="unit" value="'+esc(s.unit)+'" style="width:35px"></td>'+
+      '<td><select data-s="'+i+'" data-f="srcType" style="width:85px" onchange="onSrcChange('+i+',this.value)">'+optSel(_srcTypes,srcT)+'</select></td>'+
+      '<td id="dev_'+i+'">'+sc.dev+'</td>'+
+      '<td id="ch_'+i+'">'+sc.ch+'</td>'+
+      '<td id="pin_'+i+'">'+sc.pin+'</td>'+
+      '<td><select data-s="'+i+'" data-f="calType" style="width:65px">'+optSel(_calTypes,calT)+'</select></td>'+
+      '<td><input type="number" data-s="'+i+'" data-f="calA" value="'+(s.cal?s.cal.a:0)+'" style="width:50px" step="any"></td>'+
+      '<td><input type="number" data-s="'+i+'" data-f="calB" value="'+(s.cal?s.cal.b:0)+'" style="width:50px" step="any"></td>'+
+      '<td><input type="number" data-s="'+i+'" data-f="calC" value="'+(s.cal?s.cal.c:0)+'" style="width:50px" step="any"></td>'+
+      '<td><input type="number" data-s="'+i+'" data-f="calD" value="'+(s.cal?s.cal.d:0)+'" style="width:50px" step="any"></td>'+
+      '<td><input type="number" data-s="'+i+'" data-f="ema" value="'+(s.filter?s.filter.ema:0.3)+'" style="width:40px" step="0.01" min="0" max="1"></td>'+
+      '<td><input type="number" data-s="'+i+'" data-f="avg" value="'+(s.filter?s.filter.avg:1)+'" style="width:30px" min="1" max="32"></td>'+
+      '<td><input type="number" data-s="'+i+'" data-f="errMin" value="'+(v.errorMin!=null?v.errorMin:'')+'" style="width:45px" step="any" placeholder=""></td>'+
+      '<td><input type="number" data-s="'+i+'" data-f="errMax" value="'+(v.errorMax!=null?v.errorMax:'')+'" style="width:45px" step="any" placeholder=""></td>'+
+      '<td><input type="number" data-s="'+i+'" data-f="wrnMin" value="'+(v.warnMin!=null?v.warnMin:'')+'" style="width:45px" step="any" placeholder=""></td>'+
+      '<td><input type="number" data-s="'+i+'" data-f="wrnMax" value="'+(v.warnMax!=null?v.warnMax:'')+'" style="width:45px" step="any" placeholder=""></td>'+
+      '<td style="white-space:nowrap"><label><input type="checkbox" class="ck" data-s="'+i+'" data-f="asOff" '+(as&1?'checked':'')+'>Off</label> '+
+      '<label><input type="checkbox" class="ck" data-s="'+i+'" data-f="asCrk" '+(as&2?'checked':'')+'>Crk</label> '+
+      '<label><input type="checkbox" class="ck" data-s="'+i+'" data-f="asRun" '+(as&4?'checked':'')+'>Run</label></td>'+
+      '<td><input type="number" data-s="'+i+'" data-f="fBit" value="'+fBit+'" style="width:30px" min="0" max="255"></td>'+
+      '<td><select data-s="'+i+'" data-f="fAct" style="width:55px">'+optSel(_actTypes,fAct)+'</select></td>'+
+      '<td><span class="live-val" id="lv_'+i+'">--</span></td>'+
+      '<td><button class="btn-del" data-slot="'+i+'" title="Clear row">&times;</button></td>';
+    tb.appendChild(tr);
+  }
+  regroupTable();
+}
+
+function onSrcChange(slot,val){
+  var srcT=parseInt(val);
+  var curDev=0,curCh=0,curPin=0;
+  var ed=document.querySelector('[data-s="'+slot+'"][data-f="srcDev"]');
+  var ec=document.querySelector('[data-s="'+slot+'"][data-f="srcCh"]');
+  var ep=document.querySelector('[data-s="'+slot+'"][data-f="srcPin"]');
+  if(ed)curDev=parseInt(ed.value||ed.getAttribute('data-val'))||0;
+  if(ec)curCh=parseInt(ec.value)||0;
+  if(ep)curPin=parseInt(ep.value)||0;
+  var sc=buildSourceCells(slot,srcT,curDev,curCh,curPin);
+  document.getElementById('dev_'+slot).innerHTML=sc.dev;
+  document.getElementById('ch_'+slot).innerHTML=sc.ch;
+  document.getElementById('pin_'+slot).innerHTML=sc.pin;
+}
+
+var _collapsed={};
+function regroupTable(){
+  var tb=document.getElementById('sensorBody');
+  var rows=Array.from(tb.querySelectorAll('tr[data-slot]'));
+  if(!rows.length)return;
+  var groups={},groupOrder=[],empties=[];
+  rows.forEach(function(tr){
+    var slot=tr.getAttribute('data-slot');
+    var ne=tr.querySelector('[data-f="name"]');
+    var nm=ne?ne.value.trim():'';
+    if(!nm){empties.push(tr);return;}
+    if(!groups[nm]){groups[nm]=[];groupOrder.push(nm);}
+    groups[nm].push(tr);
+  });
+  var ordered=[];
+  groupOrder.forEach(function(nm){
+    var g=groups[nm];
+    g.forEach(function(tr,idx){ordered.push({tr:tr,name:nm,role:g.length>1?(idx===0?'parent':'child'):'single'});});
+  });
+  empties.forEach(function(tr){ordered.push({tr:tr,name:'',role:'empty'});});
+  ordered.forEach(function(item){tb.appendChild(item.tr);});
+  ordered.forEach(function(item){
+    var td0=item.tr.children[0];
+    var slot=item.tr.getAttribute('data-slot');
+    var col=_collapsed[item.name];
+    item.tr.classList.remove('group-parent','group-child','empty-row');
+    if(item.role==='parent'){
+      var sym=col?'+':'\u2212';
+      td0.innerHTML='<span class="tree-toggle" data-group="'+esc(item.name)+'">'+sym+'</span>'+slot;
+      item.tr.classList.add('group-parent');item.tr.style.display='';
+    }else if(item.role==='child'){
+      td0.innerHTML='<span class="tree-indent"></span>'+slot;
+      item.tr.classList.add('group-child');item.tr.style.display=col?'none':'';
+    }else if(item.role==='empty'){
+      td0.textContent=slot;item.tr.classList.add('empty-row');item.tr.style.display='';
+    }else{
+      td0.textContent=slot;item.tr.style.display='';
+    }
+  });
+}
+function toggleGroup(name){_collapsed[name]=!_collapsed[name];regroupTable();}
+function deleteRow(slot){
+  var q='[data-s="'+slot+'"]';
+  var el=function(f){return document.querySelector(q+'[data-f="'+f+'"]');};
+  el('name').value='';el('unit').value='';
+  el('srcType').value='0';onSrcChange(slot,'0');
+  el('calType').value='4';
+  el('calA').value='0';el('calB').value='0';el('calC').value='0';el('calD').value='0';
+  el('ema').value='0.3';el('avg').value='1';
+  el('errMin').value='';el('errMax').value='';el('wrnMin').value='';el('wrnMax').value='';
+  el('asOff').checked=true;el('asCrk').checked=true;el('asRun').checked=true;
+  el('fBit').value='255';el('fAct').value='0';
+  regroupTable();
+}
+
+var _curveSources=[[255,'Disabled'],[0,'RPM'],[1,'MAP'],[2,'TPS'],[3,'AFR B1'],[4,'AFR B2'],[5,'CLT'],[6,'IAT'],[7,'VBAT'],[8,'Advance'],[9,'Pulse Width'],[10,'Target AFR'],[14,'Oil PSI']];
+
+function populateRuleTable(rules){
+  var tb=document.getElementById('ruleBody');
+  tb.innerHTML='';
+  for(var i=0;i<8;i++){
+    var r=rules[i]||{name:'',sensor:255,sensorB:255,op:0,a:0,b:0,bit:255,action:0,debounce:0,running:false,gateRpmMin:0,gateRpmMax:0,gateMapMin:null,gateMapMax:null,curveSource:255,curveX:[0,0,0,0,0,0],curveY:[0,0,0,0,0,0]};
+    var cs=r.curveSource!=null?r.curveSource:255;
+    var cx=r.curveX||[0,0,0,0,0,0];
+    var cy=r.curveY||[0,0,0,0,0,0];
+    var grmn=r.gateRpmMin||0,grmx=r.gateRpmMax||0;
+    var gmmn=r.gateMapMin!=null?r.gateMapMin:'',gmmx=r.gateMapMax!=null?r.gateMapMax:'';
+    var tr=document.createElement('tr');
+    tr.style.borderBottom='1px solid var(--border)';
+    // Build curve editor HTML (hidden by default)
+    var curveHtml='<div id="cv_'+i+'" style="display:'+(cs!=255?'block':'none')+';margin-top:4px;font-size:11px">';
+    curveHtml+='<table style="border-collapse:collapse"><tr><td style="padding:1px 2px;font-weight:bold">X</td>';
+    for(var j=0;j<6;j++)curveHtml+='<td><input type="number" data-r="'+i+'" data-f="cx'+j+'" value="'+cx[j]+'" style="width:45px" step="any"></td>';
+    curveHtml+='</tr><tr><td style="padding:1px 2px;font-weight:bold">Y</td>';
+    for(var j=0;j<6;j++)curveHtml+='<td><input type="number" data-r="'+i+'" data-f="cy'+j+'" value="'+cy[j]+'" style="width:45px" step="any"></td>';
+    curveHtml+='</tr></table></div>';
+    tr.innerHTML='<td>'+i+'</td>'+
+      '<td><input type="text" data-r="'+i+'" data-f="name" value="'+esc(r.name)+'" style="width:80px"></td>'+
+      '<td><input type="number" data-r="'+i+'" data-f="sensor" value="'+r.sensor+'" style="width:30px" min="0" max="255"></td>'+
+      '<td><input type="number" data-r="'+i+'" data-f="sensorB" value="'+r.sensorB+'" style="width:30px" min="0" max="255"></td>'+
+      '<td><select data-r="'+i+'" data-f="op" style="width:55px">'+optSel(_opTypes,r.op)+'</select></td>'+
+      '<td><input type="number" data-r="'+i+'" data-f="a" value="'+r.a+'" style="width:55px" step="any"></td>'+
+      '<td><input type="number" data-r="'+i+'" data-f="b" value="'+r.b+'" style="width:55px" step="any"></td>'+
+      '<td><input type="number" data-r="'+i+'" data-f="bit" value="'+r.bit+'" style="width:30px" min="0" max="255"></td>'+
+      '<td><select data-r="'+i+'" data-f="act" style="width:55px">'+optSel(_actTypes,r.action)+'</select></td>'+
+      '<td><input type="number" data-r="'+i+'" data-f="debounce" value="'+r.debounce+'" style="width:55px" min="0" step="100"></td>'+
+      '<td><input type="checkbox" class="ck" data-r="'+i+'" data-f="running" '+(r.running?'checked':'')+'></td>'+
+      '<td style="white-space:nowrap"><input type="number" data-r="'+i+'" data-f="gateRpmMin" value="'+grmn+'" style="width:42px" min="0" max="9000" step="100" placeholder="min">-<input type="number" data-r="'+i+'" data-f="gateRpmMax" value="'+grmx+'" style="width:42px" min="0" max="9000" step="100" placeholder="max"></td>'+
+      '<td style="white-space:nowrap"><input type="number" data-r="'+i+'" data-f="gateMapMin" value="'+gmmn+'" style="width:42px" step="any" placeholder="min">-<input type="number" data-r="'+i+'" data-f="gateMapMax" value="'+gmmx+'" style="width:42px" step="any" placeholder="max"></td>'+
+      '<td><select data-r="'+i+'" data-f="curveSource" style="width:70px" onchange="toggleCurve('+i+',this.value)">'+optSel(_curveSources,cs)+'</select>'+curveHtml+'</td>'+
+      '<td><span id="rs_'+i+'" class="status-inactive">--</span></td>';
+    tb.appendChild(tr);
+  }
+}
+
+function toggleCurve(idx,val){
+  var el=document.getElementById('cv_'+idx);
+  if(el)el.style.display=parseInt(val)!=255?'block':'none';
+}
+
+function cellVal(slot,field){
+  var el=document.querySelector('[data-s="'+slot+'"][data-f="'+field+'"]');
+  if(!el)return 0;
+  if(el.tagName==='SELECT'||el.tagName==='INPUT')return parseInt(el.value)||0;
+  var dv=el.getAttribute('data-val');
+  return dv!=null?parseInt(dv):0;
+}
+function collectSensors(){
+  var arr=[];
+  for(var i=0;i<16;i++){
+    var q='[data-s="'+i+'"]';
+    var el=function(f){return document.querySelector(q+'[data-f="'+f+'"]');};
+    var emV=el('errMin').value,exV=el('errMax').value,wmV=el('wrnMin').value,wxV=el('wrnMax').value;
+    var as=(el('asOff').checked?1:0)|(el('asCrk').checked?2:0)|(el('asRun').checked?4:0);
+    arr.push({name:el('name').value,unit:el('unit').value,
+      source:{type:parseInt(el('srcType').value),device:cellVal(i,'srcDev'),channel:cellVal(i,'srcCh'),pin:cellVal(i,'srcPin')},
+      cal:{type:parseInt(el('calType').value),a:parseFloat(el('calA').value),b:parseFloat(el('calB').value),c:parseFloat(el('calC').value),d:parseFloat(el('calD').value)},
+      filter:{ema:parseFloat(el('ema').value),avg:parseInt(el('avg').value)},
+      validate:{errorMin:emV!==''?parseFloat(emV):null,errorMax:exV!==''?parseFloat(exV):null,warnMin:wmV!==''?parseFloat(wmV):null,warnMax:wxV!==''?parseFloat(wxV):null},
+      fault:{bit:parseInt(el('fBit').value),action:parseInt(el('fAct').value)},
+      activeStates:as
+    });
+  }
+  return arr;
+}
+
+function collectRules(){
+  var arr=[];
+  for(var i=0;i<8;i++){
+    var q='[data-r="'+i+'"]';
+    var el=function(f){return document.querySelector(q+'[data-f="'+f+'"]');};
+    var gmmn=el('gateMapMin').value,gmmx=el('gateMapMax').value;
+    var cs=parseInt(el('curveSource').value);
+    var rule={name:el('name').value,sensor:parseInt(el('sensor').value),sensorB:parseInt(el('sensorB').value),
+      op:parseInt(el('op').value),a:parseFloat(el('a').value),b:parseFloat(el('b').value),
+      bit:parseInt(el('bit').value),action:parseInt(el('act').value),
+      debounce:parseInt(el('debounce').value),running:el('running').checked,
+      gateRpmMin:parseInt(el('gateRpmMin').value)||0,
+      gateRpmMax:parseInt(el('gateRpmMax').value)||0,
+      gateMapMin:gmmn!==''?parseFloat(gmmn):null,
+      gateMapMax:gmmx!==''?parseFloat(gmmx):null,
+      curveSource:cs
+    };
+    if(cs!=255){
+      rule.curveX=[];rule.curveY=[];
+      for(var j=0;j<6;j++){
+        rule.curveX.push(parseFloat(el('cx'+j).value)||0);
+        rule.curveY.push(parseFloat(el('cy'+j).value)||0);
+      }
+    }
+    arr.push(rule);
+  }
+  return arr;
+}
+
+function save(){
+  var body=JSON.stringify({sensors:collectSensors(),rules:collectRules()});
+  fetch('/sensors',{method:'POST',headers:{'Content-Type':'application/json'},body:body})
+    .then(function(r){return r.json()})
+    .then(function(d){if(d.ok)alert('Saved');else alert('Error: '+JSON.stringify(d))})
+    .catch(function(e){alert('Error: '+e)});
+}
+
+function exportJSON(){
+  var data={sensors:collectSensors(),rules:collectRules()};
+  var blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+  var a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='sensors_config.json';
+  a.click();
+}
+
+function importJSON(input){
+  if(!input.files.length)return;
+  var reader=new FileReader();
+  reader.onload=function(e){
+    try{
+      var data=JSON.parse(e.target.result);
+      if(data.sensors)populateSensorTable(data.sensors);
+      if(data.rules)populateRuleTable(data.rules);
+      alert('Imported — click Save to apply');
+    }catch(err){alert('Invalid JSON: '+err);}
+  };
+  reader.readAsText(input.files[0]);
+  input.value='';
+}
+
+function resetDefaults(){
+  if(!confirm('Reset all sensor descriptors and fault rules to factory defaults?'))return;
+  fetch('/sensors',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({resetSensors:true,resetRules:true})})
+    .then(function(r){return r.json()})
+    .then(function(){load()})
+    .catch(function(e){alert('Error: '+e)});
+}
+
+function load(){
+  fetch('/sensors?format=json').then(function(r){return r.json()}).then(function(d){
+    _cfgData=d;
+    populateSensorTable(d.sensors||[]);
+    populateRuleTable(d.rules||[]);
+  }).catch(function(e){console.error('Load error',e)});
+}
+
+function poll(){
+  fetch('/state').then(function(r){return r.json()}).then(function(d){
+    var grid=document.getElementById('sensorGrid');
+    var sArr=d.sensors||[];
+    var h='';
+    for(var i=0;i<sArr.length;i++){
+      var sn=sArr[i];
+      var bg=sn.error?'rgba(244,67,54,0.15)':sn.warn?'rgba(255,152,0,0.15)':'rgba(76,175,80,0.08)';
+      var bc=sn.error?'#f44336':sn.warn?'#ff9800':'#4CAF50';
+      var vc=sn.error?'#f44336':sn.warn?'#ff9800':'var(--text)';
+      var isBool=(sn.unit==='bool');
+      var v;
+      if(isBool){v=sn.value>=1?'ON':'OFF';vc=sn.value>=1?'#4CAF50':'var(--text-muted)';}
+      else{v=sn.value!=null?sn.value.toFixed(1):'--';}
+      var badge='';
+      if(sn.srcType==6)badge='<span class="badge badge-eng">ENG</span>';
+      else if(sn.srcType==7)badge='<span class="badge badge-out">OUT</span>';
+      // Dimmed if inactive due to activeStates gate
+      var curSt=d.engineRunning?4:(d.cranking?2:1);
+      var inactive=sn.activeStates!=null&&!(sn.activeStates&curSt);
+      var opacity=inactive?'opacity:0.35;':'';
+      h+="<div class='sensor-card' style='background:"+bg+";border-color:"+bc+";"+opacity+"'>";
+      h+="<div class='sn'>"+sn.name+badge+"</div>";
+      h+="<div class='sv' style='color:"+vc+"'>"+v+"</div>";
+      h+="<div class='su'>"+sn.unit+"</div></div>";
+      // Update inline value in descriptor table
+      var lv=document.getElementById('lv_'+sn.slot);
+      if(lv){lv.textContent=isBool?(sn.value>=1?'ON':'OFF'):v;lv.style.color=vc;}
+    }
+    grid.innerHTML=h;
+    // Update rule status
+    var activeRules=d.activeRules||[];
+    for(var i=0;i<8;i++){
+      var rs=document.getElementById('rs_'+i);
+      if(!rs)continue;
+      var rEl=document.querySelector('[data-r="'+i+'"][data-f="name"]');
+      var rName=rEl?rEl.value:'';
+      if(rName&&activeRules.indexOf(rName)>=0){
+        rs.className='status-active';rs.textContent='ACTIVE';
+      }else{
+        rs.className='status-inactive';rs.textContent=rName?'OK':'--';
+      }
+    }
+  }).catch(function(){});
+}
+
+var _refData={
+'Name':['Sensor display name shown on dashboard and in /state JSON.','Examples: <code>MAP</code>, <code>CLT</code>, <code>OIL</code>, <code>TPS</code>'],
+'Unit':['Engineering unit displayed after the value.','Examples: <code>kPa</code>, <code>&deg;F</code>, <code>V</code>, <code>PSI</code>, <code>bool</code> (shows ON/OFF)'],
+'Source':['Hardware source type. Determines which Dev/Ch/Pin options appear.','<b>GPIO ADC</b> (1) &mdash; ESP32 analog input, pins 3-10<br><b>GPIO Digital</b> (2) &mdash; Digital input, any GPIO<br><b>ADS1115</b> (3) &mdash; I2C 16-bit ADC, 2 devices &times; 4 channels<br><b>MCP3204</b> (4) &mdash; SPI 12-bit ADC, 4 channels<br><b>Expander</b> (5) &mdash; MCP23S17 digital I/O<br><b>Engine State</b> (6) &mdash; Virtual: reads RPM, MAP, TPS, etc.<br><b>Output State</b> (7) &mdash; Virtual: reads alternator, rev limit, etc.'],
+'Dev':['Device index within the source type.','<b>ADS1115</b>: 0 = 0x48 (CJ125/TFT/MLPS), 1 = 0x49 (MAP/TPS)<br><b>Expander</b>: 0-5 = SPI MCP23S17 (#0 General I/O, #1 Transmission, #2-3 Expansion, #4 Coils, #5 Injectors)<br><b>MCP3204</b>: Always 0 (single device)<br>Other source types: not used'],
+'Ch':['Channel on the selected device.','<b>ADS1115</b>: CH0-CH3<br><b>MCP3204</b>: CH0-CH3<br><b>Expander</b>: P0-P15 (pin on that MCP23S17)<br><b>Engine State</b>: RPM, MAP, TPS, AFR, CLT, IAT, VBAT, etc.<br><b>Output State</b>: Alt Duty, Rev Limiting, Fuel Cut, Dwell, etc.'],
+'Pin':['GPIO pin number. Only used for GPIO ADC and GPIO Digital sources.','<b>GPIO ADC</b>: 3-10 (ADC-capable pins)<br><b>GPIO Digital</b>: 0-48 (excluding 33-37 reserved by PSRAM)'],
+'Cal':['Calibration type that converts raw voltage/ADC to engineering units.','<b>Linear</b> (0): Maps voltage range [A,B] to engineering range [C,D]<br><b>NTC</b> (1): Thermistor with pullup. A=PullupOhms, B=Beta, C=Vref<br><b>VDivider</b> (2): Voltage divider. A=ratio (e.g. 11.0 for 1:10)<br><b>Lookup</b> (3): Piecewise linear. A/B=value@0V/5V<br><b>None</b> (4): Raw ADC value, no conversion'],
+'A / B / C / D':['Calibration coefficients &mdash; meaning depends on Cal type.','<b>Linear</b>: A=Vmin, B=Vmax, C=EngMin, D=EngMax<br>&nbsp;&nbsp;Example MAP: A=0.5, B=4.5, C=10, D=105 (0.5-4.5V &rarr; 10-105 kPa)<br><b>NTC</b>: A=PullupOhms (2490), B=Beta (3380), C=Vref (3.3)<br><b>VDivider</b>: A=Ratio (11.0), B/C/D unused<br><b>Lookup</b>: A=value@0V, B=value@5V, C/D unused'],
+'EMA':['Exponential Moving Average smoothing factor (0&ndash;1).','0 = disabled (raw readings), 0.3 = moderate smoothing, 0.9 = very responsive.<br>Lower values = smoother but slower to respond. Good default: <code>0.3</code>'],
+'Avg':['Number of samples to average before reporting (1&ndash;32).','1 = disabled (single reading). Higher = less noise but more latency.<br>Good default: <code>1</code> for fast sensors (TPS), <code>4</code> for slow sensors (CLT)'],
+'ErrMin / ErrMax':['Error bounds. If value falls outside these, triggers ERROR fault (red).','Leave blank to disable. Example for MAP: ErrMin=<code>5</code>, ErrMax=<code>110</code> (values outside 5-110 kPa indicate sensor failure)'],
+'WnMin / WnMax':['Warning bounds. Value outside these triggers WARNING (orange) but not a fault.','Leave blank to disable. Tighter than error bounds. Example: WnMin=<code>10</code>, WnMax=<code>105</code>'],
+'Active':['Engine states where this sensor is actively read. Unchecked states return 0.','<b>Off</b> = key-on engine-off, <b>Crk</b> = cranking, <b>Run</b> = running.<br>Most sensors: all three checked. Oil pressure: only Run (no pressure at key-on)'],
+'Fault':['Bit position (0&ndash;7) in the limp mode fault bitmask.','0=MAP, 1=TPS, 2=CLT, 3=IAT, 4=VBAT, 5=Expander, 6=OIL. Use <code>255</code> (0xFF) for no fault association.<br>Multiple sensors can share a bit (e.g., both ErrMin and ErrMax on MAP use bit 0)'],
+'Action':['What happens when this sensor triggers a fault.','<b>None</b> (0): Log only, no engine protection<br><b>Limp</b> (1): Rev limit + advance cap + CEL<br><b>Shutdown</b> (2): Kill engine immediately<br><b>CEL</b> (3): Warning light only, no performance limit']
+};
+var _refKeys=['Name','Unit','Source','Dev','Ch','Pin','Cal','A / B / C / D','EMA','Avg','ErrMin / ErrMax','WnMin / WnMax','Active','Fault','Action'];
+var _activeRef=null;
+function initRefChips(){
+  var c=document.getElementById('refChips');
+  var h='';
+  for(var i=0;i<_refKeys.length;i++)h+='<button class="ref-chip" onclick="showRef(\''+_refKeys[i].replace(/'/g,"\\'")+'\')">'+_refKeys[i]+'</button>';
+  c.innerHTML=h;
+}
+function showRef(key){
+  var rc=document.getElementById('refContent');
+  var chips=document.querySelectorAll('.ref-chip');
+  if(_activeRef===key){_activeRef=null;rc.style.display='none';for(var i=0;i<chips.length;i++)chips[i].classList.remove('active');return;}
+  _activeRef=key;
+  for(var i=0;i<chips.length;i++){chips[i].classList.toggle('active',chips[i].textContent===key);}
+  var d=_refData[key];
+  if(!d){rc.style.display='none';return;}
+  rc.innerHTML='<b>'+key+'</b>: '+d[0]+'<br><br>'+d[1];
+  rc.style.display='block';
+}
+initRefChips();
+document.getElementById('sensorBody').addEventListener('click',function(e){
+  var tg=e.target.closest('.tree-toggle');
+  if(tg){toggleGroup(tg.getAttribute('data-group'));return;}
+  var dl=e.target.closest('.btn-del');
+  if(dl){deleteRow(parseInt(dl.getAttribute('data-slot')));return;}
+});
+
+load();
+poll();setInterval(poll,1000);
+</script></body></html>

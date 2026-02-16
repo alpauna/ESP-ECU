@@ -1,0 +1,108 @@
+{
+  "sensors": [
+    {
+      "name": "MAP",
+      "unit": "kPa",
+      "source": { "type": 4, "device": 0, "channel": 0, "pin": 0 },
+      "cal": { "type": 0, "a": 0.5, "b": 4.5, "c": 10, "d": 105 },
+      "filter": { "ema": 0.3, "avg": 1 },
+      "validate": { "errorMin": 5, "errorMax": 110, "warnMin": null, "warnMax": null },
+      "fault": { "bit": 0, "action": 1 },
+      "activeStates": 7
+    },
+    {
+      "name": "TPS",
+      "unit": "%",
+      "source": { "type": 4, "device": 0, "channel": 1, "pin": 0 },
+      "cal": { "type": 0, "a": 0.5, "b": 4.5, "c": 0, "d": 100 },
+      "filter": { "ema": 0, "avg": 1 },
+      "validate": { "errorMin": -5, "errorMax": 105, "warnMin": null, "warnMax": null },
+      "fault": { "bit": 1, "action": 1 },
+      "activeStates": 7
+    },
+    {
+      "name": "CLT",
+      "unit": "\u00b0F",
+      "source": { "type": 1, "device": 0, "channel": 0, "pin": 7 },
+      "cal": { "type": 1, "a": 2490, "b": 3380, "c": 3.3, "d": 0 },
+      "filter": { "ema": 0.3, "avg": 4 },
+      "validate": { "errorMin": -40, "errorMax": 280, "warnMin": null, "warnMax": 240 },
+      "fault": { "bit": 2, "action": 1 },
+      "activeStates": 7
+    },
+    {
+      "name": "IAT",
+      "unit": "\u00b0F",
+      "source": { "type": 1, "device": 0, "channel": 0, "pin": 8 },
+      "cal": { "type": 1, "a": 2490, "b": 3380, "c": 3.3, "d": 0 },
+      "filter": { "ema": 0.3, "avg": 4 },
+      "validate": { "errorMin": -40, "errorMax": 200, "warnMin": null, "warnMax": null },
+      "fault": { "bit": 3, "action": 1 },
+      "activeStates": 7
+    },
+    {
+      "name": "VBAT",
+      "unit": "V",
+      "source": { "type": 1, "device": 0, "channel": 0, "pin": 9 },
+      "cal": { "type": 2, "a": 11.0, "b": 0, "c": 0, "d": 0 },
+      "filter": { "ema": 0.3, "avg": 2 },
+      "validate": { "errorMin": 8, "errorMax": 18, "warnMin": 11, "warnMax": 15.5 },
+      "fault": { "bit": 4, "action": 3 },
+      "activeStates": 7
+    },
+    {
+      "name": "O2 B1",
+      "unit": "AFR",
+      "source": { "type": 1, "device": 0, "channel": 0, "pin": 3 },
+      "cal": { "type": 3, "a": 10, "b": 20, "c": 0, "d": 0 },
+      "filter": { "ema": 0.2, "avg": 1 },
+      "validate": { "errorMin": null, "errorMax": null, "warnMin": null, "warnMax": null },
+      "fault": { "bit": 255, "action": 0 },
+      "activeStates": 4
+    },
+    { "name": "", "unit": "", "source": { "type": 0, "device": 0, "channel": 0, "pin": 0 }, "cal": { "type": 4, "a": 0, "b": 0, "c": 0, "d": 0 }, "filter": { "ema": 0.3, "avg": 1 }, "validate": {}, "fault": { "bit": 255, "action": 0 }, "activeStates": 7 },
+    { "name": "", "unit": "", "source": { "type": 0, "device": 0, "channel": 0, "pin": 0 }, "cal": { "type": 4, "a": 0, "b": 0, "c": 0, "d": 0 }, "filter": { "ema": 0.3, "avg": 1 }, "validate": {}, "fault": { "bit": 255, "action": 0 }, "activeStates": 7 },
+    { "name": "", "unit": "", "source": { "type": 0, "device": 0, "channel": 0, "pin": 0 }, "cal": { "type": 4, "a": 0, "b": 0, "c": 0, "d": 0 }, "filter": { "ema": 0.3, "avg": 1 }, "validate": {}, "fault": { "bit": 255, "action": 0 }, "activeStates": 7 },
+    { "name": "", "unit": "", "source": { "type": 0, "device": 0, "channel": 0, "pin": 0 }, "cal": { "type": 4, "a": 0, "b": 0, "c": 0, "d": 0 }, "filter": { "ema": 0.3, "avg": 1 }, "validate": {}, "fault": { "bit": 255, "action": 0 }, "activeStates": 7 },
+    { "name": "", "unit": "", "source": { "type": 0, "device": 0, "channel": 0, "pin": 0 }, "cal": { "type": 4, "a": 0, "b": 0, "c": 0, "d": 0 }, "filter": { "ema": 0.3, "avg": 1 }, "validate": {}, "fault": { "bit": 255, "action": 0 }, "activeStates": 7 },
+    { "name": "", "unit": "", "source": { "type": 0, "device": 0, "channel": 0, "pin": 0 }, "cal": { "type": 4, "a": 0, "b": 0, "c": 0, "d": 0 }, "filter": { "ema": 0.3, "avg": 1 }, "validate": {}, "fault": { "bit": 255, "action": 0 }, "activeStates": 7 },
+    { "name": "", "unit": "", "source": { "type": 0, "device": 0, "channel": 0, "pin": 0 }, "cal": { "type": 4, "a": 0, "b": 0, "c": 0, "d": 0 }, "filter": { "ema": 0.3, "avg": 1 }, "validate": {}, "fault": { "bit": 255, "action": 0 }, "activeStates": 7 },
+    { "name": "", "unit": "", "source": { "type": 0, "device": 0, "channel": 0, "pin": 0 }, "cal": { "type": 4, "a": 0, "b": 0, "c": 0, "d": 0 }, "filter": { "ema": 0.3, "avg": 1 }, "validate": {}, "fault": { "bit": 255, "action": 0 }, "activeStates": 7 },
+    { "name": "", "unit": "", "source": { "type": 0, "device": 0, "channel": 0, "pin": 0 }, "cal": { "type": 4, "a": 0, "b": 0, "c": 0, "d": 0 }, "filter": { "ema": 0.3, "avg": 1 }, "validate": {}, "fault": { "bit": 255, "action": 0 }, "activeStates": 7 },
+    { "name": "", "unit": "", "source": { "type": 0, "device": 0, "channel": 0, "pin": 0 }, "cal": { "type": 4, "a": 0, "b": 0, "c": 0, "d": 0 }, "filter": { "ema": 0.3, "avg": 1 }, "validate": {}, "fault": { "bit": 255, "action": 0 }, "activeStates": 7 }
+  ],
+  "rules": [
+    {
+      "name": "MAP Low",
+      "sensor": 0, "sensorB": 255, "op": 0,
+      "a": 10, "b": 0,
+      "bit": 0, "action": 1, "debounce": 500, "running": true,
+      "gateRpmMin": 800, "gateRpmMax": 0,
+      "gateMapMin": null, "gateMapMax": null,
+      "curveSource": 255
+    },
+    {
+      "name": "TPS Stuck",
+      "sensor": 1, "sensorB": 255, "op": 2,
+      "a": -2, "b": 102,
+      "bit": 1, "action": 1, "debounce": 2000, "running": false,
+      "gateRpmMin": 0, "gateRpmMax": 0,
+      "gateMapMin": null, "gateMapMax": null,
+      "curveSource": 255
+    },
+    {
+      "name": "Overheat",
+      "sensor": 2, "sensorB": 255, "op": 1,
+      "a": 240, "b": 0,
+      "bit": 2, "action": 2, "debounce": 3000, "running": true,
+      "gateRpmMin": 0, "gateRpmMax": 0,
+      "gateMapMin": null, "gateMapMax": null,
+      "curveSource": 255
+    },
+    { "name": "", "sensor": 255, "sensorB": 255, "op": 0, "a": 0, "b": 0, "bit": 255, "action": 0, "debounce": 0, "running": false, "gateRpmMin": 0, "gateRpmMax": 0, "gateMapMin": null, "gateMapMax": null, "curveSource": 255 },
+    { "name": "", "sensor": 255, "sensorB": 255, "op": 0, "a": 0, "b": 0, "bit": 255, "action": 0, "debounce": 0, "running": false, "gateRpmMin": 0, "gateRpmMax": 0, "gateMapMin": null, "gateMapMax": null, "curveSource": 255 },
+    { "name": "", "sensor": 255, "sensorB": 255, "op": 0, "a": 0, "b": 0, "bit": 255, "action": 0, "debounce": 0, "running": false, "gateRpmMin": 0, "gateRpmMax": 0, "gateMapMin": null, "gateMapMax": null, "curveSource": 255 },
+    { "name": "", "sensor": 255, "sensorB": 255, "op": 0, "a": 0, "b": 0, "bit": 255, "action": 0, "debounce": 0, "running": false, "gateRpmMin": 0, "gateRpmMax": 0, "gateMapMin": null, "gateMapMax": null, "curveSource": 255 },
+    { "name": "", "sensor": 255, "sensorB": 255, "op": 0, "a": 0, "b": 0, "bit": 255, "action": 0, "debounce": 0, "running": false, "gateRpmMin": 0, "gateRpmMax": 0, "gateMapMin": null, "gateMapMax": null, "curveSource": 255 }
+  ]
+}

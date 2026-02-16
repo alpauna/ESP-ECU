@@ -6,8 +6,10 @@ CrankSensor* CrankSensor::_instance = nullptr;
 CrankSensor::CrankSensor()
     : _pin(0), _totalTeeth(36), _missingTeeth(1), _rpm(0), _toothPosition(0),
       _syncState(LOST), _lastToothTimeUs(0), _toothHistIdx(0),
-      _lastPeriodUs(0), _toothCount(0), _gapDetected(false) {
+      _lastPeriodUs(0), _toothCount(0), _gapDetected(false),
+      _toothLogIdx(0), _toothLogCapturing(false), _toothLogComplete(false) {
     memset((void*)_toothPeriods, 0, sizeof(_toothPeriods));
+    memset((void*)_toothLog, 0, sizeof(_toothLog));
 }
 
 CrankSensor::~CrankSensor() {
@@ -103,6 +105,17 @@ void IRAM_ATTR CrankSensor::processTooth(int64_t nowUs) {
 
     _lastPeriodUs = periodUs;
 
+    // Tooth logging (if active)
+    if (_toothLogCapturing && _toothLogIdx < TOOTH_LOG_SIZE) {
+        _toothLog[_toothLogIdx].periodUs = periodUs;
+        _toothLog[_toothLogIdx].toothNum = _toothPosition;
+        _toothLogIdx++;
+        if (_toothLogIdx >= TOOTH_LOG_SIZE) {
+            _toothLogCapturing = false;
+            _toothLogComplete = true;
+        }
+    }
+
     // Calculate RPM from tooth period
     // One revolution = totalTeeth tooth periods
     // RPM = 60,000,000 / (periodUs * totalTeeth)
@@ -110,6 +123,16 @@ void IRAM_ATTR CrankSensor::processTooth(int64_t nowUs) {
         uint32_t rpmCalc = 60000000UL / ((uint32_t)periodUs * _totalTeeth);
         if (rpmCalc < 20000) _rpm = (uint16_t)rpmCalc;
     }
+}
+
+void CrankSensor::startToothLog() {
+    _toothLogIdx = 0;
+    _toothLogComplete = false;
+    _toothLogCapturing = true;
+}
+
+void CrankSensor::stopToothLog() {
+    _toothLogCapturing = false;
 }
 
 uint32_t CrankSensor::averagePeriod() const {

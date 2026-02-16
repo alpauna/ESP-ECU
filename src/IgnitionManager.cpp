@@ -4,7 +4,8 @@
 
 IgnitionManager::IgnitionManager()
     : _numCylinders(0), _advanceDeg(10.0f), _dwellMs(DEFAULT_DWELL_MS),
-      _maxDwellMs(4.0f), _revLimit(DEFAULT_REV_LIMIT), _revLimiting(false) {
+      _maxDwellMs(4.0f), _revLimit(DEFAULT_REV_LIMIT), _configRevLimit(DEFAULT_REV_LIMIT),
+      _revLimiting(false), _overdwellCount(0) {
     memset(_coilPins, 0, sizeof(_coilPins));
     memset(_firingOrder, 0, sizeof(_firingOrder));
     memset(_coilState, 0, sizeof(_coilState));
@@ -12,9 +13,9 @@ IgnitionManager::IgnitionManager()
 
 IgnitionManager::~IgnitionManager() {}
 
-void IgnitionManager::begin(uint8_t numCylinders, const uint8_t* coilPins, const uint8_t* firingOrder) {
+void IgnitionManager::begin(uint8_t numCylinders, const uint16_t* coilPins, const uint8_t* firingOrder) {
     _numCylinders = min(numCylinders, (uint8_t)MAX_CYLINDERS);
-    memcpy(_coilPins, coilPins, _numCylinders);
+    memcpy(_coilPins, coilPins, _numCylinders * sizeof(uint16_t));
     memcpy(_firingOrder, firingOrder, _numCylinders);
 
     for (uint8_t i = 0; i < _numCylinders; i++) {
@@ -111,12 +112,14 @@ void IgnitionManager::update(uint16_t rpm, uint16_t toothPos, bool sequential) {
             _coilState[cylIdx].charging = false;
         }
 
-        // Safety: max dwell time exceeded
+        // Safety: max dwell time exceeded (overdwell protection)
         if (_coilState[cylIdx].charging) {
             float elapsedMs = (nowUs - _coilState[cylIdx].dwellStartUs) / 1000.0f;
             if (elapsedMs > _maxDwellMs) {
                 xDigitalWrite(_coilPins[cylIdx], LOW);
                 _coilState[cylIdx].charging = false;
+                _overdwellCount++;
+                Log.warn("IGN", "Overdwell on cyl %d (%.1fms)", cylIdx, elapsedMs);
             }
         }
     }

@@ -56,7 +56,7 @@ public:
     TransmissionManager();
 
     void configure(const ProjectInfo& proj);
-    void begin(uint8_t ssAPin, uint8_t ssBPin, uint8_t ssCPin, uint8_t ssDPin,
+    void begin(uint16_t ssAPin, uint16_t ssBPin, uint16_t ssCPin, uint16_t ssDPin,
                uint8_t tccPin, uint8_t epcPin, uint8_t ossPin, uint8_t tssPin);
     void setADS1115(ADS1115Reader* ads) { _ads = ads; }
     void update(uint16_t engineRpm, float tps, float vbat);
@@ -79,7 +79,7 @@ private:
     TransmissionState _state;
 
     // Pin assignments
-    uint8_t _ssAPin = 0, _ssBPin = 0, _ssCPin = 0, _ssDPin = 0;
+    uint16_t _ssAPin = 0, _ssBPin = 0, _ssCPin = 0, _ssDPin = 0;
     uint8_t _tccPin = 0, _epcPin = 0;
     uint8_t _ossPin = 0, _tssPin = 0;
 
@@ -131,7 +131,7 @@ private:
     void applyShiftSolenoids();
     void updateTCC(uint16_t engineRpm);
     void updateEPC(float tps);
-    void setSolenoid(uint8_t pin, bool on);
+    void setSolenoid(uint16_t pin, bool on);
 
     // TFT thermistor conversion
     static float tftAdcToTempF(float millivolts);
