@@ -188,7 +188,56 @@ ProjectInfo proj = {
     true,                        // expander2Enabled
     true,                        // expander3Enabled
     true,                        // expander4Enabled
-    true                         // expander5Enabled
+    true,                        // expander5Enabled
+    // Transmission (defaults loaded from config)
+    0,                           // transType (NONE)
+    1500, 2500, 3000,            // upshift12/23/34Rpm
+    1200, 1800, 2200,            // downshift21/32/43Rpm
+    1500,                        // tccLockRpm
+    3,                           // tccLockGear
+    5.0f,                        // tccApplyRate
+    50.0f,                       // epcBaseDuty
+    80.0f,                       // epcShiftBoost
+    500,                         // shiftTimeMs
+    275.0f,                      // maxTftTempF
+    // Limp mode
+    3000,                        // limpRevLimit
+    10.0f,                       // limpAdvanceCap
+    5000,                        // limpRecoveryMs
+    5.0f,                        // limpMapMin
+    120.0f,                      // limpMapMax
+    -5.0f,                       // limpTpsMin
+    105.0f,                      // limpTpsMax
+    280.0f,                      // limpCltMax
+    200.0f,                      // limpIatMax
+    10.0f,                       // limpVbatMin
+    // Oil pressure
+    0,                           // oilPressureMode (disabled)
+    0,                           // pinOilPressure
+    true,                        // oilPressureActiveLow
+    10.0f,                       // oilPressureMinPsi
+    100.0f,                      // oilPressureMaxPsi
+    2,                           // oilPressureMcpChannel
+    3000,                        // oilPressureStartupMs
+    // Fuel pump priming
+    3000,                        // fuelPumpPrimeMs
+    // ASE
+    35.0f,                       // aseInitialPct
+    10000,                       // aseDurationMs
+    100.0f,                      // aseMinCltF
+    // DFCO
+    2500,                        // dfcoRpmThreshold
+    3.0f,                        // dfcoTpsThreshold
+    500,                         // dfcoEntryDelayMs
+    1800,                        // dfcoExitRpm
+    5.0f,                        // dfcoExitTps
+    // CLT rev limit
+    {32, 60, 100, 140, 180, 220},    // cltRevLimitAxis
+    {3000, 3500, 4500, 5500, 6000, 6000}, // cltRevLimitValues
+    // Board diagnostics
+    false,                       // diagEnabled
+    {203, 204, 205, 206},        // diagMuxSelPins
+    207                          // diagMuxEnPin
 };
 
 // Core objects
@@ -231,6 +280,11 @@ Task tCpuLoad(TASK_SECOND, TASK_FOREVER, &onCalcCpuLoad, &ts, false);
 // Publish ECU state via MQTT every 500ms
 Task tPublishState(500 * TASK_MILLISECOND, TASK_FOREVER, []() {
     mqttHandler.publishState();
+}, &ts, false);
+
+// Diagnostic health via MQTT every 5 seconds
+Task tPublishDiag(5 * TASK_SECOND, TASK_FOREVER, []() {
+    mqttHandler.publishDiag();
 }, &ts, false);
 
 // WiFi signal strength monitor
@@ -514,6 +568,7 @@ void setup() {
 
         // Enable tasks
         tPublishState.enable();
+        tPublishDiag.enable();
     }
 
     tSaveConfig.enable();

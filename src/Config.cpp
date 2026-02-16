@@ -334,6 +334,16 @@ bool Config::loadConfig(const char* filename, ProjectInfo& proj) {
         }
     }
 
+    // Board diagnostics
+    proj.diagEnabled = doc["diagnostics"]["enabled"] | false;
+    {
+        JsonArray muxPins = doc["diagnostics"]["muxSelPins"];
+        uint16_t defaults[] = {203, 204, 205, 206};
+        for (uint8_t i = 0; i < 4; i++)
+            proj.diagMuxSelPins[i] = (muxPins && i < muxPins.size()) ? (uint16_t)(int)muxPins[i] : defaults[i];
+    }
+    proj.diagMuxEnPin = doc["diagnostics"]["muxEnPin"] | 207;
+
     Serial.printf("Config loaded: %d cyl, %d-%d trigger\n", proj.cylinders, proj.crankTeeth, proj.crankMissing);
     return true;
 }
@@ -665,6 +675,15 @@ bool Config::updateConfig(const char* filename, ProjectInfo& proj) {
     doc["oilPressure"]["maxPsi"] = proj.oilPressureMaxPsi;
     doc["oilPressure"]["mcpChannel"] = proj.oilPressureMcpChannel;
     doc["oilPressure"]["startupMs"] = proj.oilPressureStartupMs;
+
+    // Board diagnostics
+    doc["diagnostics"]["enabled"] = proj.diagEnabled;
+    {
+        JsonArray muxPins = doc["diagnostics"]["muxSelPins"].to<JsonArray>();
+        muxPins.clear();
+        for (uint8_t i = 0; i < 4; i++) muxPins.add(proj.diagMuxSelPins[i]);
+    }
+    doc["diagnostics"]["muxEnPin"] = proj.diagMuxEnPin;
 
     file = SD.open(filename, FILE_WRITE);
     if (!file) return false;

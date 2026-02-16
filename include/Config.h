@@ -147,6 +147,10 @@ struct ProjectInfo {
     // CLT-dependent rev limit (6-point curve)
     float cltRevLimitAxis[6];       // CLT in F
     float cltRevLimitValues[6];     // RPM limits
+    // Board diagnostics
+    bool diagEnabled;               // Enable diagnostic subsystem (default false)
+    uint16_t diagMuxSelPins[4];     // CD74HC4067 select lines S0-S3 (default MCP23S17#0 P3-P6: 203-206)
+    uint16_t diagMuxEnPin;          // CD74HC4067 enable pin (default MCP23S17#0 P7: 207)
 };
 
 class Config {

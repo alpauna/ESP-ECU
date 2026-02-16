@@ -17,6 +17,7 @@ class MCP3204Reader;
 class TransmissionManager;
 class TuneTable2D;
 class CustomPinManager;
+class BoardDiagnostics;
 struct ProjectInfo;
 
 struct EngineState {
@@ -78,6 +79,7 @@ public:
     ADS1115Reader* getADS1115_1() { return _ads1115_2; }
     MCP3204Reader* getMCP3204() { return _mcp3204; }
     CustomPinManager* getCustomPins() { return _customPins; }
+    BoardDiagnostics* getBoardDiagnostics() { return _diag; }
     uint32_t getUpdateTimeUs() const { return _updateTimeUs; }
     uint32_t getSensorTimeUs() const { return _sensorTimeUs; }
     bool isLimpActive() const { return _limpActive; }
@@ -105,6 +107,7 @@ private:
     MCP3204Reader* _mcp3204;     // MCP3204 SPI ADC for MAP/TPS (alternative to ADS1115 @ 0x49)
     TransmissionManager* _trans;
     CustomPinManager* _customPins;
+    BoardDiagnostics* _diag;
     bool _cj125Enabled;
     uint8_t _transType;
 
@@ -187,6 +190,11 @@ private:
 
     // CLT-dependent rev limit
     TuneTable2D* _cltRevLimitTable = nullptr;
+
+    // Board diagnostics config
+    bool _diagEnabled = false;
+    uint16_t _diagMuxSelPins[4] = {203, 204, 205, 206};
+    uint16_t _diagMuxEnPin = 207;
 
     TaskHandle_t _realtimeTaskHandle;
     static void realtimeTask(void* param);

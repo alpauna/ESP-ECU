@@ -19,6 +19,7 @@ public:
     void setECU(ECU* ecu);
     void publishState();
     void publishFault(const char* fault, const char* message, bool active);
+    void publishDiag();
     void startReconnect();
     void stopReconnect();
     void disconnect();

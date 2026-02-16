@@ -54,3 +54,23 @@ float ADS1115Reader::readMillivolts(uint8_t ch) {
     if (!_ready || ch > 3) return 0.0f;
     return _ads.computeVolts(readChannel(ch)) * 1000.0f;
 }
+
+void ADS1115Reader::startReading(uint8_t ch) {
+    if (!_ready || ch > 3) return;
+    _ads.startADCReading(MUX_BY_CHANNEL[ch], false);
+}
+
+bool ADS1115Reader::conversionComplete() {
+    if (!_ready) return false;
+    return _ads.conversionComplete();
+}
+
+int16_t ADS1115Reader::getLastResult() {
+    if (!_ready) return 0;
+    return _ads.getLastConversionResults();
+}
+
+float ADS1115Reader::getLastResultMillivolts() {
+    if (!_ready) return 0.0f;
+    return _ads.computeVolts(getLastResult()) * 1000.0f;
+}

@@ -15,6 +15,7 @@
 #include "ADS1115Reader.h"
 #include "MCP3204Reader.h"
 #include "CustomPin.h"
+#include "BoardDiagnostics.h"
 #include "OtaUtils.h"
 #include <Preferences.h>
 
@@ -449,6 +450,68 @@ void WebHandler::setupRoutes() {
             char buf[20];
             strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", &ti);
             doc["datetime"] = buf;
+        }
+        // Board diagnostics
+        BoardDiagnostics* diag = _ecu ? _ecu->getBoardDiagnostics() : nullptr;
+        JsonObject diagObj = doc["diagnostics"].to<JsonObject>();
+        diagObj["enabled"] = (diag != nullptr);
+        if (diag && diag->isReady()) {
+            diagObj["health"] = diag->getHealthScore();
+            diagObj["faults"] = diag->getFaultBitmask();
+            diagObj["scanMs"] = diag->getScanCycleMs();
+            JsonArray channels = diagObj["channels"].to<JsonArray>();
+            for (uint8_t i = 0; i < diag->getChannelCount(); i++) {
+                const DiagChannel& ch = diag->getChannel(i);
+                if (ch.name[0] == 0) continue;
+                JsonObject co = channels.add<JsonObject>();
+                co["ch"] = i;
+                co["name"] = ch.name;
+                co["value"] = ch.lastValue;
+                co["unit"] = ch.unit;
+                co["state"] = (int)ch.faultState;
+                co["faults"] = ch.totalFaults;
+            }
+        }
+
+        String json;
+        serializeJson(doc, json);
+        request->send(200, "application/json", json);
+    });
+
+    // Detailed diagnostic endpoint
+    _server.on("/diag", HTTP_GET, [this](AsyncWebServerRequest* request) {
+        if (!checkAuth(request)) return;
+        JsonDocument doc;
+        BoardDiagnostics* diag = _ecu ? _ecu->getBoardDiagnostics() : nullptr;
+        doc["enabled"] = (diag != nullptr);
+        if (diag && diag->isReady()) {
+            doc["health"] = diag->getHealthScore();
+            doc["faultBitmask"] = diag->getFaultBitmask();
+            doc["faultCount"] = diag->getFaultCount();
+            doc["scanCycleMs"] = diag->getScanCycleMs();
+            doc["currentCh"] = diag->getCurrentChannel();
+            doc["crossValid"] = diag->crossValidatePowerRails();
+            JsonArray channels = doc["channels"].to<JsonArray>();
+            for (uint8_t i = 0; i < diag->getChannelCount(); i++) {
+                const DiagChannel& ch = diag->getChannel(i);
+                JsonObject co = channels.add<JsonObject>();
+                co["ch"] = i;
+                co["name"] = ch.name;
+                co["value"] = ch.lastValue;
+                co["mv"] = ch.lastMillivolts;
+                co["unit"] = ch.unit;
+                co["min"] = ch.expectedMin;
+                co["max"] = ch.expectedMax;
+                co["state"] = (int)ch.faultState;
+                co["faultCount"] = ch.faultCounter;
+                co["totalFaults"] = ch.totalFaults;
+                co["lastReadMs"] = ch.lastReadMs;
+                if (ch.burstComplete) {
+                    JsonArray burst = co["burst"].to<JsonArray>();
+                    for (uint8_t j = 0; j < DIAG_BURST_SAMPLES; j++)
+                        burst.add(ch.burstSamples[j]);
+                }
+            }
         }
         String json;
         serializeJson(doc, json);

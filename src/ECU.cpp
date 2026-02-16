@@ -12,6 +12,7 @@
 #include "MCP3204Reader.h"
 #include "TransmissionManager.h"
 #include "CustomPin.h"
+#include "BoardDiagnostics.h"
 #include "TuneTable.h"
 #include "Config.h"
 #include "Logger.h"
@@ -28,7 +29,7 @@ static SPIClass hspi(HSPI);
 ECU::ECU(Scheduler* ts)
     : _ts(ts), _tUpdate(nullptr), _crankTeeth(36), _crankMissing(1),
       _realtimeTaskHandle(nullptr), _cj125(nullptr), _ads1115(nullptr),
-      _ads1115_2(nullptr), _mcp3204(nullptr), _trans(nullptr), _customPins(nullptr),
+      _ads1115_2(nullptr), _mcp3204(nullptr), _trans(nullptr), _customPins(nullptr), _diag(nullptr),
       _cj125Enabled(false), _transType(0),
       _pinAlternator(41), _pinI2cSda(0), _pinI2cScl(42),
       _pinHeater1(19), _pinHeater2(20), _pinCj125Ua1(3), _pinCj125Ua2(4),
@@ -74,6 +75,7 @@ ECU::~ECU() {
     delete _mcp3204;
     delete _trans;
     delete _customPins;
+    delete _diag;
     delete _cltRevLimitTable;
 }
 
@@ -165,6 +167,11 @@ void ECU::configure(const ProjectInfo& proj) {
     _oilPressureMcpChannel = proj.oilPressureMcpChannel;
     // Fuel pump priming
     _fuelPumpPrimeMs = proj.fuelPumpPrimeMs;
+
+    // Board diagnostics
+    _diagEnabled = proj.diagEnabled;
+    memcpy(_diagMuxSelPins, proj.diagMuxSelPins, sizeof(_diagMuxSelPins));
+    _diagMuxEnPin = proj.diagMuxEnPin;
 
     // ASE
     _fuel->setAseParams(proj.aseInitialPct, proj.aseDurationMs, proj.aseMinCltF);
@@ -397,6 +404,21 @@ void ECU::begin() {
     _customPins->setSensorManager(_sensors);
     _customPins->setEngineState(&_state);
 
+    // Board diagnostics — requires I2C (dedicated ADS1115) and expander #0 (mux control)
+    if (_diagEnabled && _i2cEnabled && _spiExpandersEnabled && _expander0Enabled) {
+        _diag = new BoardDiagnostics();
+        if (_diag->begin(0x4A, _diagMuxSelPins, _diagMuxEnPin)) {
+            _diag->setFaultCallback(_faultCb);
+            Log.info("ECU", "Board diagnostics enabled");
+        } else {
+            delete _diag;
+            _diag = nullptr;
+            Log.warn("ECU", "Board diagnostics init failed — ADS1115@0x4A not found");
+        }
+    } else if (_diagEnabled) {
+        Log.warn("ECU", "Board diagnostics skipped — I2C or expander #0 disabled");
+    }
+
     // Sensor + fuel calc update task (10ms on Core 0)
     _tUpdate = new Task(10 * TASK_MILLISECOND, TASK_FOREVER, [this]() { update(); }, _ts, true);
 
@@ -498,9 +520,17 @@ void ECU::update() {
     if (_customPins) {
         _customPins->update();
     }
-    uint32_t t2 = micros();
-    _updateTimeUs = t2 - t0;
     _sensorTimeUs = t1 - t0;
+
+    // Board diagnostics — idle-time scavenging (only if budget remains)
+    if (_diag) {
+        uint32_t elapsed = micros() - t0;
+        if (elapsed < 9500) {
+            _diag->update(9500 - elapsed);
+        }
+    }
+
+    _updateTimeUs = micros() - t0;
 }
 
 void ECU::checkLimpMode() {

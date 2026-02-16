@@ -4,6 +4,7 @@
 #include "IgnitionManager.h"
 #include "InjectionManager.h"
 #include "AlternatorControl.h"
+#include "BoardDiagnostics.h"
 #include <ArduinoJson.h>
 
 MQTTHandler::MQTTHandler(Scheduler* ts)
@@ -98,9 +99,40 @@ void MQTTHandler::publishState() {
     doc["dfco"] = es.dfcoActive;
     doc["overdwell"] = es.overdwellCount;
 
+    // Board diagnostics summary
+    BoardDiagnostics* diag = _ecu->getBoardDiagnostics();
+    if (diag && diag->isReady()) {
+        JsonObject diagObj = doc["diag"].to<JsonObject>();
+        diagObj["health"] = diag->getHealthScore();
+        diagObj["faults"] = diag->getFaultBitmask();
+    }
+
     char buf[1024];
     size_t len = serializeJson(doc, buf, sizeof(buf));
     _client.publish("ecu/state", 0, false, buf, len);
+}
+
+void MQTTHandler::publishDiag() {
+    if (!_client.connected() || _ecu == nullptr) return;
+    BoardDiagnostics* diag = _ecu->getBoardDiagnostics();
+    if (!diag || !diag->isReady()) return;
+
+    JsonDocument doc;
+    doc["health"] = diag->getHealthScore();
+    doc["faults"] = diag->getFaultBitmask();
+    doc["scanMs"] = diag->getScanCycleMs();
+    JsonArray channels = doc["ch"].to<JsonArray>();
+    for (uint8_t i = 0; i < diag->getChannelCount(); i++) {
+        const DiagChannel& ch = diag->getChannel(i);
+        if (ch.name[0] == 0) continue;
+        JsonObject co = channels.add<JsonObject>();
+        co["n"] = ch.name;
+        co["v"] = ch.lastValue;
+        co["s"] = (int)ch.faultState;
+    }
+    char buf[1024];
+    size_t len = serializeJson(doc, buf, sizeof(buf));
+    _client.publish("ecu/diag", 0, false, buf, len);
 }
 
 void MQTTHandler::publishFault(const char* fault, const char* message, bool active) {

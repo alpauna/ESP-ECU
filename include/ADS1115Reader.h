@@ -14,6 +14,12 @@ public:
     float readMillivolts(uint8_t ch);
     bool isReady() const { return _ready; }
 
+    // Non-blocking conversion API (for idle-time diagnostics)
+    void startReading(uint8_t ch);
+    bool conversionComplete();
+    int16_t getLastResult();
+    float getLastResultMillivolts();
+
 private:
     Adafruit_ADS1115 _ads;
     bool _ready;
