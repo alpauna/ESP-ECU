@@ -384,7 +384,7 @@ A second L2N7002SLLT1G drives all 6 MCP23S17 RESET pins from the ESP32 EN signal
 
 ### I2C Bus (ADS1115 only)
 
-With all GPIO expanders on SPI, the I2C bus (SDA=GPIO0, SCL=GPIO42) is used exclusively for the ADS1115 ADCs. A PCA9306DCUR (LCSC C33196) level shifter translates between the 3.3V ESP32 I2C domain and the 5V ADS1115 domain. All three ADS1115s operate at VDD=5V from a REF5050AIDR precision voltage reference (±0.1% accuracy, 8ppm/°C drift, 3µVpp/V noise), providing a clean reference supply that maximizes effective ADC resolution. The CD74HC4067 mux and PCA9306 run from a separate AMS1117-5.0 LDO. Both 5V rails share a dedicated analog ground (AGND) connected to the digital GND plane via a 2.2µH inductor + 100nF decoupling cap.
+With all GPIO expanders on SPI, the I2C bus (SDA=GPIO0, SCL=GPIO42) is used exclusively for the ADS1115 ADCs. A PCA9306DCUR (LCSC C33196) level shifter translates between the 3.3V ESP32 I2C domain and the 5V ADS1115 domain. All three ADS1115s operate at VDD=5V from a REF5050AIDR precision voltage reference (±0.1% accuracy, 8ppm/°C drift, 3µVpp/V noise), providing a clean reference supply that maximizes effective ADC resolution. The CD74HC4067 mux and PCA9306 run from a separate AMS1117-5.0 LDO. Both 5V rails share a dedicated analog ground (AGND) connected to the digital GND plane via a Murata BLM21PG221SN1D ferrite bead + 100nF/22µF decoupling.
 
 | Device | Address | Description |
 |--------|---------|-------------|
@@ -395,13 +395,13 @@ With all GPIO expanders on SPI, the I2C bus (SDA=GPIO0, SCL=GPIO42) is used excl
 
 **PCA9306 specs:** Ron ~3.5 ohm typical, <1.7ns switching, 400kHz I2C, 400pF bus capacitance budget. EN tied to VREF2 via 200k ohm pull-up per TI reference design.
 
-**Dedicated analog power supply:** A buck converter generates 6.94V, which feeds two REF5050 precision references and an AMS1117-5.0 LDO. The AGND plane connects to digital GND via a Murata BLM21PG221SN1D ferrite bead (220Ω@100MHz, 45mΩ DCR, C85840) with 100nF (C85923) + 10µF ceramic decoupling on the AGND side. The ferrite bead provides lossy broadband noise suppression without the resonance risk of an LC inductor filter, while the dual capacitors handle both high-frequency and transient filtering.
+**Dedicated analog power supply:** An LGS5145 buck converter (C5123971) generates 6.8V (R_top=15k, R_bot=2k, Vref=0.8V), which feeds two REF5050 precision references and an AMS1117-5.0 LDO. A SMBJ7.0A TVS (C19077563) clamps the 6.8V rail against transients. The AGND plane connects to digital GND via a Murata BLM21PG221SN1D ferrite bead (220Ω@100MHz, 45mΩ DCR, C85840) with 100nF (C85923) + 22µF ceramic decoupling on the AGND side. The ferrite bead provides lossy broadband noise suppression without the resonance risk of an LC inductor filter, while the dual capacitors handle both high-frequency and transient filtering. The AMS1117-5.0 output uses a KEMET T491D tantalum capacitor (47µF, C117039) for LDO stability — the AMS1117 requires output ESR of 0.1-0.5Ω which tantalum provides (~0.7-1.5Ω).
 
-**REF5050AIDR ×2 (LCSC C27804):** Precision 5.000V reference, ±0.1% initial accuracy, 8ppm/°C temp drift, 3µVpp/V noise, ±10mA output, VIN min 5.2V. SOIC-8 package, 22ppm long-term drift per 1000h. Both fed from 6.94V buck (1.94V headroom).
+**REF5050AIDR ×2 (LCSC C27804):** Precision 5.000V reference, ±0.1% initial accuracy, 8ppm/°C temp drift, 3µVpp/V noise, ±10mA output, VIN min 5.2V. SOIC-8 package, 22ppm long-term drift per 1000h. Both fed from 6.8V buck via 33Ω input RC filter (R=33Ω + C=10µF/100nF, fc≈480Hz) for switching noise rejection. Headroom = 1.8V.
 - **REF5050 #1:** VREF input on MCP3204 SPI ADC — sets the 12-bit full-scale range to exactly 5.000V
 - **REF5050 #2:** VDD for all 3 ADS1115 I2C ADCs — provides clean supply for internal bandgap reference (~0.6mA total load)
 
-**AMS1117-5.0 (LCSC C6187):** 5V LDO, 1A output, 1.3V dropout. Supplies VCC to CD74HC4067 mux and VREF2 to PCA9306 level shifter. Input from 6.94V buck (1.94V headroom).
+**AMS1117-5.0 (LCSC C6187):** 5V LDO, 1A output, 1.3V dropout. Supplies VCC to CD74HC4067 mux and VREF2 to PCA9306 level shifter. Input from 6.8V buck (1.8V headroom). Output capacitor is 47µF KEMET T491D tantalum (ESR ~0.7-1.5Ω) for LDO stability.
 
 ### ADS1115 Conversion-Ready (ALERT/RDY)
 
@@ -488,18 +488,18 @@ Disabled by default (`diagEnabled = false`). Enable in config and connect the ha
 | Part | LCSC | Qty | Function |
 |------|------|-----|----------|
 | CD74HC4067SM96 (SSOP-24) | C98457 | 1 | 16:1 analog mux @ 5V — routes test points to ADC |
-| ADS1115IDGSR (MSOP-10) | C468683 | 1 | 16-bit I2C ADC @ 0x4A, VDD=5V — reads mux output on AIN0 |
+| ADS1115IDGST (VSSOP-10) | C468683 | 1 | 16-bit I2C ADC @ 0x4A, VDD=5V — reads mux output on AIN0 |
 | PCA9306DCUR (VSSOP-8) | C33196 | 1 | I2C level shifter 3.3V ↔ 5V (shared by all 3 ADS1115) |
 | REF5050AIDR (SOIC-8) | C27804 | 2 | Precision 5.000V reference — #1: MCP3204 VREF, #2: ADS1115 VDD |
-| AMS1117-5.0 (SOT-223) | C6187 | 1 | 5V LDO — mux VCC + PCA9306 VREF2, fed from 6.94V buck |
+| AMS1117-5.0 (SOT-223) | C6187 | 1 | 5V LDO — mux VCC + PCA9306 VREF2, fed from 6.8V buck (47µF tantalum output) |
 | BLM21PG221SN1D ferrite bead (0805) | C85840 | 1 | AGND-GND isolation (220Ω@100MHz, 45mΩ DCR, lossy broadband filter) |
-| 10µF ceramic 0402 | — | 1 | AGND bulk decoupling (parallel with 100nF, transient filtering) |
+| 22µF ceramic 0805 | C907991 | 1 | AGND bulk decoupling (parallel with 100nF, transient filtering) |
 | 47k ohm 0402 | — | 4 | Voltage divider high-side (12V/coil/inj/fuelpump test points) |
 | 15k ohm 0402 | — | 3 | Voltage divider high-side (5V/VCCB/RESET test points) |
 | 10k ohm 0402 | — | 8 | Voltage divider low-side and NTC pullup |
 | 10k NTC 0402 | — | 1 | Board temperature sensor (beta 3950, R0=10k @ 25C) |
-| 0.1 ohm 2512 | — | 1 | Board current shunt resistor |
-| INA180A (SOT-23-5) or equivalent | — | 1 | Current sense amplifier (gain 20) for shunt |
+| 0.1 ohm 2512 | C49164916 | 1 | Board current shunt resistor (R4) |
+| INA180A1IDBVR (SOT-23-5) | C122228 | 1 | Current sense amplifier (gain 20V/V) for 0.1Ω shunt, 0-2A range |
 | 100nF 0402 | — | 2 | Bypass caps: VCC on CD74HC4067 and ADS1115 |
 | 10uF 0402 | — | 1 | Bulk bypass for ADS1115 |
 
@@ -521,7 +521,7 @@ Disabled by default (`diagEnabled = false`). Enable in config and connect the ha
 
 ### I2C Bus (with Diagnostics)
 
-All ADS1115s operate at VDD=5V from a dedicated REF5050AIDR precision reference (#2), with I2C level-shifted via PCA9306DCUR (VREF1=3.3V, VREF2=5V from AMS1117-5.0). The MCP3204 uses a separate REF5050 (#1) on its VREF pin for 12-bit full-scale accuracy. Dedicated AGND plane with LC filter isolation from digital GND.
+All ADS1115s operate at VDD=5V from a dedicated REF5050AIDR precision reference (#2), with I2C level-shifted via PCA9306DCUR (VREF1=3.3V, VREF2=5V from AMS1117-5.0). The MCP3204 uses a separate REF5050 (#1) on its VREF pin for 12-bit full-scale accuracy. Dedicated AGND plane with ferrite bead isolation from digital GND.
 
 | Device | Address | ALERT/RDY | Description |
 |--------|---------|-----------|-------------|
