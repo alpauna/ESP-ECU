@@ -149,8 +149,8 @@ All 6 MCP23S17 devices share the same CS line. Each device is addressed individu
 
 | Device | Address | Description |
 |--------|---------|-------------|
-| PCA9306DCUR | — | I2C level shifter: VREF1=3.3V (ESP32), VREF2=5V (ADS1115s) |
-| REF5050AIDR | — | Precision 5.000V reference: VDD for all ADS1115s + CD74HC4067 VCC |
+| PCA9306DCUR | — | I2C level shifter: VREF1=3.3V (ESP32), VREF2=5V from AMS1117-5.0 |
+| REF5050AIDR | — | Precision 5.000V reference → ADS1115 VDD (clean supply for internal ref) |
 | ADS1115 #0 | 0x48 | 16-bit ADC @ 5V -- CJ125_UR (CH0/1), TFT temp (CH2), MLPS (CH3) |
 | ADS1115 #1 | 0x49 | 16-bit ADC @ 5V -- MAP (CH0), TPS (CH1). Frees GPIO 5/6 for OSS/TSS |
 | ADS1115 #2 | 0x4A | 16-bit ADC @ 5V -- Diagnostics mux output (AIN0) |
@@ -384,7 +384,7 @@ A second L2N7002SLLT1G drives all 6 MCP23S17 RESET pins from the ESP32 EN signal
 
 ### I2C Bus (ADS1115 only)
 
-With all GPIO expanders on SPI, the I2C bus (SDA=GPIO0, SCL=GPIO42) is used exclusively for the ADS1115 ADCs. A PCA9306DCUR (LCSC C33196) level shifter translates between the 3.3V ESP32 I2C domain and the 5V ADS1115 domain. All three ADS1115s operate at VDD=5V supplied by a REF5050AIDR precision voltage reference (±0.1% accuracy, 8ppm/°C drift, 3µVpp/V noise). The clean reference supply maximizes ADS1115 effective resolution by minimizing supply noise coupling. Analog input range 0-5.3V (absolute max), matching the 5V CD74HC4067 mux domain.
+With all GPIO expanders on SPI, the I2C bus (SDA=GPIO0, SCL=GPIO42) is used exclusively for the ADS1115 ADCs. A PCA9306DCUR (LCSC C33196) level shifter translates between the 3.3V ESP32 I2C domain and the 5V ADS1115 domain. All three ADS1115s operate at VDD=5V from a REF5050AIDR precision voltage reference (±0.1% accuracy, 8ppm/°C drift, 3µVpp/V noise), providing a clean reference supply that maximizes effective ADC resolution. The CD74HC4067 mux and PCA9306 run from a separate AMS1117-5.0 LDO. Both 5V rails share a dedicated analog ground (AGND) connected to the digital GND plane via a 2.2µH inductor + 100nF decoupling cap.
 
 | Device | Address | Description |
 |--------|---------|-------------|
@@ -395,7 +395,13 @@ With all GPIO expanders on SPI, the I2C bus (SDA=GPIO0, SCL=GPIO42) is used excl
 
 **PCA9306 specs:** Ron ~3.5 ohm typical, <1.7ns switching, 400kHz I2C, 400pF bus capacitance budget. EN tied to VREF2 via 200k ohm pull-up per TI reference design.
 
-**REF5050AIDR specs (LCSC C27804):** Precision 5.000V reference, ±0.1% initial accuracy, 8ppm/°C temp drift, 3µVpp/V noise, ±10mA output, VIN min 5.2V. SOIC-8 package, 22ppm long-term drift per 1000h. Supplies VDD to all 3 ADS1115s and VCC to the CD74HC4067 mux. Total load ~0.6mA (3x ADS1115) + ~8µA (mux) — well within ±10mA budget.
+**Dedicated analog power supply:** A buck converter generates 6.94V, which feeds two REF5050 precision references and an AMS1117-5.0 LDO. The AGND plane connects to digital GND via a 2.2µH inductor (C5832324) and 100nF decoupling cap (C85923), forming an LC filter (f₀ ≈ 10.7kHz) that attenuates switching noise from the digital domain.
+
+**REF5050AIDR ×2 (LCSC C27804):** Precision 5.000V reference, ±0.1% initial accuracy, 8ppm/°C temp drift, 3µVpp/V noise, ±10mA output, VIN min 5.2V. SOIC-8 package, 22ppm long-term drift per 1000h. Both fed from 6.94V buck (1.94V headroom).
+- **REF5050 #1:** VREF input on MCP3204 SPI ADC — sets the 12-bit full-scale range to exactly 5.000V
+- **REF5050 #2:** VDD for all 3 ADS1115 I2C ADCs — provides clean supply for internal bandgap reference (~0.6mA total load)
+
+**AMS1117-5.0 (LCSC C6187):** 5V LDO, 1A output, 1.3V dropout. Supplies VCC to CD74HC4067 mux and VREF2 to PCA9306 level shifter. Input from 6.94V buck (1.94V headroom).
 
 ### ADS1115 Conversion-Ready (ALERT/RDY)
 
@@ -484,7 +490,9 @@ Disabled by default (`diagEnabled = false`). Enable in config and connect the ha
 | CD74HC4067SM96 (SSOP-24) | C98457 | 1 | 16:1 analog mux @ 5V — routes test points to ADC |
 | ADS1115IDGSR (MSOP-10) | C468683 | 1 | 16-bit I2C ADC @ 0x4A, VDD=5V — reads mux output on AIN0 |
 | PCA9306DCUR (VSSOP-8) | C33196 | 1 | I2C level shifter 3.3V ↔ 5V (shared by all 3 ADS1115) |
-| REF5050AIDR (SOIC-8) | C27804 | 1 | Precision 5.000V reference — VDD for all 3 ADS1115 + mux VCC |
+| REF5050AIDR (SOIC-8) | C27804 | 2 | Precision 5.000V reference — #1: MCP3204 VREF, #2: ADS1115 VDD |
+| AMS1117-5.0 (SOT-223) | C6187 | 1 | 5V LDO — mux VCC + PCA9306 VREF2, fed from 6.94V buck |
+| 2.2µH inductor (0805) | C5832324 | 1 | AGND-GND isolation (LC filter with 100nF cap, f₀ ≈ 10.7kHz) |
 | 47k ohm 0402 | — | 4 | Voltage divider high-side (12V/coil/inj/fuelpump test points) |
 | 15k ohm 0402 | — | 3 | Voltage divider high-side (5V/VCCB/RESET test points) |
 | 10k ohm 0402 | — | 8 | Voltage divider low-side and NTC pullup |
@@ -512,7 +520,7 @@ Disabled by default (`diagEnabled = false`). Enable in config and connect the ha
 
 ### I2C Bus (with Diagnostics)
 
-All ADS1115s operate at VDD=5V from REF5050AIDR precision reference, with I2C level-shifted via PCA9306DCUR (VREF1=3.3V, VREF2=5V). Analog inputs accept 0-5.3V (absolute max), matching the 5V CD74HC4067 mux domain.
+All ADS1115s operate at VDD=5V from a dedicated REF5050AIDR precision reference (#2), with I2C level-shifted via PCA9306DCUR (VREF1=3.3V, VREF2=5V from AMS1117-5.0). The MCP3204 uses a separate REF5050 (#1) on its VREF pin for 12-bit full-scale accuracy. Dedicated AGND plane with LC filter isolation from digital GND.
 
 | Device | Address | ALERT/RDY | Description |
 |--------|---------|-----------|-------------|
