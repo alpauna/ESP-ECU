@@ -112,6 +112,9 @@ Cores communicate via shared `EngineState` struct with volatile fields.
 | Fuel pump relay | MCP23S17 #0 P0 | SPI expander (pin 200) |
 | Tachometer output | MCP23S17 #0 P1 | SPI expander (pin 201) |
 | Check engine light | MCP23S17 #0 P2 | SPI expander (pin 202) |
+| ADS1115 ALERT #0 | MCP23S17 #0 P3 | ADS1115 @0x4A ALERT/RDY input (pin 203) |
+| ADS1115 ALERT #1 | MCP23S17 #0 P4 | ADS1115 @0x48 ALERT/RDY input (pin 204) |
+| ADS1115 ALERT #2 | MCP23S17 #0 P5 | ADS1115 @0x49 ALERT/RDY input (pin 205) |
 | CJ125 SS1 | MCP23S17 #0 P8 | CJ125 Bank 1 chip select (pin 208) |
 | CJ125 SS2 | MCP23S17 #0 P9 | CJ125 Bank 2 chip select (pin 209) |
 | SS_A | MCP23S17 #1 P0 | Shift Solenoid A (5V via TXB0108, pin 216) |
@@ -148,6 +151,7 @@ All 6 MCP23S17 devices share the same CS line. Each device is addressed individu
 |--------|---------|-------------|
 | ADS1115 #0 | 0x48 | 16-bit ADC -- CJ125_UR (CH0/1), TFT temp (CH2), MLPS (CH3) |
 | ADS1115 #1 | 0x49 | 16-bit ADC -- MAP (CH0), TPS (CH1). Frees GPIO 5/6 for OSS/TSS |
+| ADS1115 #2 | 0x4A | 16-bit ADC -- Diagnostics mux output (AIN0) |
 
 **GPIO Allocation Summary:**
 
@@ -237,7 +241,7 @@ Devices are numbered by priority — input-focused chips get the lowest addresse
 
 | Device | Pins | Purpose | Interrupt Priority |
 |--------|------|---------|--------------------|
-| #0 (addr 0) | 200-215 | General I/O — fuel pump, tach, CEL, CJ125 CS, custom inputs | **Highest** — scan first |
+| #0 (addr 0) | 200-215 | General I/O — fuel pump, tach, CEL, ADS1115 ALERT/RDY, CJ125 CS | **Highest** — scan first |
 | #1 (addr 1) | 216-231 | Transmission solenoids (SS-A/B/C/D) + spare I/O | High |
 | #2 (addr 2) | 232-247 | Expansion — custom I/O, user-defined pins | Medium |
 | #3 (addr 3) | 248-263 | Expansion — custom I/O, user-defined pins | Medium |
@@ -385,6 +389,28 @@ With all GPIO expanders on SPI, the I2C bus (SDA=GPIO0, SCL=GPIO42) is used excl
 | ADS1115 #0 | 0x48 | CJ125_UR (CH0/1), TFT temp (CH2), MLPS (CH3) |
 | ADS1115 #1 | 0x49 | MAP (CH0), TPS (CH1) — frees GPIO 5/6 for OSS/TSS |
 
+### ADS1115 Conversion-Ready (ALERT/RDY)
+
+Each ADS1115 has an open-drain ALERT/RDY output (pin 6) that goes LOW when a conversion completes. The Adafruit library configures conversion-ready mode automatically in `startADCReading()` (Hi_thresh=0x8000, Lo_thresh=0x0000, CQUE=1CONV). This eliminates the need to poll the I2C config register — a three-tier detection scheme provides the fastest available method based on pin type:
+
+| Method | Per-check cost | Mechanism | Used when |
+|--------|---------------|-----------|-----------|
+| Native GPIO ISR | ~0 µs | `IRAM_ATTR` ISR on FALLING edge sets volatile flag | ALERT/RDY wired to ESP32 GPIO < 49 |
+| Expander SPI read | ~20 µs | Direct `xDigitalRead()` via MCP23S17 SPI | ALERT/RDY wired to MCP23S17 pin (200+) |
+| I2C config poll | ~200 µs | `conversionComplete()` reads ADS1115 config register | No ALERT/RDY pin configured (pin = 0) |
+
+The expander SPI read is 10x faster than I2C config register polling. Native GPIO ISR is effectively zero-cost — the volatile flag is set by hardware interrupt and checked with a single memory read.
+
+**ALERT/RDY pin assignments (MCP23S17 #0, INPUT_PULLUP):**
+
+| ADS1115 | Address | ALERT/RDY Pin | MCP23S17 #0 | Config key | Default |
+|---------|---------|---------------|-------------|------------|---------|
+| #0 (CJ125) | 0x48 | 204 | P4 | `pins.adsAlert1` | 204 |
+| #1 (MAP/TPS) | 0x49 | 205 | P5 | `pins.adsAlert2` | 205 |
+| #2 (Diagnostics) | 0x4A | 203 | P3 | `diagnostics.alertPin` | 203 |
+
+**Wiring:** ADS1115 ALERT/RDY (open-drain) → MCP23S17 input pin with internal pull-up enabled (GPPUA/B register). No external pull-up resistor needed. Set any pin to 0 in config to disable ALERT/RDY and fall back to I2C polling for that device.
+
 ## Board Diagnostics
 
 Built-in self-test and health monitoring system using a CD74HC4067SM96 16:1 analog multiplexer and a dedicated ADS1115 ADC. Diagnostics run only during idle time within the 10ms ECU update cycle — never impacting real-time engine control. The system monitors power rails, output drivers, control signals, board temperature, and current draw, detecting faults automatically with debounce and burst-sample investigation.
@@ -466,7 +492,7 @@ Disabled by default (`diagEnabled = false`). Enable in config and connect the ha
 
 1. SELECT_MUX — Set S0-S3 via xDigitalWrite on MCP23S17 #4 P8-P11, enable mux via P12
 2. START_CONV — Start ADS1115 single-shot conversion on AIN0
-3. WAIT_CONV — Poll conversion complete (non-blocking), timeout 15ms
+3. WAIT_CONV — Check ALERT/RDY via SPI pin read (~20µs) or I2C poll fallback (~200µs), timeout 15ms
 4. READ_RESULT — Read millivolts, apply scale factor, evaluate fault
 5. IDLE — Advance to next channel
 
@@ -476,11 +502,11 @@ Disabled by default (`diagEnabled = false`). Enable in config and connect the ha
 
 ### I2C Bus (with Diagnostics)
 
-| Device | Address | Description |
-|--------|---------|-------------|
-| ADS1115 #0 | 0x48 | CJ125_UR (CH0/1), TFT temp (CH2), MLPS (CH3) |
-| ADS1115 #1 | 0x49 | MAP (CH0), TPS (CH1) — frees GPIO 5/6 for OSS/TSS |
-| ADS1115 #2 | 0x4A | Diagnostics mux output (AIN0) — dedicated, no contention |
+| Device | Address | ALERT/RDY | Description |
+|--------|---------|-----------|-------------|
+| ADS1115 #0 | 0x48 | Pin 204 (MCP#0 P4) | CJ125_UR (CH0/1), TFT temp (CH2), MLPS (CH3) |
+| ADS1115 #1 | 0x49 | Pin 205 (MCP#0 P5) | MAP (CH0), TPS (CH1) — frees GPIO 5/6 for OSS/TSS |
+| ADS1115 #2 | 0x4A | Pin 203 (MCP#0 P3) | Diagnostics mux output (AIN0) — dedicated, no contention |
 
 ## Safe Mode
 

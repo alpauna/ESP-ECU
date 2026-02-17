@@ -47,6 +47,22 @@ bool ADS1115Reader::begin(uint8_t addr, adsGain_t gain, uint16_t rate) {
 }
 
 // ---- ALERT/RDY pin setup ----
+//
+// The Adafruit library already configures conversion-ready mode in startADCReading():
+//   Hi_thresh = 0x8000, Lo_thresh = 0x0000, CQUE = 1CONV
+// ALERT/RDY (open-drain) goes LOW when conversion completes.
+//
+// Native GPIO:  IRAM_ATTR ISR on FALLING edge → volatile _convReady flag.
+//               conversionComplete() = volatile bool check (~0µs).
+//
+// Expander pin: Direct SPI GPIO read via xDigitalRead (~20µs).
+//               10x faster than I2C config register poll (~200µs).
+//               NOTE: Shared ISR gate (hasSharedInterrupt) is NOT used because
+//               CustomPin::update() processes and clears the shared interrupt flag
+//               before diagnostics runs, causing a race condition. Direct SPI
+//               polling is simple, reliable, and fast enough.
+//
+// Fallback:     I2C config register poll (~200µs). Used when alertPin = 0.
 
 void ADS1115Reader::setAlertPin(uint16_t pin) {
     _alertPin = pin;
@@ -55,17 +71,14 @@ void ADS1115Reader::setAlertPin(uint16_t pin) {
     if (pin == 0) return;
 
     if (pin >= SPI_EXP_PIN_OFFSET) {
-        // MCP23S17 expander pin — enable interrupt-on-change + SPI poll
+        // MCP23S17 expander pin — direct SPI GPIO read (~20µs vs ~200µs I2C)
         uint8_t expIdx = (pin - SPI_EXP_PIN_OFFSET) / SPI_EXP_PIN_COUNT;
         PinExpander& exp = PinExpander::instance();
         if (exp.isReady(expIdx)) {
             xPinMode(pin, INPUT_PULLUP);
-            // Enable interrupt-on-change so shared ISR fires on ALERT/RDY transitions.
-            // conversionComplete() uses hasSharedInterrupt() as a fast gate before SPI read.
-            exp.enablePinInterrupt(pin);
             _useAlertPin = true;
             _alertIsNative = false;
-            Log.info("ADS", "ALERT/RDY on expander pin %d (#%d) — shared ISR + SPI confirm", pin, expIdx);
+            Log.info("ADS", "ALERT/RDY on expander pin %d (#%d) — SPI read (~20us)", pin, expIdx);
         } else {
             Log.warn("ADS", "ALERT/RDY pin %d: expander #%d not ready — I2C fallback", pin, expIdx);
         }
@@ -80,7 +93,7 @@ void ADS1115Reader::setAlertPin(uint16_t pin) {
     }
 }
 
-// ---- Blocking read (uses ISR/SPI instead of I2C poll) ----
+// ---- Blocking read ----
 
 int16_t ADS1115Reader::readChannel(uint8_t ch) {
     if (!_ready || ch > 3) return 0;
@@ -95,10 +108,8 @@ int16_t ADS1115Reader::readChannel(uint8_t ch) {
             if (millis() - start > ADS_READ_TIMEOUT_MS) return 0;
         }
     } else if (_useAlertPin) {
-        // Expander: shared ISR gate + SPI confirm (~0µs until interrupt, then ~20µs once)
-        PinExpander& exp = PinExpander::instance();
-        while (true) {
-            if (exp.hasSharedInterrupt() && xDigitalRead(_alertPin) == LOW) break;
+        // Expander: direct SPI GPIO read (~20µs per check, 10x faster than I2C)
+        while (xDigitalRead(_alertPin) != LOW) {
             if (millis() - start > ADS_READ_TIMEOUT_MS) return 0;
         }
     } else {
@@ -131,10 +142,8 @@ bool ADS1115Reader::conversionComplete() {
         return _convReady;
     }
     if (_useAlertPin) {
-        // Expander: check shared ISR flag first (volatile, ~0µs).
-        // Only do SPI read when an interrupt has actually occurred.
-        if (!PinExpander::instance().hasSharedInterrupt()) return false;
-        return (xDigitalRead(_alertPin) == LOW);  // SPI confirm (~20µs, once)
+        // Expander: direct SPI GPIO read (~20µs, 10x faster than I2C)
+        return (xDigitalRead(_alertPin) == LOW);
     }
     // Fallback: I2C config register poll (~200µs)
     return _ads.conversionComplete();
