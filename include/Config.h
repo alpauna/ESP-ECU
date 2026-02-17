@@ -149,8 +149,8 @@ struct ProjectInfo {
     float cltRevLimitValues[6];     // RPM limits
     // Board diagnostics
     bool diagEnabled;               // Enable diagnostic subsystem (default false)
-    uint16_t diagMuxSelPins[4];     // CD74HC4067 select lines S0-S3 (default MCP23S17#0 P3-P6: 203-206)
-    uint16_t diagMuxEnPin;          // CD74HC4067 enable pin (default MCP23S17#0 P7: 207)
+    uint16_t diagMuxSelPins[4];     // CD74HC4067 select lines S0-S3 (default MCP23S17#4 P8-P11: 272-275)
+    uint16_t diagMuxEnPin;          // CD74HC4067 enable pin (default MCP23S17#4 P12: 276)
 };
 
 class Config {

@@ -404,8 +404,8 @@ void ECU::begin() {
     _customPins->setSensorManager(_sensors);
     _customPins->setEngineState(&_state);
 
-    // Board diagnostics — requires I2C (dedicated ADS1115) and expander #0 (mux control)
-    if (_diagEnabled && _i2cEnabled && _spiExpandersEnabled && _expander0Enabled) {
+    // Board diagnostics — requires I2C (dedicated ADS1115) and expander #4 (mux control)
+    if (_diagEnabled && _i2cEnabled && _spiExpandersEnabled && _expander4Enabled) {
         _diag = new BoardDiagnostics();
         if (_diag->begin(0x4A, _diagMuxSelPins, _diagMuxEnPin)) {
             _diag->setFaultCallback(_faultCb);
@@ -416,7 +416,7 @@ void ECU::begin() {
             Log.warn("ECU", "Board diagnostics init failed — ADS1115@0x4A not found");
         }
     } else if (_diagEnabled) {
-        Log.warn("ECU", "Board diagnostics skipped — I2C or expander #0 disabled");
+        Log.warn("ECU", "Board diagnostics skipped — I2C or expander #4 disabled");
     }
 
     // Sensor + fuel calc update task (10ms on Core 0)

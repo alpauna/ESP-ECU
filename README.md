@@ -241,7 +241,7 @@ Devices are numbered by priority — input-focused chips get the lowest addresse
 | #1 (addr 1) | 216-231 | Transmission solenoids (SS-A/B/C/D) + spare I/O | High |
 | #2 (addr 2) | 232-247 | Expansion — custom I/O, user-defined pins | Medium |
 | #3 (addr 3) | 248-263 | Expansion — custom I/O, user-defined pins | Medium |
-| #4 (addr 4) | 264-279 | Coils 1-8 (P0-P7), 8 spare (P8-P15) | **Low** — output only |
+| #4 (addr 4) | 264-279 | Coils 1-8 (P0-P7), diag mux S0-S3+EN (P8-P12), 3 spare (P13-P15) | **Low** — output only |
 | #5 (addr 5) | 280-295 | Injectors 1-8 (P0-P7), 8 spare (P8-P15) | **Lowest** — output only |
 
 **Recommendation:** Configure input-responsive functions (custom pin ISR, digital switch inputs, feedback signals) on devices #0-#3. Reserve devices #4-#5 for outputs only (coils, injectors). This ensures interrupt scanning prioritizes chips that are most likely to have pending state changes.
@@ -406,11 +406,11 @@ Disabled by default (`diagEnabled = false`). Enable in config and connect the ha
 | 7 | I2 | CH2: 12V battery (47k/10k divider) |
 | 8 | I1 | CH1: 5V rail (15k/10k divider) |
 | 9 | I0 | CH0: 3.3V rail (direct) |
-| 10 | S0 | MCP23S17 #0 P3 (pin 203) — select bit 0 |
-| 11 | S1 | MCP23S17 #0 P4 (pin 204) — select bit 1 |
+| 10 | S0 | MCP23S17 #4 P8 (pin 272) — select bit 0 |
+| 11 | S1 | MCP23S17 #4 P9 (pin 273) — select bit 1 |
 | 12 | GND | Ground |
-| 13 | S2 | MCP23S17 #0 P5 (pin 205) — select bit 2 |
-| 14 | S3 | MCP23S17 #0 P6 (pin 206) — select bit 3 |
+| 13 | S2 | MCP23S17 #4 P10 (pin 274) — select bit 2 |
+| 14 | S3 | MCP23S17 #4 P11 (pin 275) — select bit 3 |
 | 15 | I15 | CH15: Spare (user-defined) |
 | 16 | I14 | CH14: Board current (0.1R shunt, gain 20) |
 | 17 | I13 | CH13: CJ125 heater 2 sample (divider 11:1) |
@@ -419,7 +419,7 @@ Disabled by default (`diagEnabled = false`). Enable in config and connect the ha
 | 20 | I10 | CH10: PERIPH_EN GPIO (3.3V domain) |
 | 21 | I9 | CH9: MCP23S17 RESET# (15k/10k divider, 5V domain) |
 | 22 | I8 | CH8: TXB0108 OE (3.3V domain, direct) |
-| 23 | EN | MCP23S17 #0 P7 (pin 207) — active LOW enable |
+| 23 | EN | MCP23S17 #4 P12 (pin 276) — active LOW enable |
 | 24 | VCC | 3.3V supply (operates in 3.3V domain, inputs use voltage dividers for higher rails) |
 
 **Channel select truth table:**
@@ -464,7 +464,7 @@ Disabled by default (`diagEnabled = false`). Enable in config and connect the ha
 
 **State machine phases (per channel):**
 
-1. SELECT_MUX — Set S0-S3 via xDigitalWrite on MCP23S17 #0 P3-P6, enable mux via P7
+1. SELECT_MUX — Set S0-S3 via xDigitalWrite on MCP23S17 #4 P8-P11, enable mux via P12
 2. START_CONV — Start ADS1115 single-shot conversion on AIN0
 3. WAIT_CONV — Poll conversion complete (non-blocking), timeout 15ms
 4. READ_RESULT — Read millivolts, apply scale factor, evaluate fault

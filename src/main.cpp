@@ -236,8 +236,8 @@ ProjectInfo proj = {
     {3000, 3500, 4500, 5500, 6000, 6000}, // cltRevLimitValues
     // Board diagnostics
     false,                       // diagEnabled
-    {203, 204, 205, 206},        // diagMuxSelPins
-    207                          // diagMuxEnPin
+    {272, 273, 274, 275},        // diagMuxSelPins (MCP23S17#4 P8-P11)
+    276                          // diagMuxEnPin (MCP23S17#4 P12)
 };
 
 // Core objects

@@ -338,11 +338,11 @@ bool Config::loadConfig(const char* filename, ProjectInfo& proj) {
     proj.diagEnabled = doc["diagnostics"]["enabled"] | false;
     {
         JsonArray muxPins = doc["diagnostics"]["muxSelPins"];
-        uint16_t defaults[] = {203, 204, 205, 206};
+        uint16_t defaults[] = {272, 273, 274, 275};
         for (uint8_t i = 0; i < 4; i++)
             proj.diagMuxSelPins[i] = (muxPins && i < muxPins.size()) ? (uint16_t)(int)muxPins[i] : defaults[i];
     }
-    proj.diagMuxEnPin = doc["diagnostics"]["muxEnPin"] | 207;
+    proj.diagMuxEnPin = doc["diagnostics"]["muxEnPin"] | 276;
 
     Serial.printf("Config loaded: %d cyl, %d-%d trigger\n", proj.cylinders, proj.crankTeeth, proj.crankMissing);
     return true;
