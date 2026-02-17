@@ -15,6 +15,7 @@ ESP32-S3 Engine Control Unit for gas engines. Controls coil-over-plug ignition (
 - **I/O expansion** -- 6x SPI MCP23S17 (96 pins) on shared HSPI bus with single CS, hardware addressing (HAEN), unified virtual pin routing, ghost device detection, and runtime health monitoring
 - **Safe mode** -- Automatic boot loop detection with peripheral isolation. Configurable per-device enable/disable for I2C and SPI expanders via web UI
 - **Limp mode** -- Sensor fault protection (MAP, TPS, CLT, IAT, VBAT), expander health monitoring, and oil pressure sensor support. Reduces rev limit, caps ignition advance, locks transmission gear, and lights CEL
+- **Board diagnostics** -- CD74HC4067 16:1 analog mux + dedicated ADS1115 ADC monitors 16 test points (power rails, output drivers, board temp, current) during idle time. Fault detection with debounce, burst investigation, and power rail cross-validation
 - **Oil pressure monitoring** -- Configurable as digital switch or analog sender (0-5V via MCP3204 or native GPIO), with engine-running guard and startup delay
 - **Remote access** -- REST API, WebSocket, and MQTT for monitoring and tuning
 - **Live dashboard** -- Real-time gauges and status at `/dashboard`
@@ -71,6 +72,7 @@ Cores communicate via shared `EngineState` struct with volatile fields.
 | `src/Logger.cpp` | Multi-output logging with tar.gz rotation |
 | `src/WebHandler.cpp` | Web server and REST API |
 | `src/MQTTHandler.cpp` | MQTT client with ECU topics |
+| `src/BoardDiagnostics.cpp` | Built-in self-test: CD74HC4067 mux + ADS1115 health monitoring |
 | `src/PSRAMAllocator.cpp` | PSRAM allocator override |
 | `src/OtaUtils.cpp` | OTA firmware update from SD card |
 
@@ -383,6 +385,103 @@ With all GPIO expanders on SPI, the I2C bus (SDA=GPIO0, SCL=GPIO42) is used excl
 | ADS1115 #0 | 0x48 | CJ125_UR (CH0/1), TFT temp (CH2), MLPS (CH3) |
 | ADS1115 #1 | 0x49 | MAP (CH0), TPS (CH1) — frees GPIO 5/6 for OSS/TSS |
 
+## Board Diagnostics
+
+Built-in self-test and health monitoring system using a CD74HC4067SM96 16:1 analog multiplexer and a dedicated ADS1115 ADC. Diagnostics run only during idle time within the 10ms ECU update cycle — never impacting real-time engine control. The system monitors power rails, output drivers, control signals, board temperature, and current draw, detecting faults automatically with debounce and burst-sample investigation.
+
+Disabled by default (`diagEnabled = false`). Enable in config and connect the hardware to activate.
+
+### CD74HC4067SM96 Pinout (LCSC C98457)
+
+[TI CD74HC4067 Datasheet](https://www.ti.com/lit/ds/symlink/cd74hc4067.pdf) — SSOP-24 package, 2V-6V, 70 ohm Ron
+
+| Pin | Name | Connection |
+|-----|------|------------|
+| 1 | COM (common I/O) | ADS1115 @ 0x4A AIN0 (analog signal to ADC) |
+| 2 | I7 | CH7: Fuel pump relay drive (47k/10k divider) |
+| 3 | I6 | CH6: Alternator field PWM (RC average) |
+| 4 | I5 | CH5: Injector 1 output (47k/10k divider) |
+| 5 | I4 | CH4: Coil 1 output (47k/10k divider) |
+| 6 | I3 | CH3: 5V VCCB post-TXB0108 (15k/10k divider) |
+| 7 | I2 | CH2: 12V battery (47k/10k divider) |
+| 8 | I1 | CH1: 5V rail (15k/10k divider) |
+| 9 | I0 | CH0: 3.3V rail (direct) |
+| 10 | S0 | MCP23S17 #0 P3 (pin 203) — select bit 0 |
+| 11 | S1 | MCP23S17 #0 P4 (pin 204) — select bit 1 |
+| 12 | GND | Ground |
+| 13 | S2 | MCP23S17 #0 P5 (pin 205) — select bit 2 |
+| 14 | S3 | MCP23S17 #0 P6 (pin 206) — select bit 3 |
+| 15 | I15 | CH15: Spare (user-defined) |
+| 16 | I14 | CH14: Board current (0.1R shunt, gain 20) |
+| 17 | I13 | CH13: CJ125 heater 2 sample (divider 11:1) |
+| 18 | I12 | CH12: CJ125 heater 1 sample (divider 11:1) |
+| 19 | I11 | CH11: Board temperature NTC (10k pullup, 10k NTC @ 25C) |
+| 20 | I10 | CH10: PERIPH_EN GPIO (3.3V domain) |
+| 21 | I9 | CH9: MCP23S17 RESET# (15k/10k divider, 5V domain) |
+| 22 | I8 | CH8: TXB0108 OE (3.3V domain, direct) |
+| 23 | EN | MCP23S17 #0 P7 (pin 207) — active LOW enable |
+| 24 | VCC | 3.3V supply (operates in 3.3V domain, inputs use voltage dividers for higher rails) |
+
+**Channel select truth table:**
+
+| S3 | S2 | S1 | S0 | Channel | Test Point |
+|----|----|----|-----|---------|------------|
+| 0 | 0 | 0 | 0 | I0 | 3V3_RAIL — 3.3V rail direct |
+| 0 | 0 | 0 | 1 | I1 | 5V_RAIL — 5V rail (15k/10k divider) |
+| 0 | 0 | 1 | 0 | I2 | 12V_BATT — Battery (47k/10k divider) |
+| 0 | 0 | 1 | 1 | I3 | 5V_VCCB — TXB0108 5V side (15k/10k divider) |
+| 0 | 1 | 0 | 0 | I4 | COIL1_OUT — Coil 1 drive (47k/10k divider) |
+| 0 | 1 | 0 | 1 | I5 | INJ1_OUT — Injector 1 drive (47k/10k divider) |
+| 0 | 1 | 1 | 0 | I6 | ALT_FIELD — Alternator PWM (RC average) |
+| 0 | 1 | 1 | 1 | I7 | FUELPUMP — Fuel pump relay (47k/10k divider) |
+| 1 | 0 | 0 | 0 | I8 | TXB_OE — TXB0108 output enable (3.3V direct) |
+| 1 | 0 | 0 | 1 | I9 | MCP_RESET — MCP23S17 RESET# (15k/10k divider) |
+| 1 | 0 | 1 | 0 | I10 | PERIPH_EN — Peripheral enable GPIO (3.3V direct) |
+| 1 | 0 | 1 | 1 | I11 | BOARD_TEMP — NTC thermistor (10k/10k divider) |
+| 1 | 1 | 0 | 0 | I12 | HEATER1 — CJ125 heater bank 1 (divider 11:1) |
+| 1 | 1 | 0 | 1 | I13 | HEATER2 — CJ125 heater bank 2 (divider 11:1) |
+| 1 | 1 | 1 | 0 | I14 | BOARD_CUR — Board current (0.1R shunt, gain 20) |
+| 1 | 1 | 1 | 1 | I15 | SPARE — User-defined |
+
+### Diagnostics Hardware BOM
+
+| Part | LCSC | Qty | Function |
+|------|------|-----|----------|
+| CD74HC4067SM96 (SSOP-24) | C98457 | 1 | 16:1 analog mux — routes test points to ADC |
+| ADS1115IDGSR (MSOP-10) | C37593 | 1 | 16-bit I2C ADC @ 0x4A — reads mux output on AIN0 |
+| 47k ohm 0402 | — | 4 | Voltage divider high-side (12V/coil/inj/fuelpump test points) |
+| 15k ohm 0402 | — | 3 | Voltage divider high-side (5V/VCCB/RESET test points) |
+| 10k ohm 0402 | — | 8 | Voltage divider low-side and NTC pullup |
+| 10k NTC 0402 | — | 1 | Board temperature sensor (beta 3950, R0=10k @ 25C) |
+| 0.1 ohm 2512 | — | 1 | Board current shunt resistor |
+| INA180A (SOT-23-5) or equivalent | — | 1 | Current sense amplifier (gain 20) for shunt |
+| 100nF 0402 | — | 2 | Bypass caps: VCC on CD74HC4067 and ADS1115 |
+| 10uF 0402 | — | 1 | Bulk bypass for ADS1115 |
+
+### Diagnostics Architecture
+
+**Idle-time scavenging:** Diagnostics only execute when the ECU's 10ms update cycle has budget remaining (elapsed < 9.5ms). Each call advances one phase of a non-blocking state machine — a full 16-channel scan takes ~320ms without blocking any single cycle.
+
+**State machine phases (per channel):**
+
+1. SELECT_MUX — Set S0-S3 via xDigitalWrite on MCP23S17 #0 P3-P6, enable mux via P7
+2. START_CONV — Start ADS1115 single-shot conversion on AIN0
+3. WAIT_CONV — Poll conversion complete (non-blocking), timeout 15ms
+4. READ_RESULT — Read millivolts, apply scale factor, evaluate fault
+5. IDLE — Advance to next channel
+
+**Fault detection:** 3 consecutive out-of-range readings trigger burst investigation (8 rapid samples). Burst analysis computes mean/stddev to classify as hard fault, intermittent, or transient. Cross-validation correlates power rail readings (3.3V vs 5V vs 12V).
+
+**Health score:** 100 - (faults x 15 + warnings x 5). Published via REST (`/diag`), MQTT (`ecu/diag`), and web UI (`/diag/view`).
+
+### I2C Bus (with Diagnostics)
+
+| Device | Address | Description |
+|--------|---------|-------------|
+| ADS1115 #0 | 0x48 | CJ125_UR (CH0/1), TFT temp (CH2), MLPS (CH3) |
+| ADS1115 #1 | 0x49 | MAP (CH0), TPS (CH1) — frees GPIO 5/6 for OSS/TSS |
+| ADS1115 #2 | 0x4A | Diagnostics mux output (AIN0) — dedicated, no contention |
+
 ## Safe Mode
 
 The ECU includes boot loop detection and per-peripheral enable/disable to recover from hardware faults without reflashing.
@@ -461,6 +560,7 @@ All pages served from SD card `/www/` directory.
 | `/log/view` | Log viewer |
 | `/heap/view` | Memory/CPU monitor |
 | `/wifi/view` | WiFi scan and test |
+| `/diag/view` | Board diagnostics health and channels |
 | `/admin/setup` | Initial password setup |
 
 ## Getting Started
