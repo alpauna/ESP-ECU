@@ -395,7 +395,7 @@ With all GPIO expanders on SPI, the I2C bus (SDA=GPIO0, SCL=GPIO42) is used excl
 
 **PCA9306 specs:** Ron ~3.5 ohm typical, <1.7ns switching, 400kHz I2C, 400pF bus capacitance budget. EN tied to VREF2 via 200k ohm pull-up per TI reference design.
 
-**Dedicated analog power supply:** A buck converter generates 6.94V, which feeds two REF5050 precision references and an AMS1117-5.0 LDO. The AGND plane connects to digital GND via a 2.2µH inductor (C5832324) and 100nF decoupling cap (C85923), forming an LC filter (f₀ ≈ 10.7kHz) that attenuates switching noise from the digital domain.
+**Dedicated analog power supply:** A buck converter generates 6.94V, which feeds two REF5050 precision references and an AMS1117-5.0 LDO. The AGND plane connects to digital GND via a Murata BLM21PG221SN1D ferrite bead (220Ω@100MHz, 45mΩ DCR, C85840) with 100nF (C85923) + 10µF ceramic decoupling on the AGND side. The ferrite bead provides lossy broadband noise suppression without the resonance risk of an LC inductor filter, while the dual capacitors handle both high-frequency and transient filtering.
 
 **REF5050AIDR ×2 (LCSC C27804):** Precision 5.000V reference, ±0.1% initial accuracy, 8ppm/°C temp drift, 3µVpp/V noise, ±10mA output, VIN min 5.2V. SOIC-8 package, 22ppm long-term drift per 1000h. Both fed from 6.94V buck (1.94V headroom).
 - **REF5050 #1:** VREF input on MCP3204 SPI ADC — sets the 12-bit full-scale range to exactly 5.000V
@@ -492,7 +492,8 @@ Disabled by default (`diagEnabled = false`). Enable in config and connect the ha
 | PCA9306DCUR (VSSOP-8) | C33196 | 1 | I2C level shifter 3.3V ↔ 5V (shared by all 3 ADS1115) |
 | REF5050AIDR (SOIC-8) | C27804 | 2 | Precision 5.000V reference — #1: MCP3204 VREF, #2: ADS1115 VDD |
 | AMS1117-5.0 (SOT-223) | C6187 | 1 | 5V LDO — mux VCC + PCA9306 VREF2, fed from 6.94V buck |
-| 2.2µH inductor (0805) | C5832324 | 1 | AGND-GND isolation (LC filter with 100nF cap, f₀ ≈ 10.7kHz) |
+| BLM21PG221SN1D ferrite bead (0805) | C85840 | 1 | AGND-GND isolation (220Ω@100MHz, 45mΩ DCR, lossy broadband filter) |
+| 10µF ceramic 0402 | — | 1 | AGND bulk decoupling (parallel with 100nF, transient filtering) |
 | 47k ohm 0402 | — | 4 | Voltage divider high-side (12V/coil/inj/fuelpump test points) |
 | 15k ohm 0402 | — | 3 | Voltage divider high-side (5V/VCCB/RESET test points) |
 | 10k ohm 0402 | — | 8 | Voltage divider low-side and NTC pullup |
