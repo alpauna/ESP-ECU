@@ -107,6 +107,7 @@ private:
     uint8_t _hwAddr[SPI_EXP_MAX] = {};
     uint16_t _shadow[SPI_EXP_MAX] = {}; // Output latch shadow (OLAT)
     uint16_t _dir[SPI_EXP_MAX] = {0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF};
+    uint16_t _pullup[SPI_EXP_MAX] = {}; // Pull-up shadow (GPPUA|B)
 
     // Shared interrupt state
     uint8_t _sharedIntGpio = 0xFF;

@@ -135,10 +135,17 @@ void PinExpander::setPinMode(uint8_t pin, uint8_t mode) {
 
     if (mode == OUTPUT) {
         _dir[idx] &= ~(1 << localPin); // 0 = output
+        _pullup[idx] &= ~(1 << localPin);
     } else {
         _dir[idx] |= (1 << localPin);  // 1 = input
+        if (mode == INPUT_PULLUP) {
+            _pullup[idx] |= (1 << localPin);
+        } else {
+            _pullup[idx] &= ~(1 << localPin);
+        }
     }
     spiWriteReg16(idx, MCP23S17_IODIRA, _dir[idx]);
+    spiWriteReg16(idx, MCP_GPPUA, _pullup[idx]);
 }
 
 void PinExpander::writePin(uint8_t pin, uint8_t val) {

@@ -1,18 +1,28 @@
 #include "ADS1115Reader.h"
+#include "PinExpander.h"
 #include "Logger.h"
 #include <Wire.h>
 
-ADS1115Reader::ADS1115Reader() : _ready(false) {}
+// ---- ISR ----
+
+void IRAM_ATTR ADS1115Reader::alertISR(void* arg) {
+    volatile bool* flag = static_cast<volatile bool*>(arg);
+    *flag = true;
+}
+
+// ---- Lifecycle ----
+
+ADS1115Reader::ADS1115Reader()
+    : _ready(false), _alertPin(0), _useAlertPin(false),
+      _alertIsNative(false), _convReady(false) {}
 
 bool ADS1115Reader::begin(uint8_t addr, adsGain_t gain, uint16_t rate) {
     _ready = _ads.begin(addr);
     if (_ready) {
         // Verify the device is real — floating I2C bus can cause false positive ACK
-        // Read config register (0x01) via raw Wire. ADS1115 default config has
-        // specific bit patterns that a ghost device won't produce.
         Wire.beginTransmission(addr);
         Wire.write(0x01);  // Config register pointer
-        Wire.endTransmission(false);  // repeated start
+        Wire.endTransmission(false);
         uint8_t recv = Wire.requestFrom(addr, (uint8_t)2);
         if (recv != 2) {
             Log.warn("ADS", "ADS1115 ghost at 0x%02X (no data) — skipped", addr);
@@ -22,8 +32,6 @@ bool ADS1115Reader::begin(uint8_t addr, adsGain_t gain, uint16_t rate) {
         uint8_t hi = Wire.read();
         uint8_t lo = Wire.read();
         uint16_t configVal = ((uint16_t)hi << 8) | lo;
-        // ADS1115 config POR default is 0x8583. After setGain/setDataRate it changes.
-        // But a ghost device returns 0x0000 or 0xFFFF. Check for those.
         if (configVal == 0x0000 || configVal == 0xFFFF) {
             Log.warn("ADS", "ADS1115 ghost at 0x%02X (config=0x%04X) — skipped", addr, configVal);
             _ready = false;
@@ -38,13 +46,65 @@ bool ADS1115Reader::begin(uint8_t addr, adsGain_t gain, uint16_t rate) {
     return _ready;
 }
 
+// ---- ALERT/RDY pin setup ----
+
+void ADS1115Reader::setAlertPin(uint16_t pin) {
+    _alertPin = pin;
+    _useAlertPin = false;
+    _alertIsNative = false;
+    if (pin == 0) return;
+
+    if (pin >= SPI_EXP_PIN_OFFSET) {
+        // MCP23S17 expander pin — enable interrupt-on-change + SPI poll
+        uint8_t expIdx = (pin - SPI_EXP_PIN_OFFSET) / SPI_EXP_PIN_COUNT;
+        PinExpander& exp = PinExpander::instance();
+        if (exp.isReady(expIdx)) {
+            xPinMode(pin, INPUT_PULLUP);
+            // Enable interrupt-on-change so shared ISR fires on ALERT/RDY transitions.
+            // conversionComplete() uses hasSharedInterrupt() as a fast gate before SPI read.
+            exp.enablePinInterrupt(pin);
+            _useAlertPin = true;
+            _alertIsNative = false;
+            Log.info("ADS", "ALERT/RDY on expander pin %d (#%d) — shared ISR + SPI confirm", pin, expIdx);
+        } else {
+            Log.warn("ADS", "ALERT/RDY pin %d: expander #%d not ready — I2C fallback", pin, expIdx);
+        }
+    } else if (pin < 49) {
+        // Native ESP32 GPIO — attach IRAM_ATTR ISR on FALLING edge
+        pinMode(pin, INPUT_PULLUP);
+        ::attachInterruptArg(digitalPinToInterrupt(pin), alertISR,
+                             (void*)&_convReady, FALLING);
+        _useAlertPin = true;
+        _alertIsNative = true;
+        Log.info("ADS", "ALERT/RDY on GPIO%d — IRAM_ATTR ISR (FALLING), zero-cost poll", pin);
+    }
+}
+
+// ---- Blocking read (uses ISR/SPI instead of I2C poll) ----
+
 int16_t ADS1115Reader::readChannel(uint8_t ch) {
     if (!_ready || ch > 3) return 0;
+
+    _convReady = false;
     _ads.startADCReading(MUX_BY_CHANNEL[ch], false);
     uint32_t start = millis();
-    while (!_ads.conversionComplete()) {
-        if (millis() - start > ADS_READ_TIMEOUT_MS) {
-            return 0;
+
+    if (_useAlertPin && _alertIsNative) {
+        // Native GPIO ISR: volatile bool set by IRAM_ATTR handler (~0µs per check)
+        while (!_convReady) {
+            if (millis() - start > ADS_READ_TIMEOUT_MS) return 0;
+        }
+    } else if (_useAlertPin) {
+        // Expander: shared ISR gate + SPI confirm (~0µs until interrupt, then ~20µs once)
+        PinExpander& exp = PinExpander::instance();
+        while (true) {
+            if (exp.hasSharedInterrupt() && xDigitalRead(_alertPin) == LOW) break;
+            if (millis() - start > ADS_READ_TIMEOUT_MS) return 0;
+        }
+    } else {
+        // Fallback: I2C config register poll (~200µs per check)
+        while (!_ads.conversionComplete()) {
+            if (millis() - start > ADS_READ_TIMEOUT_MS) return 0;
         }
     }
     return _ads.getLastConversionResults();
@@ -55,13 +115,28 @@ float ADS1115Reader::readMillivolts(uint8_t ch) {
     return _ads.computeVolts(readChannel(ch)) * 1000.0f;
 }
 
+// ---- Non-blocking conversion API ----
+
 void ADS1115Reader::startReading(uint8_t ch) {
     if (!_ready || ch > 3) return;
+    _convReady = false;  // Clear flag before starting new conversion
     _ads.startADCReading(MUX_BY_CHANNEL[ch], false);
 }
 
 bool ADS1115Reader::conversionComplete() {
     if (!_ready) return false;
+
+    if (_useAlertPin && _alertIsNative) {
+        // Native GPIO: volatile bool set by IRAM_ATTR ISR (~0µs)
+        return _convReady;
+    }
+    if (_useAlertPin) {
+        // Expander: check shared ISR flag first (volatile, ~0µs).
+        // Only do SPI read when an interrupt has actually occurred.
+        if (!PinExpander::instance().hasSharedInterrupt()) return false;
+        return (xDigitalRead(_alertPin) == LOW);  // SPI confirm (~20µs, once)
+    }
+    // Fallback: I2C config register poll (~200µs)
     return _ads.conversionComplete();
 }
 

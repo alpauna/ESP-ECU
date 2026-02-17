@@ -143,6 +143,10 @@ void ECU::configure(const ProjectInfo& proj) {
 
     // CJ125 wideband O2
     _cj125Enabled = proj.cj125Enabled;
+    _pinCj125Ss1 = proj.pinCj125Ss1;
+    _pinCj125Ss2 = proj.pinCj125Ss2;
+    _pinAdsAlert1 = proj.pinAdsAlert1;
+    _pinAdsAlert2 = proj.pinAdsAlert2;
 
     // Transmission
     _transType = proj.transType;
@@ -172,6 +176,7 @@ void ECU::configure(const ProjectInfo& proj) {
     _diagEnabled = proj.diagEnabled;
     memcpy(_diagMuxSelPins, proj.diagMuxSelPins, sizeof(_diagMuxSelPins));
     _diagMuxEnPin = proj.diagMuxEnPin;
+    _diagAlertPin = proj.diagAlertPin;
 
     // ASE
     _fuel->setAseParams(proj.aseInitialPct, proj.aseDurationMs, proj.aseMinCltF);
@@ -307,6 +312,7 @@ void ECU::begin() {
     if (!_mcp3204 && _i2cEnabled) {
         _ads1115_2 = new ADS1115Reader();
         if (_ads1115_2->begin(0x49, GAIN_TWOTHIRDS, RATE_ADS1115_860SPS)) {
+            if (_pinAdsAlert2) _ads1115_2->setAlertPin(_pinAdsAlert2);
             _sensors->setMapTpsADS1115(_ads1115_2);
             Log.info("ECU", "ADS1115 @ 0x49 found — MAP/TPS via I2C, GPIO %d/%d freed for OSS/TSS",
                      _sensors->getPin(2), _sensors->getPin(3));
@@ -353,6 +359,7 @@ void ECU::begin() {
 
         _ads1115 = new ADS1115Reader();
         _ads1115->begin(0x48);
+        if (_pinAdsAlert1) _ads1115->setAlertPin(_pinAdsAlert1);
         _sensors->setADS1115(_ads1115);
 
         _cj125 = new CJ125Controller(&SPI);
@@ -371,6 +378,7 @@ void ECU::begin() {
         if (!_ads1115) {
             _ads1115 = new ADS1115Reader();
             _ads1115->begin(0x48);
+            if (_pinAdsAlert1) _ads1115->setAlertPin(_pinAdsAlert1);
             _sensors->setADS1115(_ads1115);
         }
         _trans->setADS1115(_ads1115);
@@ -407,7 +415,7 @@ void ECU::begin() {
     // Board diagnostics — requires I2C (dedicated ADS1115) and expander #4 (mux control)
     if (_diagEnabled && _i2cEnabled && _spiExpandersEnabled && _expander4Enabled) {
         _diag = new BoardDiagnostics();
-        if (_diag->begin(0x4A, _diagMuxSelPins, _diagMuxEnPin)) {
+        if (_diag->begin(0x4A, _diagMuxSelPins, _diagMuxEnPin, _diagAlertPin)) {
             _diag->setFaultCallback(_faultCb);
             Log.info("ECU", "Board diagnostics enabled");
         } else {

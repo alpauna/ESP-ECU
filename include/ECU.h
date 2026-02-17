@@ -125,6 +125,8 @@ private:
     uint8_t _pinCj125Ua2;
     uint16_t _pinCj125Ss1;   // MCP23S17 #0 P8 — CJ125 Bank 1 CS (default 208)
     uint16_t _pinCj125Ss2;   // MCP23S17 #0 P9 — CJ125 Bank 2 CS (default 209)
+    uint16_t _pinAdsAlert1 = 204;  // ADS1115 @0x48 ALERT/RDY (MCP23S17#0 P4)
+    uint16_t _pinAdsAlert2 = 205;  // ADS1115 @0x49 ALERT/RDY (MCP23S17#0 P5)
     uint8_t _pinTcc;
     uint8_t _pinEpc;
     uint8_t _pinHspiSck;
@@ -195,6 +197,7 @@ private:
     bool _diagEnabled = false;
     uint16_t _diagMuxSelPins[4] = {203, 204, 205, 206};
     uint16_t _diagMuxEnPin = 207;
+    uint16_t _diagAlertPin = 203;
 
     TaskHandle_t _realtimeTaskHandle;
     static void realtimeTask(void* param);

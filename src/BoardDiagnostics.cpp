@@ -10,13 +10,14 @@ BoardDiagnostics::BoardDiagnostics()
       _burstChannel(0xFF), _burstRemaining(0),
       _muxSettleUs(0), _convStartMs(0),
       _scanStartMs(0), _lastScanCycleMs(0),
-      _muxEnPin(0) {
+      _muxEnPin(0), _alertPin(0), _useAlertPin(false) {
     memset(_muxSelPins, 0, sizeof(_muxSelPins));
     for (uint8_t i = 0; i < DIAG_CHANNEL_COUNT; i++)
         _channels[i].clear();
 }
 
-bool BoardDiagnostics::begin(uint8_t diagAdsAddr, const uint16_t muxSelPins[4], uint16_t muxEnPin) {
+bool BoardDiagnostics::begin(uint8_t diagAdsAddr, const uint16_t muxSelPins[4], uint16_t muxEnPin,
+                             uint16_t alertPin) {
     _diagAds = new ADS1115Reader();
     if (!_diagAds->begin(diagAdsAddr)) {
         Log.warn("DIAG", "ADS1115 not found at 0x%02X — diagnostics disabled", diagAdsAddr);
@@ -34,14 +35,23 @@ bool BoardDiagnostics::begin(uint8_t diagAdsAddr, const uint16_t muxSelPins[4], 
     xPinMode(_muxEnPin, OUTPUT);
     enableMux(false);
 
+    // ALERT/RDY pin — delegates to ADS1115Reader which handles pin setup and polling.
+    _alertPin = alertPin;
+    _useAlertPin = false;
+    if (alertPin != 0) {
+        _diagAds->setAlertPin(alertPin);
+        _useAlertPin = _diagAds->hasAlertPin();
+    }
+
     initDefaultChannels();
 
     _ready = true;
     _enabled = true;
     _scanStartMs = millis();
 
-    Log.info("DIAG", "Board diagnostics initialized: ADS1115@0x%02X, mux S0-S3=%d-%d-%d-%d, EN=%d",
-             diagAdsAddr, _muxSelPins[0], _muxSelPins[1], _muxSelPins[2], _muxSelPins[3], _muxEnPin);
+    Log.info("DIAG", "Board diagnostics initialized: ADS1115@0x%02X, mux S0-S3=%d-%d-%d-%d, EN=%d, ALERT=%s",
+             diagAdsAddr, _muxSelPins[0], _muxSelPins[1], _muxSelPins[2], _muxSelPins[3], _muxEnPin,
+             _useAlertPin ? String(_alertPin).c_str() : "I2C-poll");
     return true;
 }
 
@@ -238,6 +248,7 @@ bool BoardDiagnostics::update(uint32_t budgetUs) {
     }
 
     case DIAG_PHASE_WAIT_CONV: {
+        // conversionComplete() uses ALERT/RDY pin (fast SPI ~20µs) or I2C poll (~200µs fallback)
         if (!_diagAds->conversionComplete()) {
             if (millis() - _convStartMs > CONV_TIMEOUT_MS) {
                 Log.warn("DIAG", "ADS1115 timeout on CH%d", _currentChannel);

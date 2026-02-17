@@ -61,7 +61,8 @@ class BoardDiagnostics {
 public:
     BoardDiagnostics();
 
-    bool begin(uint8_t diagAdsAddr, const uint16_t muxSelPins[4], uint16_t muxEnPin);
+    bool begin(uint8_t diagAdsAddr, const uint16_t muxSelPins[4], uint16_t muxEnPin,
+               uint16_t alertPin = 0);
     bool update(uint32_t budgetUs);
 
     const DiagChannel& getChannel(uint8_t ch) const { return _channels[ch]; }
@@ -76,6 +77,7 @@ public:
     bool isReady() const { return _ready; }
     bool isEnabled() const { return _enabled; }
     void setEnabled(bool en) { _enabled = en; }
+    bool isAlertPinActive() const { return _useAlertPin; }
     bool crossValidatePowerRails() const;
 
     typedef std::function<void(const char* fault, const char* message, bool active)> FaultCallback;
@@ -87,6 +89,8 @@ private:
 
     uint16_t _muxSelPins[4];
     uint16_t _muxEnPin;
+    uint16_t _alertPin;
+    bool _useAlertPin;
 
     bool _ready;
     bool _enabled;

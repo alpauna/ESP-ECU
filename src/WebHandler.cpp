@@ -494,6 +494,7 @@ void WebHandler::setupRoutes() {
             doc["scanCycleMs"] = diag->getScanCycleMs();
             doc["currentCh"] = diag->getCurrentChannel();
             doc["crossValid"] = diag->crossValidatePowerRails();
+            doc["alertPin"] = diag->isAlertPinActive();
             JsonArray channels = doc["channels"].to<JsonArray>();
             for (uint8_t i = 0; i < diag->getChannelCount(); i++) {
                 const DiagChannel& ch = diag->getChannel(i);
@@ -763,6 +764,8 @@ void WebHandler::setupRoutes() {
             doc["pinCel"] = proj->pinCel;
             doc["pinCj125Ss1"] = proj->pinCj125Ss1;
             doc["pinCj125Ss2"] = proj->pinCj125Ss2;
+            doc["pinAdsAlert1"] = proj->pinAdsAlert1;
+            doc["pinAdsAlert2"] = proj->pinAdsAlert2;
             doc["pinSsA"] = proj->pinSsA;
             doc["pinSsB"] = proj->pinSsB;
             doc["pinSsC"] = proj->pinSsC;
@@ -1166,6 +1169,8 @@ void WebHandler::setupRoutes() {
                 (uint16_t)(data["pinCel"] | (int)proj->pinCel),
                 (uint16_t)(data["pinCj125Ss1"] | (int)proj->pinCj125Ss1),
                 (uint16_t)(data["pinCj125Ss2"] | (int)proj->pinCj125Ss2),
+                (uint16_t)(data["pinAdsAlert1"] | (int)proj->pinAdsAlert1),
+                (uint16_t)(data["pinAdsAlert2"] | (int)proj->pinAdsAlert2),
                 (uint16_t)(data["pinSsA"] | (int)proj->pinSsA),
                 (uint16_t)(data["pinSsB"] | (int)proj->pinSsB),
                 (uint16_t)(data["pinSsC"] | (int)proj->pinSsC),
@@ -1174,9 +1179,10 @@ void WebHandler::setupRoutes() {
             uint16_t* expCur[] = {
                 &proj->pinFuelPump, &proj->pinTachOut, &proj->pinCel,
                 &proj->pinCj125Ss1, &proj->pinCj125Ss2,
+                &proj->pinAdsAlert1, &proj->pinAdsAlert2,
                 &proj->pinSsA, &proj->pinSsB, &proj->pinSsC, &proj->pinSsD,
             };
-            for (int i = 0; i < 9; i++) {
+            for (int i = 0; i < 11; i++) {
                 if (expPins[i] != *expCur[i]) { *expCur[i] = expPins[i]; needsReboot = true; }
             }
             // Coil/injector arrays (uint16_t)

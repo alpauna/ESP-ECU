@@ -163,6 +163,9 @@ ProjectInfo proj = {
     202,                         // pinCel
     208,                         // pinCj125Ss1
     209,                         // pinCj125Ss2
+    // ADS1115 ALERT/RDY inputs
+    204,                         // pinAdsAlert1 (MCP23S17#0 P4 — ADS1115@0x48 Bank 1)
+    205,                         // pinAdsAlert2 (MCP23S17#0 P5 — ADS1115@0x49 Bank 2)
     // Transmission solenoids (MCP23S17 #1)
     216,                         // pinSsA
     217,                         // pinSsB
@@ -237,7 +240,8 @@ ProjectInfo proj = {
     // Board diagnostics
     false,                       // diagEnabled
     {272, 273, 274, 275},        // diagMuxSelPins (MCP23S17#4 P8-P11)
-    276                          // diagMuxEnPin (MCP23S17#4 P12)
+    276,                         // diagMuxEnPin (MCP23S17#4 P12)
+    203                          // diagAlertPin (MCP23S17#0 P3 — ADS1115 ALERT/RDY)
 };
 
 // Core objects

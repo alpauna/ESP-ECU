@@ -73,6 +73,9 @@ struct ProjectInfo {
     uint16_t pinCel;                // MCP23S17 #0 P2 (default 202)
     uint16_t pinCj125Ss1;           // MCP23S17 #0 P8 — CJ125 Bank 1 CS (default 208)
     uint16_t pinCj125Ss2;           // MCP23S17 #0 P9 — CJ125 Bank 2 CS (default 209)
+    // ADS1115 ALERT/RDY inputs (open-drain, LOW = conversion complete)
+    uint16_t pinAdsAlert1;          // ADS1115 @0x48 ALERT/RDY — CJ125 Bank 1 (default MCP23S17#0 P4: 204, 0=disabled)
+    uint16_t pinAdsAlert2;          // ADS1115 @0x49 ALERT/RDY — CJ125 Bank 2 (default MCP23S17#0 P5: 205, 0=disabled)
     // Transmission solenoids (MCP23S17 #1)
     uint16_t pinSsA;                // MCP23S17 #1 P0 (default 216)
     uint16_t pinSsB;                // MCP23S17 #1 P1 (default 217)
@@ -151,6 +154,7 @@ struct ProjectInfo {
     bool diagEnabled;               // Enable diagnostic subsystem (default false)
     uint16_t diagMuxSelPins[4];     // CD74HC4067 select lines S0-S3 (default MCP23S17#4 P8-P11: 272-275)
     uint16_t diagMuxEnPin;          // CD74HC4067 enable pin (default MCP23S17#4 P12: 276)
+    uint16_t diagAlertPin;          // ADS1115 ALERT/RDY input (default MCP23S17#0 P3: 203, 0=disabled)
 };
 
 class Config {

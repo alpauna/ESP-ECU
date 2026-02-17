@@ -448,7 +448,7 @@ Disabled by default (`diagEnabled = false`). Enable in config and connect the ha
 | Part | LCSC | Qty | Function |
 |------|------|-----|----------|
 | CD74HC4067SM96 (SSOP-24) | C98457 | 1 | 16:1 analog mux — routes test points to ADC |
-| ADS1115IDGSR (MSOP-10) | C37593 | 1 | 16-bit I2C ADC @ 0x4A — reads mux output on AIN0 |
+| ADS1115IDGSR (MSOP-10) | C468683 | 1 | 16-bit I2C ADC @ 0x4A — reads mux output on AIN0 |
 | 47k ohm 0402 | — | 4 | Voltage divider high-side (12V/coil/inj/fuelpump test points) |
 | 15k ohm 0402 | — | 3 | Voltage divider high-side (5V/VCCB/RESET test points) |
 | 10k ohm 0402 | — | 8 | Voltage divider low-side and NTC pullup |

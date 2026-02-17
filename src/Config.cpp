@@ -237,6 +237,8 @@ bool Config::loadConfig(const char* filename, ProjectInfo& proj) {
     proj.pinCel = doc["pins"]["cel"] | 202;
     proj.pinCj125Ss1 = doc["pins"]["cj125Ss1"] | 208;
     proj.pinCj125Ss2 = doc["pins"]["cj125Ss2"] | 209;
+    proj.pinAdsAlert1 = doc["pins"]["adsAlert1"] | 204;
+    proj.pinAdsAlert2 = doc["pins"]["adsAlert2"] | 205;
     // Transmission solenoids (MCP23S17 #1)
     proj.pinSsA = doc["pins"]["ssA"] | 216;
     proj.pinSsB = doc["pins"]["ssB"] | 217;
@@ -343,6 +345,7 @@ bool Config::loadConfig(const char* filename, ProjectInfo& proj) {
             proj.diagMuxSelPins[i] = (muxPins && i < muxPins.size()) ? (uint16_t)(int)muxPins[i] : defaults[i];
     }
     proj.diagMuxEnPin = doc["diagnostics"]["muxEnPin"] | 276;
+    proj.diagAlertPin = doc["diagnostics"]["alertPin"] | 203;
 
     Serial.printf("Config loaded: %d cyl, %d-%d trigger\n", proj.cylinders, proj.crankTeeth, proj.crankMissing);
     return true;
@@ -442,6 +445,8 @@ bool Config::saveConfig(const char* filename, ProjectInfo& proj) {
     pins["cel"] = proj.pinCel;
     pins["cj125Ss1"] = proj.pinCj125Ss1;
     pins["cj125Ss2"] = proj.pinCj125Ss2;
+    pins["adsAlert1"] = proj.pinAdsAlert1;
+    pins["adsAlert2"] = proj.pinAdsAlert2;
     pins["ssA"] = proj.pinSsA;
     pins["ssB"] = proj.pinSsB;
     pins["ssC"] = proj.pinSsC;
@@ -612,6 +617,8 @@ bool Config::updateConfig(const char* filename, ProjectInfo& proj) {
     doc["pins"]["cel"] = proj.pinCel;
     doc["pins"]["cj125Ss1"] = proj.pinCj125Ss1;
     doc["pins"]["cj125Ss2"] = proj.pinCj125Ss2;
+    doc["pins"]["adsAlert1"] = proj.pinAdsAlert1;
+    doc["pins"]["adsAlert2"] = proj.pinAdsAlert2;
     doc["pins"]["ssA"] = proj.pinSsA;
     doc["pins"]["ssB"] = proj.pinSsB;
     doc["pins"]["ssC"] = proj.pinSsC;
@@ -684,6 +691,7 @@ bool Config::updateConfig(const char* filename, ProjectInfo& proj) {
         for (uint8_t i = 0; i < 4; i++) muxPins.add(proj.diagMuxSelPins[i]);
     }
     doc["diagnostics"]["muxEnPin"] = proj.diagMuxEnPin;
+    doc["diagnostics"]["alertPin"] = proj.diagAlertPin;
 
     file = SD.open(filename, FILE_WRITE);
     if (!file) return false;

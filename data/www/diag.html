@@ -153,6 +153,7 @@ function poll(){
     html+="<span>Faults: "+d.faultCount+"</span>";
     html+="<span>Scan: "+d.scanCycleMs+"ms</span>";
     html+="<span>Rails: "+(d.crossValid?"PASS":"FAIL")+"</span>";
+    html+="<span>ADC: "+(d.alertPin?"ALERT/RDY":"I2C-poll")+"</span>";
     html+="<span>Channel: "+d.currentCh+"/16</span>";
     html+="</div></div>";
     if(d.channels && d.channels.length>0){
