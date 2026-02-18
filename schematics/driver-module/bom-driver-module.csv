@@ -1,0 +1,42 @@
+Item,Qty,Reference,Value,Package,Manufacturer Part,Manufacturer,Description,Variant
+1,1,U1,STM32F030F4P6,TSSOP-20,STM32F030F4P6TR,ST,ARM Cortex-M0 MCU 48MHz 16KB Flash 4KB RAM,All
+2,2,"U2,U3",UCC27524A,SOT-23-6,UCC27524ADBVR,TI,Dual 5A low-side gate driver 4.5-18V,All
+3,4,"Q1,Q2,Q3,Q4",IRLZ44N,TO-220AB,IRLZ44NPBF,Infineon,N-ch MOSFET 55V 47A 22mOhm logic-level,A+B (injector/COP)
+3a,4,"Q1,Q2,Q3,Q4",IRFB4110,TO-220AB,IRFB4110PBF,Infineon,N-ch MOSFET 100V 180A 3.7mOhm,C (direct coil)
+4,4,"U4,U5,U6,U7",INA180A1,SOT-23-5,INA180A1IDBVR,TI,Current sense amp 20V/V gain 26V CM,All
+5,4,"R1,R2,R3,R4",100mOhm 1%,2512,CRA2512-FZ-R100ELF,Bourns,Current sense shunt 1W,A+B (injector/COP)
+5a,4,"R1,R2,R3,R4",10mOhm 1%,2512,CRA2512-FZ-R010ELF,Bourns,Current sense shunt 2W,C (direct coil)
+6,1,U8,SP3485EN,SOIC-8,SP3485EN-L/TR,MaxLinear,3.3V RS-485 transceiver half-duplex,All
+7,1,U9,AMS1117-3.3,SOT-223,AMS1117-3.3,AMS,3.3V LDO regulator 1A,All
+8,4,"D1,D2,D3,D4",SMBJ40A,SMB,SMBJ40A,Littelfuse,40V TVS unidirectional (flyback clamp),A+B (injector/COP)
+8a,4,"D1,D2,D3,D4",SMBJ80A,SMB,SMBJ80A,Littelfuse,80V TVS unidirectional (flyback clamp),C (direct coil)
+9,4,"D5,D6,D7,D8",SS54,SMA,SS54,MDD,5A 40V Schottky (flyback freewheel),All
+10,1,D9,SMBJ16A,SMB,SMBJ16A,Littelfuse,16V TVS input protection,All
+11,1,D10,SS54,SMA,SS54,MDD,Reverse polarity protection,All
+12,4,"Z1,Z2,Z3,Z4",15V Zener,SOD-323,BZT52C15S,Nexperia,Gate overvoltage clamp,All
+13,4,"R5,R6,R7,R8",10kOhm,0402,0402WGF1002TCE,UNI-ROYAL,Gate pulldown (OFF at power-up),All
+14,4,"R9,R10,R11,R12",100Ohm,0402,0402WGF1000TCE,UNI-ROYAL,Gate driver series resistor (dV/dt limit),All
+15,4,"R13,R14,R15,R16",10kOhm,0402,0402WGF1002TCE,UNI-ROYAL,Control input pulldown (OFF when disconnected),All
+16,1,R17,10kOhm,0402,0402WGF1002TCE,UNI-ROYAL,STM32 NRST pullup,All
+17,1,R18,10kOhm,0402,0402WGF1002TCE,UNI-ROYAL,STM32 BOOT0 pulldown,All
+18,1,R19,120Ohm,0402,0402WGF1200TCE,UNI-ROYAL,RS-485 bus termination (solder jumper),All
+19,1,R20,470Ohm,0402,0402WGF4700TCE,UNI-ROYAL,Status LED resistor,All
+20,2,"R21,R22",560Ohm,0603,0603WAF5600T5E,UNI-ROYAL,RS-485 bias resistors A/B,All
+21,8,"C1-C8",100nF,0402,CL05B104KO5NNNC,Samsung,IC decoupling (U1-U9),All
+22,2,"C9,C10",10uF,0805,CL21A106KAYNNNE,Samsung,3.3V rail bulk + AMS1117 output,All
+23,1,C11,10uF,0805,CL21A106KAYNNNE,Samsung,AMS1117 input,All
+24,1,C12,100uF/25V,8x10mm,UVY1E101MDD,Nichicon,12V input bulk electrolytic,All
+25,2,"C13,C14",1uF,0402,CL05A105KA5NQNC,Samsung,INA180A1 output filter,All
+26,1,LED1,Green,0603,KT-0603G,KENTO,Status/heartbeat LED,All
+27,1,J1,2-pin screw terminal,5.08mm,WJ128-5.08-2P,Kangnex,Power input +12V / GND,All
+28,1,J2,7-pin header,2.54mm,Header 1x7P,Generic,Control inputs EN + CH1-4 + VCC + GND,All
+29,1,J3,5-pin screw terminal,5.08mm,WJ128-5.08-5P,Kangnex,Power outputs OUT1-4 + GND,All
+30,1,J4,4-pin header,2.54mm,Header 1x4P,Generic,RS-485 bus A/B + VCC + GND,All
+31,1,J5,4-pin header,1.27mm,Header 1x4P 1.27mm,Generic,SWD programming SWDIO/SWCLK/3.3V/GND,All
+32,1,SW1,3-position DIP,2.54mm,DSWB03LHGET,YE,Modbus address select (bits 0-2),All
+33,4,"SK1-SK4",TO-220 socket,TO-220,4-220-01-SS,Mill-Max,MOSFET socket for field replacement (optional),All
+34,1,Q5,DMP6023LE,SOT-23,DMP6023LE-7,Diodes Inc,P-ch MOSFET -60V -3.3A enable high-side switch,All
+35,1,Q6,2N7002,SOT-23,2N7002,Nexperia,N-ch MOSFET enable gate driver,All
+36,1,R23,10kOhm,0402,0402WGF1002TCE,UNI-ROYAL,Q5 gate pullup to +12V (default OFF),All
+37,1,R24,10kOhm,0402,0402WGF1002TCE,UNI-ROYAL,EN input pulldown (default OFF when disconnected),All
+38,1,R25,100Ohm,0402,0402WGF1000TCE,UNI-ROYAL,Q6 gate series resistor,All
