@@ -20,6 +20,7 @@ public:
     void publishState();
     void publishFault(const char* fault, const char* message, bool active);
     void publishDiag();
+    void publishModbus();
     void startReconnect();
     void stopReconnect();
     void disconnect();

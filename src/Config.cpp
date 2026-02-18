@@ -347,6 +347,13 @@ bool Config::loadConfig(const char* filename, ProjectInfo& proj) {
     proj.diagMuxEnPin = doc["diagnostics"]["muxEnPin"] | 276;
     proj.diagAlertPin = doc["diagnostics"]["alertPin"] | 203;
 
+    // Modbus RTU
+    proj.modbusEnabled   = doc["modbus"]["enabled"] | false;
+    proj.pinModbusTx     = doc["modbus"]["txPin"] | 16;
+    proj.pinModbusRx     = doc["modbus"]["rxPin"] | 17;
+    proj.modbusBaud      = doc["modbus"]["baud"] | 9600;
+    proj.modbusMaxSlaves = doc["modbus"]["maxSlaves"] | 4;
+
     Serial.printf("Config loaded: %d cyl, %d-%d trigger\n", proj.cylinders, proj.crankTeeth, proj.crankMissing);
     return true;
 }
@@ -692,6 +699,13 @@ bool Config::updateConfig(const char* filename, ProjectInfo& proj) {
     }
     doc["diagnostics"]["muxEnPin"] = proj.diagMuxEnPin;
     doc["diagnostics"]["alertPin"] = proj.diagAlertPin;
+
+    // Modbus RTU
+    doc["modbus"]["enabled"]   = proj.modbusEnabled;
+    doc["modbus"]["txPin"]     = proj.pinModbusTx;
+    doc["modbus"]["rxPin"]     = proj.pinModbusRx;
+    doc["modbus"]["baud"]      = proj.modbusBaud;
+    doc["modbus"]["maxSlaves"] = proj.modbusMaxSlaves;
 
     file = SD.open(filename, FILE_WRITE);
     if (!file) return false;

@@ -18,6 +18,7 @@ class TransmissionManager;
 class TuneTable2D;
 class CustomPinManager;
 class BoardDiagnostics;
+class ModbusManager;
 struct ProjectInfo;
 
 struct EngineState {
@@ -80,6 +81,8 @@ public:
     MCP3204Reader* getMCP3204() { return _mcp3204; }
     CustomPinManager* getCustomPins() { return _customPins; }
     BoardDiagnostics* getBoardDiagnostics() { return _diag; }
+    void setModbusManager(ModbusManager* m) { _modbus = m; }
+    ModbusManager* getModbusManager() { return _modbus; }
     uint32_t getUpdateTimeUs() const { return _updateTimeUs; }
     uint32_t getSensorTimeUs() const { return _sensorTimeUs; }
     bool isLimpActive() const { return _limpActive; }
@@ -108,6 +111,7 @@ private:
     TransmissionManager* _trans;
     CustomPinManager* _customPins;
     BoardDiagnostics* _diag;
+    ModbusManager* _modbus = nullptr;
     bool _cj125Enabled;
     uint8_t _transType;
 

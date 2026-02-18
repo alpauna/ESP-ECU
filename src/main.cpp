@@ -17,6 +17,7 @@
 #include <Preferences.h>
 #include "FuelManager.h"
 #include "TuneTable.h"
+#include "ModbusManager.h"
 #include <esp_log.h>
 
 // Boot loop detection — persists across software/WDT/panic resets, NOT power-on
@@ -241,13 +242,20 @@ ProjectInfo proj = {
     false,                       // diagEnabled
     {272, 273, 274, 275},        // diagMuxSelPins (MCP23S17#4 P8-P11)
     276,                         // diagMuxEnPin (MCP23S17#4 P12)
-    203                          // diagAlertPin (MCP23S17#0 P3 — ADS1115 ALERT/RDY)
+    203,                         // diagAlertPin (MCP23S17#0 P3 — ADS1115 ALERT/RDY)
+    // Modbus RTU master
+    false,                       // modbusEnabled
+    16,                          // pinModbusTx (UART1 TX)
+    17,                          // pinModbusRx (UART1 RX)
+    9600,                        // modbusBaud
+    4                            // modbusMaxSlaves
 };
 
 // Core objects
 ECU ecu(&ts);
 WebHandler webHandler(80, &ts);
 MQTTHandler mqttHandler(&ts);
+ModbusManager* modbusManager = nullptr;
 
 // Forward declarations
 void onCalcCpuLoad();
@@ -289,6 +297,7 @@ Task tPublishState(500 * TASK_MILLISECOND, TASK_FOREVER, []() {
 // Diagnostic health via MQTT every 5 seconds
 Task tPublishDiag(5 * TASK_SECOND, TASK_FOREVER, []() {
     mqttHandler.publishDiag();
+    mqttHandler.publishModbus();
 }, &ts, false);
 
 // WiFi signal strength monitor
@@ -565,6 +574,18 @@ void setup() {
                     cpm->getRule(0), MAX_OUTPUT_RULES);
                 cpm->begin();
             }
+        }
+
+        // Modbus RTU master
+        if (proj.modbusEnabled) {
+            modbusManager = new ModbusManager(&ts);
+            modbusManager->setECU(&ecu);
+            modbusManager->setFaultCallback([](const char* fault, const char* msg, bool active) {
+                mqttHandler.publishFault(fault, msg, active);
+            });
+            modbusManager->begin(proj.pinModbusTx, proj.pinModbusRx,
+                                 proj.modbusBaud, proj.modbusMaxSlaves);
+            ecu.setModbusManager(modbusManager);
         }
 
         // Suppress Wire I2C error spam globally — non-present I2C devices generate noise

@@ -16,6 +16,7 @@
 #include "MCP3204Reader.h"
 #include "CustomPin.h"
 #include "BoardDiagnostics.h"
+#include "ModbusManager.h"
 #include "OtaUtils.h"
 #include <Preferences.h>
 
@@ -514,6 +515,46 @@ void WebHandler::setupRoutes() {
                     JsonArray burst = co["burst"].to<JsonArray>();
                     for (uint8_t j = 0; j < DIAG_BURST_SAMPLES; j++)
                         burst.add(ch.burstSamples[j]);
+                }
+            }
+        }
+        String json;
+        serializeJson(doc, json);
+        request->send(200, "application/json", json);
+    });
+
+    // Modbus RTU slave data
+    _server.on("/modbus", HTTP_GET, [this](AsyncWebServerRequest* request) {
+        if (!checkAuth(request)) return;
+        JsonDocument doc;
+        ModbusManager* mb = _ecu ? _ecu->getModbusManager() : nullptr;
+        doc["enabled"] = (mb != nullptr && mb->isEnabled());
+        if (mb && mb->isEnabled()) {
+            doc["slaveCount"] = mb->getSlaveCount();
+            doc["onlineCount"] = mb->getOnlineCount();
+            JsonArray slaves = doc["slaves"].to<JsonArray>();
+            for (uint8_t i = 0; i < mb->getSlaveCount(); i++) {
+                const ModbusManager::SlaveData* s = mb->getSlave(i);
+                if (!s) continue;
+                JsonObject so = slaves.add<JsonObject>();
+                so["address"] = s->address;
+                so["online"] = s->online;
+                so["type"] = s->moduleType;
+                so["health"] = s->healthPct;
+                so["tempC"] = serialized(String(s->boardTempC, 1));
+                so["errors"] = s->errorCount;
+                if (s->identified) {
+                    so["fwVersion"] = s->fwVersion;
+                    so["serialNumber"] = s->serialNumber;
+                }
+                JsonArray channels = so["channels"].to<JsonArray>();
+                for (uint8_t ch = 0; ch < 4; ch++) {
+                    JsonObject co = channels.add<JsonObject>();
+                    co["peakA"] = serialized(String(s->channels[ch].peakCurrentA, 3));
+                    co["pulseMs"] = serialized(String(s->channels[ch].pulseWidthMs, 2));
+                    co["energyMj"] = serialized(String(s->channels[ch].energyMj, 1));
+                    co["faults"] = s->channels[ch].faultFlags;
+                    co["rawAdc"] = s->channels[ch].rawAdc;
                 }
             }
         }

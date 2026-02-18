@@ -5,6 +5,7 @@
 #include "InjectionManager.h"
 #include "AlternatorControl.h"
 #include "BoardDiagnostics.h"
+#include "ModbusManager.h"
 #include <ArduinoJson.h>
 
 MQTTHandler::MQTTHandler(Scheduler* ts)
@@ -133,6 +134,35 @@ void MQTTHandler::publishDiag() {
     char buf[1024];
     size_t len = serializeJson(doc, buf, sizeof(buf));
     _client.publish("ecu/diag", 0, false, buf, len);
+}
+
+void MQTTHandler::publishModbus() {
+    if (!_client.connected() || _ecu == nullptr) return;
+    ModbusManager* mb = _ecu->getModbusManager();
+    if (!mb || !mb->isEnabled()) return;
+
+    JsonDocument doc;
+    doc["online"] = mb->getOnlineCount();
+    doc["total"] = mb->getSlaveCount();
+    JsonArray slaves = doc["slaves"].to<JsonArray>();
+    for (uint8_t i = 0; i < mb->getSlaveCount(); i++) {
+        const ModbusManager::SlaveData* s = mb->getSlave(i);
+        if (!s || !s->online) continue;
+        JsonObject so = slaves.add<JsonObject>();
+        so["addr"] = s->address;
+        so["type"] = s->moduleType;
+        so["hp"] = s->healthPct;
+        JsonArray ch = so["ch"].to<JsonArray>();
+        for (uint8_t j = 0; j < 4; j++) {
+            JsonObject co = ch.add<JsonObject>();
+            co["a"] = serialized(String(s->channels[j].peakCurrentA, 3));
+            co["pw"] = serialized(String(s->channels[j].pulseWidthMs, 2));
+            co["f"] = s->channels[j].faultFlags;
+        }
+    }
+    char buf[1024];
+    size_t len = serializeJson(doc, buf, sizeof(buf));
+    _client.publish("ecu/modbus", 0, false, buf, len);
 }
 
 void MQTTHandler::publishFault(const char* fault, const char* message, bool active) {

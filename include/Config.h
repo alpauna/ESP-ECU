@@ -155,6 +155,12 @@ struct ProjectInfo {
     uint16_t diagMuxSelPins[4];     // CD74HC4067 select lines S0-S3 (default MCP23S17#4 P8-P11: 272-275)
     uint16_t diagMuxEnPin;          // CD74HC4067 enable pin (default MCP23S17#4 P12: 276)
     uint16_t diagAlertPin;          // ADS1115 ALERT/RDY input (default MCP23S17#0 P3: 203, 0=disabled)
+    // Modbus RTU master
+    bool modbusEnabled;             // Enable Modbus master (default false)
+    uint8_t pinModbusTx;            // UART1 TX to RS-485 module (default 16)
+    uint8_t pinModbusRx;            // UART1 RX from RS-485 module (default 17)
+    uint32_t modbusBaud;            // Baud rate (default 9600)
+    uint8_t modbusMaxSlaves;        // Max slave count 1-8 (default 4)
 };
 
 class Config {
