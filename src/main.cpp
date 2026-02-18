@@ -18,6 +18,7 @@
 #include "FuelManager.h"
 #include "TuneTable.h"
 #include "ModbusManager.h"
+#include "DriverModuleManager.h"
 #include <esp_log.h>
 
 // Boot loop detection — persists across software/WDT/panic resets, NOT power-on
@@ -256,6 +257,7 @@ ECU ecu(&ts);
 WebHandler webHandler(80, &ts);
 MQTTHandler mqttHandler(&ts);
 ModbusManager* modbusManager = nullptr;
+DriverModuleManager* driverModuleManager = nullptr;
 
 // Forward declarations
 void onCalcCpuLoad();
@@ -292,6 +294,7 @@ Task tCpuLoad(TASK_SECOND, TASK_FOREVER, &onCalcCpuLoad, &ts, false);
 // Publish ECU state via MQTT every 500ms
 Task tPublishState(500 * TASK_MILLISECOND, TASK_FOREVER, []() {
     mqttHandler.publishState();
+    if (driverModuleManager) driverModuleManager->update();
 }, &ts, false);
 
 // Diagnostic health via MQTT every 5 seconds
@@ -314,11 +317,16 @@ Task tWifiSignal(TASK_MINUTE, TASK_FOREVER, []() {
 // Save config to SD every 5 minutes
 Task tSaveConfig(5 * TASK_MINUTE, TASK_FOREVER, []() {
     config.updateConfig(_filename, proj);
-    // Also save sensor descriptors and fault rules
+    // Also save sensor descriptors, fault rules, and module config
     if (!_safeMode) {
         SensorManager* sm = ecu.getSensorManager();
         config.saveSensorConfig(_filename, sm->getDescriptor(0), MAX_SENSORS,
                                 sm->getRule(0), MAX_RULES);
+        if (driverModuleManager) {
+            config.saveModuleConfig("/modules.txt",
+                driverModuleManager->getDescriptors(), MAX_MODULES,
+                driverModuleManager->getRules(), MAX_MODULE_RULES);
+        }
     }
     Log.debug("MAIN", "Config saved to SD");
 }, &ts, false);
@@ -586,6 +594,19 @@ void setup() {
             modbusManager->begin(proj.pinModbusTx, proj.pinModbusRx,
                                  proj.modbusBaud, proj.modbusMaxSlaves);
             ecu.setModbusManager(modbusManager);
+
+            // Driver module manager (auto-detection, naming, rules)
+            driverModuleManager = new DriverModuleManager();
+            driverModuleManager->setFaultCallback([](const char* fault, const char* msg, bool active) {
+                mqttHandler.publishFault(fault, msg, active);
+            });
+            driverModuleManager->setEngineState(&ecu.getState());
+            driverModuleManager->setCustomPinManager(ecu.getCustomPins());
+            config.loadModuleConfig("/modules.txt",
+                driverModuleManager->getDescriptor(0), MAX_MODULES,
+                driverModuleManager->getRule(0), MAX_MODULE_RULES);
+            driverModuleManager->begin(modbusManager);
+            ecu.setDriverModuleManager(driverModuleManager);
         }
 
         // Suppress Wire I2C error spam globally — non-present I2C devices generate noise

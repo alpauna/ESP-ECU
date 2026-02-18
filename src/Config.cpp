@@ -1270,3 +1270,188 @@ bool Config::saveCustomPins(const char* filename, const CustomPinDescriptor* pin
     file.close();
     return true;
 }
+
+// --- Driver module config JSON helpers ---
+
+#include "DriverModule.h"
+
+static const char* modTypeToStr(ModuleType t) {
+    switch (t) {
+        case MOD_COIL_IGNITER: return "coil_igniter";
+        case MOD_INJECTOR:     return "injector";
+        case MOD_COIL_DIRECT:  return "coil_direct";
+        default:               return "unknown";
+    }
+}
+static ModuleType strToModType(const char* s) {
+    if (!s) return MOD_UNKNOWN;
+    if (strcmp(s, "coil_igniter") == 0) return MOD_COIL_IGNITER;
+    if (strcmp(s, "injector") == 0)     return MOD_INJECTOR;
+    if (strcmp(s, "coil_direct") == 0)  return MOD_COIL_DIRECT;
+    return MOD_UNKNOWN;
+}
+static const char* mfaultActToStr(ModuleFaultAction a) {
+    switch (a) {
+        case MFAULT_WARN:     return "warn";
+        case MFAULT_LIMP:     return "limp";
+        case MFAULT_SHUTDOWN: return "shutdown";
+        default:              return "none";
+    }
+}
+static ModuleFaultAction strToMfaultAct(const char* s) {
+    if (!s) return MFAULT_NONE;
+    if (strcmp(s, "warn") == 0)     return MFAULT_WARN;
+    if (strcmp(s, "limp") == 0)     return MFAULT_LIMP;
+    if (strcmp(s, "shutdown") == 0) return MFAULT_SHUTDOWN;
+    return MFAULT_NONE;
+}
+static const char* msrcToStr(ModuleRuleSource s) {
+    switch (s) {
+        case MSRC_PEAK_CURRENT: return "peak_current";
+        case MSRC_PULSE_WIDTH:  return "pulse_width";
+        case MSRC_ENERGY:       return "energy";
+        case MSRC_BOARD_TEMP:   return "board_temp";
+        case MSRC_HEALTH:       return "health";
+        case MSRC_ERROR_COUNT:  return "error_count";
+        default:                return "peak_current";
+    }
+}
+static ModuleRuleSource strToMsrc(const char* s) {
+    if (!s) return MSRC_PEAK_CURRENT;
+    if (strcmp(s, "peak_current") == 0) return MSRC_PEAK_CURRENT;
+    if (strcmp(s, "pulse_width") == 0)  return MSRC_PULSE_WIDTH;
+    if (strcmp(s, "energy") == 0)       return MSRC_ENERGY;
+    if (strcmp(s, "board_temp") == 0)   return MSRC_BOARD_TEMP;
+    if (strcmp(s, "health") == 0)       return MSRC_HEALTH;
+    if (strcmp(s, "error_count") == 0)  return MSRC_ERROR_COUNT;
+    return MSRC_PEAK_CURRENT;
+}
+static const char* mropToStr(ModuleRuleOp op) {
+    switch (op) {
+        case MROP_GT:    return "gt";
+        case MROP_RANGE: return "range";
+        case MROP_DELTA: return "delta";
+        default:         return "lt";
+    }
+}
+static ModuleRuleOp strToMrop(const char* s) {
+    if (!s) return MROP_LT;
+    if (strcmp(s, "gt") == 0)    return MROP_GT;
+    if (strcmp(s, "range") == 0) return MROP_RANGE;
+    if (strcmp(s, "delta") == 0) return MROP_DELTA;
+    return MROP_LT;
+}
+
+bool Config::loadModuleConfig(const char* filename, ModuleDescriptor* modules, uint8_t maxModules,
+                               ModuleRule* rules, uint8_t maxRules) {
+    if (!_sdInitialized || !SD.exists(filename)) return false;
+    fs::File file = SD.open(filename, FILE_READ);
+    if (!file) return false;
+    JsonDocument doc;
+    DeserializationError error = deserializeJson(doc, file);
+    file.close();
+    if (error) return false;
+
+    JsonArray modsArr = doc["modules"];
+    if (modsArr) {
+        for (uint8_t i = 0; i < maxModules && i < modsArr.size(); i++) {
+            JsonObject mo = modsArr[i];
+            ModuleDescriptor& m = modules[i];
+            m.clear();
+            const char* nm = mo["name"];
+            if (nm) strncpy(m.name, nm, sizeof(m.name) - 1);
+            m.serialNumber = mo["serial"] | (uint32_t)0;
+            m.address = mo["address"] | 0;
+            m.expectedType = strToModType(mo["type"]);
+            m.overcurrentA = mo["overcurrentA"] | 0.0f;
+            m.openCircuitMinA = mo["openMinA"] | 0.0f;
+            m.maxPulseWidthMs = mo["maxPulseMs"] | 0.0f;
+            m.maxBoardTempC = mo["maxTempC"] | 0.0f;
+            m.minHealthPct = mo["minHealth"] | 0;
+            m.maxErrors = mo["maxErrors"] | (uint16_t)0;
+            m.faultAction = strToMfaultAct(mo["faultAction"]);
+            m.enablePin = mo["enablePin"] | (uint16_t)0;
+        }
+    }
+
+    JsonArray rulesArr = doc["rules"];
+    if (rulesArr) {
+        for (uint8_t i = 0; i < maxRules && i < rulesArr.size(); i++) {
+            JsonObject ro = rulesArr[i];
+            ModuleRule& r = rules[i];
+            r.clear();
+            const char* rname = ro["name"];
+            if (rname) strncpy(r.name, rname, sizeof(r.name) - 1);
+            r.enabled = ro["enabled"] | false;
+            r.moduleSlot = ro["module"] | 0xFF;
+            r.channel = ro["channel"] | 0xFF;
+            r.channelB = ro["channelB"] | 0xFF;
+            r.source = strToMsrc(ro["source"]);
+            r.op = strToMrop(ro["op"]);
+            r.thresholdA = ro["a"] | 0.0f;
+            r.thresholdB = ro["b"] | 0.0f;
+            r.hysteresis = ro["hysteresis"] | 0.0f;
+            r.debounceMs = ro["debounce"] | 0;
+            r.faultAction = strToMfaultAct(ro["action"]);
+            r.gateRpmMin = ro["gateRpmMin"] | 0;
+            r.gateRpmMax = ro["gateRpmMax"] | 0;
+        }
+    }
+
+    Serial.printf("Module config loaded: %d modules, %d rules\n",
+                  modsArr ? (int)modsArr.size() : 0, rulesArr ? (int)rulesArr.size() : 0);
+    return true;
+}
+
+bool Config::saveModuleConfig(const char* filename, const ModuleDescriptor* modules, uint8_t maxModules,
+                               const ModuleRule* rules, uint8_t maxRules) {
+    if (!_sdInitialized) return false;
+
+    JsonDocument doc;
+
+    JsonArray modsArr = doc["modules"].to<JsonArray>();
+    for (uint8_t i = 0; i < maxModules; i++) {
+        const ModuleDescriptor& m = modules[i];
+        if (m.name[0] == '\0') continue;
+        JsonObject mo = modsArr.add<JsonObject>();
+        mo["name"] = m.name;
+        if (m.serialNumber) mo["serial"] = m.serialNumber;
+        if (m.address) mo["address"] = m.address;
+        mo["type"] = modTypeToStr(m.expectedType);
+        if (m.overcurrentA > 0) mo["overcurrentA"] = m.overcurrentA;
+        if (m.openCircuitMinA > 0) mo["openMinA"] = m.openCircuitMinA;
+        if (m.maxPulseWidthMs > 0) mo["maxPulseMs"] = m.maxPulseWidthMs;
+        if (m.maxBoardTempC > 0) mo["maxTempC"] = m.maxBoardTempC;
+        if (m.minHealthPct > 0) mo["minHealth"] = m.minHealthPct;
+        if (m.maxErrors > 0) mo["maxErrors"] = m.maxErrors;
+        mo["faultAction"] = mfaultActToStr(m.faultAction);
+        if (m.enablePin) mo["enablePin"] = m.enablePin;
+    }
+
+    JsonArray rulesArr = doc["rules"].to<JsonArray>();
+    for (uint8_t i = 0; i < maxRules; i++) {
+        const ModuleRule& r = rules[i];
+        if (!r.enabled && r.moduleSlot >= MAX_MODULES) continue;
+        JsonObject ro = rulesArr.add<JsonObject>();
+        ro["name"] = r.name;
+        ro["enabled"] = r.enabled;
+        ro["module"] = r.moduleSlot;
+        ro["channel"] = r.channel;
+        if (r.op == MROP_DELTA) ro["channelB"] = r.channelB;
+        ro["source"] = msrcToStr(r.source);
+        ro["op"] = mropToStr(r.op);
+        ro["a"] = r.thresholdA;
+        if (r.op == MROP_RANGE) ro["b"] = r.thresholdB;
+        ro["hysteresis"] = r.hysteresis;
+        ro["debounce"] = r.debounceMs;
+        ro["action"] = mfaultActToStr(r.faultAction);
+        if (r.gateRpmMin > 0) ro["gateRpmMin"] = r.gateRpmMin;
+        if (r.gateRpmMax > 0) ro["gateRpmMax"] = r.gateRpmMax;
+    }
+
+    fs::File file = SD.open(filename, FILE_WRITE);
+    if (!file) return false;
+    serializeJson(doc, file);
+    file.close();
+    return true;
+}

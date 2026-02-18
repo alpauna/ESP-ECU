@@ -212,6 +212,12 @@ public:
     bool saveCustomPins(const char* filename, const struct CustomPinDescriptor* pins, uint8_t maxPins,
                         const struct OutputRule* rules, uint8_t maxRules);
 
+    // Driver module persistence
+    bool loadModuleConfig(const char* filename, struct ModuleDescriptor* modules, uint8_t maxModules,
+                          struct ModuleRule* rules, uint8_t maxRules);
+    bool saveModuleConfig(const char* filename, const struct ModuleDescriptor* modules, uint8_t maxModules,
+                          const struct ModuleRule* rules, uint8_t maxRules);
+
     // Tune table persistence
     bool saveTuneData(const char* filename, const char* tableName,
                       const float* data, uint8_t rows, uint8_t cols,

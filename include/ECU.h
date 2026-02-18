@@ -19,6 +19,7 @@ class TuneTable2D;
 class CustomPinManager;
 class BoardDiagnostics;
 class ModbusManager;
+class DriverModuleManager;
 struct ProjectInfo;
 
 struct EngineState {
@@ -83,6 +84,8 @@ public:
     BoardDiagnostics* getBoardDiagnostics() { return _diag; }
     void setModbusManager(ModbusManager* m) { _modbus = m; }
     ModbusManager* getModbusManager() { return _modbus; }
+    void setDriverModuleManager(DriverModuleManager* m) { _driverModules = m; }
+    DriverModuleManager* getDriverModuleManager() { return _driverModules; }
     uint32_t getUpdateTimeUs() const { return _updateTimeUs; }
     uint32_t getSensorTimeUs() const { return _sensorTimeUs; }
     bool isLimpActive() const { return _limpActive; }
@@ -112,6 +115,7 @@ private:
     CustomPinManager* _customPins;
     BoardDiagnostics* _diag;
     ModbusManager* _modbus = nullptr;
+    DriverModuleManager* _driverModules = nullptr;
     bool _cj125Enabled;
     uint8_t _transType;
 

@@ -17,6 +17,7 @@
 #include "CustomPin.h"
 #include "BoardDiagnostics.h"
 #include "ModbusManager.h"
+#include "DriverModuleManager.h"
 #include "OtaUtils.h"
 #include <Preferences.h>
 
@@ -555,6 +556,119 @@ void WebHandler::setupRoutes() {
                     co["energyMj"] = serialized(String(s->channels[ch].energyMj, 1));
                     co["faults"] = s->channels[ch].faultFlags;
                     co["rawAdc"] = s->channels[ch].rawAdc;
+                }
+            }
+        }
+        String json;
+        serializeJson(doc, json);
+        request->send(200, "application/json", json);
+    });
+
+    // Driver module manager — GET descriptors, rules, live data, unassigned
+    _server.on("/modules", HTTP_GET, [this](AsyncWebServerRequest* request) {
+        if (!checkAuth(request)) return;
+        JsonDocument doc;
+        DriverModuleManager* dm = _ecu ? _ecu->getDriverModuleManager() : nullptr;
+        ModbusManager* mb = _ecu ? _ecu->getModbusManager() : nullptr;
+        doc["enabled"] = (dm != nullptr);
+        if (dm) {
+            doc["matched"] = dm->getMatchedCount();
+            doc["faulted"] = dm->getFaultedCount();
+            doc["warned"] = dm->getWarnedCount();
+
+            // Descriptors with live data
+            JsonArray modules = doc["modules"].to<JsonArray>();
+            for (uint8_t i = 0; i < MAX_MODULES; i++) {
+                const ModuleDescriptor* m = dm->getDescriptors() + i;
+                if (m->name[0] == '\0') continue;
+                JsonObject mo = modules.add<JsonObject>();
+                mo["slot"] = i;
+                mo["name"] = m->name;
+                if (m->serialNumber) {
+                    char hex[12];
+                    snprintf(hex, sizeof(hex), "0x%08X", m->serialNumber);
+                    mo["serial"] = hex;
+                }
+                mo["address"] = m->address;
+                mo["type"] = (m->expectedType == MOD_COIL_IGNITER) ? "coil_igniter" :
+                             (m->expectedType == MOD_INJECTOR) ? "injector" :
+                             (m->expectedType == MOD_COIL_DIRECT) ? "coil_direct" : "unknown";
+                mo["matched"] = m->matched;
+                mo["faulted"] = m->faulted;
+                mo["warned"] = m->warned;
+                mo["faultAction"] = (m->faultAction == MFAULT_WARN) ? "warn" :
+                                    (m->faultAction == MFAULT_LIMP) ? "limp" :
+                                    (m->faultAction == MFAULT_SHUTDOWN) ? "shutdown" : "none";
+                if (m->enablePin) mo["enablePin"] = m->enablePin;
+
+                // Thresholds
+                JsonObject th = mo["thresholds"].to<JsonObject>();
+                if (m->overcurrentA > 0) th["overcurrentA"] = m->overcurrentA;
+                if (m->openCircuitMinA > 0) th["openMinA"] = m->openCircuitMinA;
+                if (m->maxPulseWidthMs > 0) th["maxPulseMs"] = m->maxPulseWidthMs;
+                if (m->maxBoardTempC > 0) th["maxTempC"] = m->maxBoardTempC;
+                if (m->minHealthPct > 0) th["minHealth"] = m->minHealthPct;
+                if (m->maxErrors > 0) th["maxErrors"] = m->maxErrors;
+
+                // Live data from matched slave
+                if (m->matched && m->slaveIndex >= 0 && mb) {
+                    const ModbusManager::SlaveData* s = mb->getSlave(m->slaveIndex);
+                    if (s && s->online) {
+                        JsonObject live = mo["live"].to<JsonObject>();
+                        live["health"] = s->healthPct;
+                        live["tempC"] = serialized(String(s->boardTempC, 1));
+                        live["errors"] = s->errorCount;
+                        JsonArray ch = live["channels"].to<JsonArray>();
+                        for (uint8_t c = 0; c < 4; c++) {
+                            JsonObject co = ch.add<JsonObject>();
+                            co["peakA"] = serialized(String(s->channels[c].peakCurrentA, 3));
+                            co["pulseMs"] = serialized(String(s->channels[c].pulseWidthMs, 2));
+                            co["energyMj"] = serialized(String(s->channels[c].energyMj, 1));
+                            co["faults"] = s->channels[c].faultFlags;
+                        }
+                    }
+                }
+            }
+
+            // Rules
+            JsonArray rules = doc["rules"].to<JsonArray>();
+            for (uint8_t i = 0; i < MAX_MODULE_RULES; i++) {
+                const ModuleRule* r = dm->getRules() + i;
+                if (r->moduleSlot >= MAX_MODULES && !r->enabled) continue;
+                JsonObject ro = rules.add<JsonObject>();
+                ro["slot"] = i;
+                ro["name"] = r->name;
+                ro["enabled"] = r->enabled;
+                ro["module"] = r->moduleSlot;
+                ro["channel"] = r->channel;
+                ro["source"] = (r->source == MSRC_PEAK_CURRENT) ? "peak_current" :
+                               (r->source == MSRC_PULSE_WIDTH) ? "pulse_width" :
+                               (r->source == MSRC_ENERGY) ? "energy" :
+                               (r->source == MSRC_BOARD_TEMP) ? "board_temp" :
+                               (r->source == MSRC_HEALTH) ? "health" : "error_count";
+                ro["op"] = (r->op == MROP_GT) ? "gt" :
+                           (r->op == MROP_RANGE) ? "range" :
+                           (r->op == MROP_DELTA) ? "delta" : "lt";
+                ro["a"] = r->thresholdA;
+                if (r->op == MROP_RANGE) ro["b"] = r->thresholdB;
+                if (r->op == MROP_DELTA) ro["channelB"] = r->channelB;
+                ro["action"] = (r->faultAction == MFAULT_WARN) ? "warn" :
+                               (r->faultAction == MFAULT_LIMP) ? "limp" :
+                               (r->faultAction == MFAULT_SHUTDOWN) ? "shutdown" : "none";
+                ro["active"] = r->active;
+            }
+
+            // Unassigned modules (online but not matched to any descriptor)
+            if (dm->getUnassignedCount() > 0) {
+                JsonArray unassigned = doc["unassigned"].to<JsonArray>();
+                for (uint8_t i = 0; i < dm->getUnassignedCount(); i++) {
+                    const DriverModuleManager::UnassignedModule& u = dm->getUnassigned()[i];
+                    JsonObject uo = unassigned.add<JsonObject>();
+                    uo["address"] = u.address;
+                    char hex[12];
+                    snprintf(hex, sizeof(hex), "0x%08X", u.serialNumber);
+                    uo["serial"] = hex;
+                    uo["type"] = u.moduleType;
                 }
             }
         }
@@ -2111,6 +2225,76 @@ void WebHandler::setupRoutes() {
         r->send(200, "application/json", "{\"ok\":true}");
     });
     _server.addHandler(cpinPostHandler);
+
+    // Driver module manager — POST update descriptors and rules
+    auto* modulesPostHandler = new AsyncCallbackJsonWebHandler("/modules", [this](AsyncWebServerRequest* r, JsonVariant& json) {
+        if (!checkAuth(r)) return;
+        DriverModuleManager* dm = _ecu ? _ecu->getDriverModuleManager() : nullptr;
+        if (!dm) { r->send(503, "text/plain", "Module manager not available"); return; }
+        JsonObject data = json.as<JsonObject>();
+
+        // Update module descriptors
+        JsonArray modsArr = data["modules"];
+        if (modsArr) {
+            for (uint8_t i = 0; i < MAX_MODULES && i < modsArr.size(); i++) {
+                JsonObject mo = modsArr[i];
+                uint8_t slot = mo["slot"] | i;
+                if (slot >= MAX_MODULES) continue;
+                ModuleDescriptor* m = dm->getDescriptor(slot);
+                // If "clear" flag set, clear the slot
+                if (mo["clear"] | false) { m->clear(); continue; }
+                const char* nm = mo["name"];
+                if (nm) strncpy(m->name, nm, sizeof(m->name) - 1);
+                m->serialNumber = mo["serial"] | m->serialNumber;
+                m->address = mo["address"] | m->address;
+                m->expectedType = (ModuleType)(int)(mo["type"] | (int)m->expectedType);
+                m->overcurrentA = mo["overcurrentA"] | m->overcurrentA;
+                m->openCircuitMinA = mo["openMinA"] | m->openCircuitMinA;
+                m->maxPulseWidthMs = mo["maxPulseMs"] | m->maxPulseWidthMs;
+                m->maxBoardTempC = mo["maxTempC"] | m->maxBoardTempC;
+                m->minHealthPct = mo["minHealth"] | m->minHealthPct;
+                m->maxErrors = mo["maxErrors"] | m->maxErrors;
+                m->faultAction = (ModuleFaultAction)(int)(mo["faultAction"] | (int)m->faultAction);
+                m->enablePin = mo["enablePin"] | m->enablePin;
+            }
+        }
+
+        // Update rules
+        JsonArray rulesArr = data["rules"];
+        if (rulesArr) {
+            for (uint8_t i = 0; i < MAX_MODULE_RULES && i < rulesArr.size(); i++) {
+                JsonObject ro = rulesArr[i];
+                uint8_t slot = ro["slot"] | i;
+                if (slot >= MAX_MODULE_RULES) continue;
+                ModuleRule* rl = dm->getRule(slot);
+                if (ro["clear"] | false) { rl->clear(); continue; }
+                const char* rname = ro["name"];
+                if (rname) strncpy(rl->name, rname, sizeof(rl->name) - 1);
+                rl->enabled = ro["enabled"] | rl->enabled;
+                rl->moduleSlot = ro["module"] | rl->moduleSlot;
+                rl->channel = ro["channel"] | rl->channel;
+                rl->channelB = ro["channelB"] | rl->channelB;
+                rl->source = (ModuleRuleSource)(int)(ro["source"] | (int)rl->source);
+                rl->op = (ModuleRuleOp)(int)(ro["op"] | (int)rl->op);
+                rl->thresholdA = ro["a"] | rl->thresholdA;
+                rl->thresholdB = ro["b"] | rl->thresholdB;
+                rl->hysteresis = ro["hysteresis"] | rl->hysteresis;
+                rl->debounceMs = ro["debounce"] | rl->debounceMs;
+                rl->faultAction = (ModuleFaultAction)(int)(ro["action"] | (int)rl->faultAction);
+                rl->gateRpmMin = ro["gateRpmMin"] | rl->gateRpmMin;
+                rl->gateRpmMax = ro["gateRpmMax"] | rl->gateRpmMax;
+            }
+        }
+
+        // Save to SD
+        if (_config) {
+            _config->saveModuleConfig("/modules.txt",
+                dm->getDescriptors(), MAX_MODULES,
+                dm->getRules(), MAX_MODULE_RULES);
+        }
+        r->send(200, "application/json", "{\"ok\":true}");
+    });
+    _server.addHandler(modulesPostHandler);
 
     // Custom pins — manual output control
     auto* cpinOutputHandler = new AsyncCallbackJsonWebHandler("/custom-pins/output", [this](AsyncWebServerRequest* r, JsonVariant& json) {

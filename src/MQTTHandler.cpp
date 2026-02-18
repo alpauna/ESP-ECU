@@ -6,6 +6,7 @@
 #include "AlternatorControl.h"
 #include "BoardDiagnostics.h"
 #include "ModbusManager.h"
+#include "DriverModuleManager.h"
 #include <ArduinoJson.h>
 
 MQTTHandler::MQTTHandler(Scheduler* ts)
@@ -141,9 +142,16 @@ void MQTTHandler::publishModbus() {
     ModbusManager* mb = _ecu->getModbusManager();
     if (!mb || !mb->isEnabled()) return;
 
+    DriverModuleManager* dm = _ecu->getDriverModuleManager();
+
     JsonDocument doc;
     doc["online"] = mb->getOnlineCount();
     doc["total"] = mb->getSlaveCount();
+    if (dm) {
+        doc["matched"] = dm->getMatchedCount();
+        doc["faulted"] = dm->getFaultedCount();
+        doc["warned"] = dm->getWarnedCount();
+    }
     JsonArray slaves = doc["slaves"].to<JsonArray>();
     for (uint8_t i = 0; i < mb->getSlaveCount(); i++) {
         const ModbusManager::SlaveData* s = mb->getSlave(i);
@@ -152,6 +160,18 @@ void MQTTHandler::publishModbus() {
         so["addr"] = s->address;
         so["type"] = s->moduleType;
         so["hp"] = s->healthPct;
+        // Add descriptor name if matched
+        if (dm) {
+            for (uint8_t m = 0; m < MAX_MODULES; m++) {
+                const ModuleDescriptor* md = dm->getDescriptors() + m;
+                if (md->slaveIndex == (int8_t)i && md->name[0] != '\0') {
+                    so["name"] = md->name;
+                    so["fault"] = md->faulted;
+                    so["warn"] = md->warned;
+                    break;
+                }
+            }
+        }
         JsonArray ch = so["ch"].to<JsonArray>();
         for (uint8_t j = 0; j < 4; j++) {
             JsonObject co = ch.add<JsonObject>();

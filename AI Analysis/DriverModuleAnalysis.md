@@ -559,19 +559,60 @@ Between each UCC27524A output and MOSFET gate:
 - This is still fast enough for injector timing (ms-scale pulse widths)
 - For direct coil variant: 100Ω × 3300pF (IRFB4115 Ciss) = 330ns — still fine for dwell control
 
-### 5.4 Enable Pin — ESP-ECU Integration
+### 5.4 High-Side P-MOSFET Sizing
 
-The enable signal should come from a dedicated MCP23S17 expander pin. Recommended: wire one expander output per module pair (coil + injector on same bank share one enable).
+The enable P-FET must handle the full load current of all 4 channels simultaneously. P-FETs are preferred for simplicity — they sit on the high side, gate is pulled to source (OFF) by default, and an N-FET level shifter drives the gate low to turn on.
 
-For watchdog-gated enable: the ESP-ECU can toggle the enable pin periodically. If the main loop stalls, enable drops LOW → all outputs killed. Implementation in ESP-ECU firmware:
+**P-FET selection by variant:**
 
-```cpp
-// In ECU::update() (10ms loop):
-if (modbusEnabled) {
-    customPin.write(pinModbusEnable, HIGH);  // Keep alive
-}
-// If update() stops running (crash/watchdog), pin defaults LOW → modules disarmed
+| Variant | Peak Load | Sustained Load | Recommended P-FET | VDS | ID | Rds(on) | Package |
+|---------|-----------|----------------|--------------------|----|-----|---------|---------|
+| Injector | 4 × 2A = 8A | 4 × 1A × 50% = 2A | DMP6023LE | -60V | -3.3A | 50mΩ | SOT-23 |
+| COP trigger | 4 × 0.5A = 2A | ~0.5A avg | DMP6023LE | -60V | -3.3A | 50mΩ | SOT-23 |
+| Direct coil | 4 × 10A = 40A | 4 × 10A × 25% = 10A | **IRF4905PBF** | -55V | -74A | 20mΩ | TO-220 |
+
+**For injector/COP variants:** The DMP6023LE in SOT-23 handles 3.3A continuous easily. At 2A sustained: Pdiss = 2² × 0.050 = 200mW, well within SOT-23 thermal limits.
+
+**For direct coil variants:** The DMP6023LE is undersized (3.3A max). Use **IRF4905PBF** (-55V, -74A, 20mΩ Rds(on), TO-220) or similar high-current P-FET. At 10A sustained: Pdiss = 10² × 0.020 = 2W. Needs a small heatsink or PCB copper pour. Alternatively, use **FQP27P06** (-60V, -27A, 70mΩ, TO-220) which handles 10A with 7W capacity.
+
+**P-FET gate drive consideration:**
+- Q5 (P-FET) gate must be pulled to GND to turn ON. With 12V battery rail, Vgs = -12V when Q6 pulls gate to GND.
+- DMP6023LE: Vgs(th) = -1.0 to -3.0V, max Vgs = ±20V → -12V drive is fine
+- IRF4905: Vgs(th) = -2.0 to -4.0V, max Vgs = ±20V → -12V drive is fine
+- Gate pullup R23 (10kΩ to +12V) ensures gate = source = OFF when Q6 is off
+
+### 5.5 Enable Pin — ESP-ECU Integration
+
+The enable signal comes from a dedicated MCP23S17 expander pin configured in the module descriptor's `enablePin` field. The DriverModuleManager controls it:
+
+**Normal operation:** DriverModuleManager keeps the enable pin HIGH → Q6 ON → Q5 gate pulled LOW → P-FET ON → load powered.
+
+**Fault shutdown:** When DriverModuleManager detects overcurrent, stuck coil, or thermal fault with `MFAULT_SHUTDOWN` action, it drives the enable pin LOW → Q6 OFF → Q5 gate pulled to +12V → P-FET OFF → 12V instantly cut to all 4 channels.
+
+**ESP-ECU firmware path:**
 ```
+DriverModuleManager::evaluateThresholds()
+  → overcurrent detected on module "Coil Bank A"
+  → faultAction == MFAULT_SHUTDOWN
+  → setEnablePin(slot, false)
+  → xDigitalWrite(enablePin, LOW)    // MCP23S17 expander pin
+  → Q6 OFF → Q5 gate → +12V → P-FET OFF → 12V LOAD KILLED
+  → fireFault("MOD_Coil Bank A", "Overcurrent ...", true)
+  → MQTT publishes fault, dashboard pill turns red
+```
+
+**Recommended enable pin allocation (V8):**
+
+| Module | Enable Pin | MCP23S17 | Notes |
+|--------|-----------|----------|-------|
+| Coil Bank A (cyl 1-4) | Pin 210 | #0 P10 | Kills all 4 coils on bank A |
+| Coil Bank B (cyl 5-8) | Pin 211 | #0 P11 | Kills all 4 coils on bank B |
+| Injector Bank A (cyl 1-4) | Pin 212 | #0 P12 | Kills all 4 injectors on bank A |
+| Injector Bank B (cyl 5-8) | Pin 213 | #0 P13 | Kills all 4 injectors on bank B |
+
+Each pin pair (coil+injector on same bank) can optionally share a single enable for complete bank shutdown.
+
+**Watchdog integration:** The ECU main loop can periodically re-assert enable HIGH. If the main loop stalls (crash/watchdog), enable stays LOW → modules disarmed. The MCP23S17 powers up with all outputs LOW (default), so modules are always OFF until explicitly enabled.
 
 ---
 
