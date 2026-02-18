@@ -50,7 +50,8 @@ UART1 GPIO16/17                              └──────────�
 
 | Parameter | Value | Notes |
 |-----------|-------|-------|
-| Input voltage | 10-16V (vehicle battery) | Protected by SMBJ16A TVS |
+| Load input voltage | 10-16V (from ECU ISEN−, battery post-sense) | Protected by ECU fuse (F1) + SMBJ36A + per-module resettable PTC fuse |
+| Electronics input | 12V (from RS-485 module TPS61089 bus) | Powers MCU, sense amps, gate drivers, VREF |
 | Logic supply | 3.3V via AMS1117-3.3 | Powers MCU, INA180A1, SP3485 |
 | Gate driver supply | 12V (direct from VIN) | UCC27524A VDD, full gate enhancement |
 | Quiescent current | ~25mA | MCU + drivers + RS-485 idle |
@@ -70,7 +71,7 @@ UART1 GPIO16/17                              └──────────�
 The enable pin controls a P-channel MOSFET (DMP6023LE or equivalent) on the 12V output rail feeding all 4 power MOSFETs. This is a hard kill — regardless of gate driver state or MCU faults, no load current can flow without enable HIGH.
 
 ```
-+12V VIN ──▶ Q5 (P-FET, DMP6023LE) ──▶ +12V_OUT (to load connectors)
+ISEN− (battery) ──▶ PTC fuse(s) ──▶ Q5 (P-FET, DMP6023LE) ──▶ +12V_OUT (to load connectors)
               │ gate
               ├── R_gate (10kΩ to +12V = default OFF)
               │
@@ -282,10 +283,10 @@ Same as defined in ESP-ECU ModbusManager — the module firmware implements the 
 
 | Connector | Pins | Function |
 |-----------|------|----------|
-| J1 — Power | 2-pin screw terminal | +12V battery, GND |
+| J1 — Load Power | 2-pin screw terminal | ISEN− (battery, post-sense), GND — via on-board PTC fuse(s) |
 | J2 — Control inputs | 7-pin header | EN, CH1, CH2, CH3, CH4, +3.3V, GND |
 | J3 — Outputs | 5-pin screw terminal | OUT1, OUT2, OUT3, OUT4, GND |
-| J4 — RS-485 bus | 4-pin header (or RJ45) | A, B, +5V, GND |
+| J4 — RS-485 bus | 4-pin header (or RJ45) | A, B, +12V (electronics power from TPS61089), GND |
 | J5 — Programming | 4-pin header | SWDIO, SWCLK, 3.3V, GND |
 | J6 — UART boot | 3-pin header | TX, RX, GND (for STM32 UART bootloader) |
 
