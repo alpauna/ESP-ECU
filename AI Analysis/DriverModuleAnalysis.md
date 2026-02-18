@@ -643,16 +643,19 @@ Each pin pair (coil+injector on same bank) can optionally share a single enable 
 
 ## 6. Thermal Analysis
 
+> **Note:** With the aluminum-core MCPCB substrate (Section 9.1), all thermal budgets improve significantly. The θJA values below are for FR4 reference — on MCPCB, divide by 5-10× depending on dielectric thermal conductivity. See [BoardDesignAnalysis.md](BoardDesignAnalysis.md) Section 7.1 for MCPCB thermal path calculations.
+
 ### 6.1 MOSFET Thermal Budget
 
 **Injector variant (1A, 22mΩ, TO-220):**
-- Pdiss = 22mW (continuous) → ΔT = 22mW × 62°C/W (TO-220 to air) = 1.4°C
-- **No heatsink needed**
+- Pdiss = 22mW (continuous)
+- On FR4: ΔT = 22mW × 62°C/W = 1.4°C — **no heatsink needed**
+- On MCPCB: ΔT = 22mW × 6°C/W = 0.13°C — negligible
 
 **Direct coil variant (10A peak, 25% duty, 3.7mΩ average, TO-220):**
 - Pdiss = 370mW peak × 25% duty = 93mW average
-- ΔT = 93mW × 62°C/W = 5.8°C above ambient
-- **No heatsink needed**
+- On FR4: ΔT = 93mW × 62°C/W = 5.8°C — marginal at 85°C ambient
+- On MCPCB: ΔT = 93mW × 6°C/W = 0.6°C — **no concern**
 
 ### 6.2 LDO Thermal Budget
 
@@ -661,9 +664,11 @@ Each pin pair (coil+injector on same bank) can optionally share a single enable 
 | TPS7A4701 (12→5V, 55mA) | 385mW | QFN-20 | 30.5°C/W | +11.7°C |
 | AMS1117-3.3 (12→3.3V, 35mA) | 305mW | SOT-223 | ~90°C/W | +27.4°C |
 
-At 85°C ambient (engine bay): AMS1117 junction = 85 + 27.4 = **112.4°C** (max rated 125°C — 12.6°C margin).
+At 85°C ambient on FR4: AMS1117 junction = 85 + 27.4 = **112.4°C** (max rated 125°C — 12.6°C margin).
 
-**Improvement option:** Replace AMS1117 with **AP2112K-3.3** (SOT-23-5, higher efficiency) or add a 78L05-style pre-regulator to reduce AMS1117 input voltage. But 12.6°C margin is acceptable for a module that's monitoring its own temperature.
+On MCPCB, the aluminum base acts as a heatsink for the AMS1117 via thermal pad. Effective θJA drops to ~30-40°C/W → junction = 85 + 12 = **97°C** — comfortable margin.
+
+**Improvement option:** Replace AMS1117 with **AP2112K-3.3** (SOT-23-5, higher efficiency) or add a 78L05-style pre-regulator to reduce AMS1117 input voltage. On MCPCB this is less critical due to the improved thermal path, but still worth considering for the direct coil variant where total board dissipation is highest.
 
 ### 6.3 Board Temperature Monitoring via REF5050 TEMP
 
@@ -783,17 +788,70 @@ void calibrate_adc(void) {
 
 ## 9. PCB Design Considerations
 
-### 9.1 Layout Guidelines
+> **Full board design analysis:** See [BoardDesignAnalysis.md](BoardDesignAnalysis.md) for complete trace sizing tables (IPC-2221), via current calculations, ground plane strategy, and module-specific substrate recommendations.
 
-- **2-layer PCB**, ~60×80mm board size
-- **Power MOSFET area**: Wide traces (≥2mm for 10A drain path), short source-to-shunt path
+### 9.1 Substrate — Aluminum Core MCPCB
+
+The driver module uses a **2-layer aluminum-core MCPCB** (Metal Core PCB) instead of standard FR4. The aluminum base plate acts as an integrated heatsink, spreading heat from MOSFETs, sense shunts, PTC fuses, and LDOs across the entire board.
+
+**Stackup:**
+
+```
+2oz copper (top)    │ 70µm   │ Traces, pads, all components
+Thermal dielectric  │ 75-150µm │ Key spec: 1-5 W/m·K thermal conductivity
+Aluminum base       │ 1.0-1.6mm │ 5052 or 6061 alloy, heat spreader
+```
+
+**Dielectric selection by variant:**
+
+| Variant | Total Board Dissipation | Recommended Dielectric | Notes |
+|---------|------------------------|----------------------|-------|
+| Injector (4ch × 1A) | ~1.5W (shunts + LDOs) | 1.0 W/m·K (standard) | Low thermal stress |
+| COP trigger (4ch × 0.5A) | ~1W | 1.0 W/m·K (standard) | Lowest thermal load |
+| Direct coil (4ch × 10A) | ~6-7W (shunts 4W + LDOs + MOSFETs) | **3.0 W/m·K** (premium) | Highest thermal load, needs best heat spreading |
+
+**Thermal advantage over FR4:**
+
+| Parameter | FR4 (1.6mm) | MCPCB (1.0 W/m·K) | MCPCB (3.0 W/m·K) |
+|-----------|-------------|--------------------|--------------------|
+| θ board (junction to base) | ~100°C/W | ~15°C/W | ~5°C/W |
+| ΔT at 1W total | +100°C | +15°C | +5°C |
+| ΔT at 6W total | Not viable | +90°C | +30°C |
+
+For the direct coil variant at 85°C ambient: MCPCB 3.0 W/m·K gives 85 + 30 = **115°C** — within component limits. FR4 would require massive external heatsinking.
+
+**MCPCB layout constraints:**
+- **Single routable layer** — aluminum base is not routable (thermal pad only)
+- **No plated through-vias** to aluminum (would short to base) — use thermal vias only if intentionally grounding to the base plate
+- **Ground connection to base:** Optional vias connecting GND copper to aluminum for electrical grounding + thermal path
+- **Board edge clearance:** ≥2mm (aluminum base exposed at cut edges)
+- **V-scoring preferred** for panelization; milling generates aluminum chips
+
+### 9.2 Layout Guidelines
+
+- ~60×80mm board size (single routable copper layer + aluminum base)
+- **Power MOSFET area**: Wide traces/pours (≥2mm for 10A drain path), short source-to-shunt path
 - **Kelvin connection** on shunt resistors: 4-wire sense to INA180A1 inputs, separate from power traces
-- **PTC fuse / shunt separation**: Place PTC fuses near J1 input connector at board edge. Place sense shunts near MOSFETs in board center. Minimum 10mm separation with ground plane thermal break between them. PTC self-heating near trip point causes thermal drift in nearby sense resistors.
-- **Ground partitioning**: Star ground topology — analog sense ground and power return ground meet at one point
+- **PTC fuse / shunt separation**: Place PTC fuses near J1 input connector at board edge. Place sense shunts near MOSFETs in board center. Minimum 10mm separation. On MCPCB the aluminum base conducts heat laterally — thermal break between PTC and shunt zones is achieved by a copper void (no pour) in the gap region.
+- **Ground partitioning**: Star ground topology — analog sense ground and power return ground meet at one point near the STM32 GND pin
 - **Gate traces**: Short, direct from UCC27524A to MOSFET gate pad. 100Ω series resistor placed close to gate.
 - **Decoupling**: 100nF ceramic within 5mm of every IC VDD pin
 - **RS-485 traces**: A/B as differential pair, short stub to SP3485
-- **TO-220 sockets**: Aligned along one board edge for easy access. Consider screw-mount heatsink bar option.
+- **TO-220 sockets**: Aligned along one board edge for easy access. On MCPCB, the aluminum base provides heatsinking for TO-220 tab (drain) via copper pad underneath socket.
+
+**Trace sizing (2oz copper, external only, MCPCB):**
+
+| Trace | Current | Width | Notes |
+|-------|---------|-------|-------|
+| MOSFET drain (12V to coil connector) | 2-10A | 60-150 mil pour | Copper pour preferred |
+| MOSFET source to shunt | 2-10A | 60-150 mil pour | Kelvin 4-wire to INA180 |
+| Shunt to GND star | 2-10A | 60-150 mil pour | Wide pour |
+| INA180 output to STM32 ADC | <1mA | 8 mil | Keep away from power traces |
+| Gate driver to MOSFET | <100mA peak | 15 mil | Short, 100Ω series R close to gate |
+| Control inputs (EN, CH1-4) | <10mA | 10 mil | 10kΩ pulldowns to GND |
+| PTC fuse to P-FET to 12V_LOAD | 2-10A | 100-200 mil pour | Thermal isolation from shunts |
+| 5V analog rail | ~50mA | 15 mil | Clean routing away from power |
+| 3.3V digital rail | ~35mA | 10 mil | Local to STM32 + SP3485 |
 
 ### 9.2 Connector Placement
 

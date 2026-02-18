@@ -234,13 +234,17 @@ EN = HIGH (ESP-ECU active):    Q6 ON → Q5 gate pulled to GND → P-FET ON → 
 
 ## PCB Considerations
 
-- **2-layer PCB** sufficient — no high-speed signals
-- **MOSFET mounting**: TO-220 with sockets or soldered with heatsink pads. Keep source traces wide (high current path)
-- **Current sense shunt**: 4-wire Kelvin connection to shunt resistor. Keep sense traces away from power traces
-- **Ground plane**: Solid ground on bottom layer. Star ground from power MOSFETs and analog sense
+> **Full analysis:** See [AI Analysis/BoardDesignAnalysis.md](../../AI%20Analysis/BoardDesignAnalysis.md) Section 7 for complete MCPCB stackup, trace sizing, and thermal calculations.
+> **Detailed layout:** See [AI Analysis/DriverModuleAnalysis.md](../../AI%20Analysis/DriverModuleAnalysis.md) Section 9 for layout guidelines and aluminum substrate selection.
+
+- **2-layer aluminum-core MCPCB** — single routable copper layer (top) + aluminum heat spreader base
+- **Substrate:** 2oz copper top, thermal dielectric (1.0-3.0 W/m·K depending on variant), 1.0-1.6mm 5052/6061 aluminum base
+- **MOSFET mounting**: TO-220 with sockets or soldered. Aluminum base provides heatsinking via copper pad under socket.
+- **Current sense shunt**: 4-wire Kelvin connection to shunt resistor. Keep sense traces away from power traces. Thermal isolation from PTC fuses via copper void gap.
+- **Ground**: Star ground topology — analog sense ground and power return meet at one point near STM32 GND
 - **RS-485**: Keep A/B traces as differential pair, short stubs to SP3485
 - **Board size target**: ~60×80mm (fits in standard enclosure)
-- **Conformal coating recommended** for engine bay environment
+- **Conformal coating recommended** for engine bay environment (exclude TO-220 sockets and connectors)
 
 ---
 
