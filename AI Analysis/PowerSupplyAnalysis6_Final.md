@@ -342,17 +342,15 @@ Each stage is separated by 3–4ms, providing clean current draw steps and preve
 
 ---
 
-## Soft-Start Capacitor Note
+## Soft-Start Capacitor — Confirmed
 
-The LM25118 soft-start time depends on the SS pin (pin 7) capacitor. The exact designator could not be definitively traced from the schematic image. Typical LM25118 designs use 22nF–220nF:
+CSS = **100nF** on LM25118 SS pin (pin 7).
 
-| CSS value | Soft-start time | 6.8V ramp rate | Inrush to ~1300µF |
-|-----------|----------------|----------------|-------------------|
-| 47nF | 5.8ms | 1.17 V/ms | ~1.5A (below current limit) |
-| 100nF | 12.3ms | 0.55 V/ms | ~0.72A (gentle) |
-| 220nF | 27ms | 0.25 V/ms | ~0.33A (very gentle) |
+```
+tSS = CSS × VFB / ISS = 100nF × 1.23V / 10µA = 12.3ms
+```
 
-The timeline calculations above assume CSS ≈ 100nF (tSS ≈ 12ms). **Verify the actual SS capacitor designator on the board.** If CSS = 47nF, all rail-up times shift approximately 6ms earlier. If CSS = 220nF, they shift ~15ms later. The enable sequence order and gaps are unaffected.
+This gives a 6.8V ramp rate of 0.55 V/ms and peak inrush of ~0.72A into ~1300µF output capacitance — well below the LM25118 current limit. All timeline calculations in this report use this confirmed value.
 
 ---
 
@@ -384,7 +382,7 @@ The timeline calculations above assume CSS ≈ 100nF (tSS ≈ 12ms). **Verify th
 | # | Item | Recommendation |
 |---|------|---------------|
 | 1 | Driver gate pull-downs | 10k–47kΩ from coil/injector MOSFET gates to GND (on driver pages) |
-| 2 | Verify SS capacitor | Confirm designator and value on SS pin (pin 7) of U1 |
+| ~~2~~ | ~~Verify SS capacitor~~ | ✅ Confirmed: CSS = 100nF → tSS = 12.3ms |
 
 ---
 
