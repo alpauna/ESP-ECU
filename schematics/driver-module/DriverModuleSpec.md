@@ -8,7 +8,7 @@
 
 ## Overview
 
-Universal 4-channel low-side MOSFET driver module for ignition coils or fuel injectors. Each module receives logic-level control signals directly from the ESP-ECU (MCP23S17 expander outputs) and switches 12V loads through discrete N-channel MOSFETs. On-board current sensing (INA180A1) feeds a local STM32 MCU that reports diagnostics back to the ESP-ECU via Modbus RTU over RS-485.
+Universal 4-channel low-side MOSFET driver module for ignition coils or fuel injectors. Each module receives 5V logic-level control signals from the ESP-ECU (MCP23S17 outputs level-shifted to 5V) and switches 12V loads through discrete N-channel MOSFETs. On-board current sensing (INA180A1) feeds a local STM32 MCU that reports diagnostics back to the ESP-ECU via Modbus RTU over RS-485.
 
 **Key design goals:**
 - TO-220 MOSFETs in sockets for field replacement
@@ -17,6 +17,8 @@ Universal 4-channel low-side MOSFET driver module for ignition coils or fuel inj
 - V8 configuration: 2 coil modules + 2 injector modules
 - Control signals are direct-wired (no Modbus latency in the drive path)
 - Modbus carries only diagnostic data (current, pulse width, faults)
+- All I/O standardized to 5V — no external signal touches an ESP32 pin directly
+- Level shifting (MOSFET or buffer) and op-amp attenuation on the ESP-ECU board isolate the 3.3V MCU domain from the 5V external world
 
 ---
 
@@ -25,7 +27,7 @@ Universal 4-channel low-side MOSFET driver module for ignition coils or fuel inj
 ```
 ESP-ECU                          Driver Module                    Load
 MCP23S17 ──[4× logic signals]──▶ UCC27524A ──▶ MOSFET ──▶ Coil/Injector
-expander     (3.3V push-pull)    gate driver   (TO-220)    (12V switched)
+(5V, level-shifted)              gate driver   (TO-220)    (12V switched)
                                                   │
                                             ┌─────▼──────┐
                                             │ INA180A1   │
@@ -52,7 +54,8 @@ UART1 GPIO16/17                              └──────────�
 |-----------|-------|-------|
 | Load input voltage | 10-16V (from ECU ISEN−, battery post-sense) | Protected by ECU fuse (F1) + SMBJ36A + per-module resettable PTC fuse |
 | Electronics input | 12V (from RS-485 module TPS61089 bus) | Powers MCU, sense amps, gate drivers, VREF |
-| Logic supply | 3.3V via AMS1117-3.3 | Powers MCU, INA180A1, SP3485 |
+| Analog supply | 5.0V via TPS7A4701 | Powers INA180A1 (×4) sense amps |
+| Logic supply | 3.3V via AMS1117-3.3 | Powers MCU, SP3485 (internal only) |
 | Gate driver supply | 12V (direct from VIN) | UCC27524A VDD, full gate enhancement |
 | Quiescent current | ~25mA | MCU + drivers + RS-485 idle |
 
@@ -60,7 +63,7 @@ UART1 GPIO16/17                              └──────────�
 
 | Parameter | Value | Notes |
 |-----------|-------|-------|
-| Input voltage | 3.3V CMOS (from MCP23S17) | VIH >2.0V, VIL <0.8V |
+| Input voltage | 5V CMOS (from ESP-ECU, level-shifted) | VIH >2.0V, VIL <0.8V |
 | Input impedance | >10kΩ | UCC27524A input |
 | Input pulldown | 10kΩ per channel + enable | Ensures OFF when disconnected |
 | Enable pin | Active-HIGH, 10kΩ pulldown | Must be driven HIGH to allow any output |
@@ -75,7 +78,7 @@ ISEN− (battery) ──▶ PTC fuse(s) ──▶ Q5 (P-FET, DMP6023LE) ──�
               │ gate
               ├── R_gate (10kΩ to +12V = default OFF)
               │
-              └── Q6 (N-FET, 2N7002) gate ← EN pin (3.3V from ESP-ECU)
+              └── Q6 (N-FET, 2N7002) gate ← EN pin (5V from ESP-ECU)
                    drain → Q5 gate (pulls low = P-FET ON)
                    source → GND
 
@@ -184,7 +187,7 @@ EN = HIGH (ESP-ECU active):    Q6 ON → Q5 gate pulled to GND → P-FET ON → 
 - Common-mode: -0.2V to +26V (handles 12V battery rail)
 - Bandwidth: 35kHz at gain=20
 - Offset: ±500μV max
-- Supply: 2.7-5.5V (run at 3.3V)
+- Supply: 2.7-5.5V (run at 5.0V from TPS7A4701)
 - Output swing: 5mV to (VCC-5mV)
 
 ### U8: RS-485 — SP3485EN-L/TR (SOIC-8)
@@ -284,7 +287,7 @@ Same as defined in ESP-ECU ModbusManager — the module firmware implements the 
 | Connector | Pins | Function |
 |-----------|------|----------|
 | J1 — Load Power | 2-pin screw terminal | ISEN− (battery, post-sense), GND — via on-board PTC fuse(s) |
-| J2 — Control inputs | 7-pin header | EN, CH1, CH2, CH3, CH4, +3.3V, GND |
+| J2 — Control inputs | 7-pin header | EN, CH1, CH2, CH3, CH4, +5V, GND |
 | J3 — Outputs | 5-pin screw terminal | OUT1, OUT2, OUT3, OUT4, GND |
 | J4 — RS-485 bus | 4-pin header (or RJ45) | A, B, +12V (electronics power from TPS61089), GND |
 | J5 — Programming | 4-pin header | SWDIO, SWCLK, 3.3V, GND |

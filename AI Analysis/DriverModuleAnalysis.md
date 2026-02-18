@@ -11,7 +11,7 @@
 ### 1.1 Purpose
 
 A universal 4-channel low-side MOSFET driver module that:
-- Receives logic-level control signals (3.3V) directly from ESP-ECU MCP23S17 expander outputs
+- Receives logic-level control signals (5V) from ESP-ECU via level-shifted MCP23S17 expander outputs
 - Switches 12V loads (coils or injectors) through discrete N-channel MOSFETs in TO-220 sockets
 - Senses current on each channel via INA180A1 + shunt resistor
 - Reports diagnostics back to ESP-ECU via Modbus RTU over RS-485
@@ -33,7 +33,7 @@ ESP-ECU (MCP23S17)                    Driver Module                         Load
   EN ──[wire]──────────────────▶│ Q6(2N7002)→Q5(P-FET) ──▶ +12V_LOAD ──▶ Coil/Injector
   CH1-CH4 ──[4× wire]─────────▶│ UCC27524A → Q1-Q4(MOSFET) ──▶ drain ────┘     │
                                 │         source ──▶ R_shunt ──▶ GND            │
-  +3.3V, GND ──[wire]─────────▶│                       │                        │
+  +5V, GND ──[wire]────────────▶│                       │                        │
                                 │              INA180A1 (×4) ──▶ ÷2 divider     │
                                 │                       │                        │
                                 │              STM32F030 ADC ◀──┘                │
@@ -51,7 +51,30 @@ RS-485 bus ◀────────────────────│─
                                 └─────────────────────────────────┘
 ```
 
-### 1.4 Two Power Domains
+### 1.4 Standardized 5V I/O — Level Shifting Strategy
+
+**Design rule: No external signal touches an ESP32 GPIO pin directly.** All I/O between the ESP-ECU and external modules (driver modules, sensors, peripherals) is standardized to 5V. Level shifting happens on the ESP-ECU board, forming a protective boundary between the 3.3V ESP32/MCP23S17 domain and the 5V external world.
+
+**Why 5V:**
+- Most automotive driver ICs and gate drivers expect 5V CMOS logic
+- Better noise immunity on long wires in the engine bay (5V swing vs 3.3V)
+- Consistent voltage level across all external connections — no ambiguity
+- The MCP23S17 expanders already operate at 3.3V VDD with 5V-tolerant inputs, so the shifting is only needed on the output side
+
+**Level shifting methods (on the ESP-ECU board):**
+
+| Signal Type | Direction | Method | Notes |
+|-------------|-----------|--------|-------|
+| Digital output (EN, CH1-4, fuel pump, CEL, etc.) | ECU → external | BSS138 N-FET level shifter or 74LVC245 buffer | Simple, reliable, <10ns propagation |
+| Digital input (sensors, switches) | External → ECU | BSS138 N-FET bidirectional shifter | 5V input → 3.3V to ESP32 ADC/GPIO |
+| Analog input (0-5V sensors) | External → ECU | Op-amp attenuator (5V → 3.3V) or resistive divider with buffer | Unity-gain or scaling op-amp (e.g., MCP6002) with 5V supply, output clamped to 3.3V |
+| Analog output (PWM, DAC) | ECU → external | Op-amp gain stage (3.3V → 5V) | Non-inverting amp with gain = 5/3.3 ≈ 1.52 |
+
+**For driver module control signals (EN + CH1-CH4):** These are output-only from the ESP-ECU. A single 74LVC245A (8-channel, unidirectional, 3.3V→5V) or 5× BSS138 MOSFET shifters on the MCP23S17 output pins handles an entire module's control bus. The 74LVC245A runs from a 5V supply rail and accepts 3.3V inputs as valid HIGH (VIH = 2.0V).
+
+**For analog sensor inputs:** Op-amp buffers (e.g., MCP6002 dual op-amp, rail-to-rail, 5V supply) attenuate 0-5V sensor signals to 0-3.3V for the ESP32 ADC. This provides high-impedance input, ESD protection, and anti-aliasing filtering in one stage. The op-amp output is clamped to 3.3V by its connection to the 3.3V rail or a series resistor + zener.
+
+### 1.5 Two Power Domains
 
 | Domain | Source | Voltage | Protection | Purpose |
 |--------|--------|---------|------------|---------|
@@ -398,14 +421,16 @@ This is more than adequate for detecting:
 
 Two UCC27524ADBVR (dual gate driver) provide 4 channels.
 
-**Input compatibility with 3.3V MCP23S17 outputs:**
+**Input compatibility with 5V level-shifted outputs:**
 
-| Parameter | UCC27524A Spec | MCP23S17 Output | Margin |
-|-----------|---------------|-----------------|--------|
-| VIH (min) | 2.0V | 3.3V (VOH) | +1.3V ✓ |
+All ESP-ECU I/O is standardized to 5V via level shifters on the MCP23S17 expander outputs (3.3V native → 5V shifted). This ensures consistent logic levels across all external modules regardless of which ESP32 peripheral sources the signal.
+
+| Parameter | UCC27524A Spec | ESP-ECU Output (5V) | Margin |
+|-----------|---------------|---------------------|--------|
+| VIH (min) | 2.0V | 5.0V (VOH) | +3.0V ✓ |
 | VIL (max) | 1.3V | 0V (VOL) | −1.3V ✓ |
 | Hysteresis | 0.9V | — | Excellent noise immunity |
-| Input clamp | −5V to VDD+0.3V | 0–3.3V | Within range ✓ |
+| Input clamp | −5V to VDD+0.3V | 0–5.0V | Within range (VDD=12V) ✓ |
 
 **Switching performance at VDD = 12V:**
 
@@ -534,7 +559,7 @@ ISEN− (battery, post-sense) ──┬── PTC fuse(s) ──┬── +12V_B
                    │
                    └──── Q6 drain
                             │
-                   Q6 gate ◀── R25 (100Ω) ◀── EN pin (3.3V from ESP-ECU)
+                   Q6 gate ◀── R25 (100Ω) ◀── EN pin (5V from ESP-ECU)
                             │
                    Q6 source ── GND
                             │
@@ -546,7 +571,7 @@ ISEN− (battery, post-sense) ──┬── PTC fuse(s) ──┬── +12V_B
 | State | EN pin | Q6 (N-FET) | Q5 gate | Q5 (P-FET) | +12V_LOAD |
 |-------|--------|------------|---------|------------|-----------|
 | Default (no ESP-ECU) | 0V (pulldown) | OFF | +12V (pullup) | OFF | 0V — **SAFE** |
-| ESP-ECU active | 3.3V | ON | ~0V (pulled to GND) | ON | Battery V |
+| ESP-ECU active | 5V | ON | ~0V (pulled to GND) | ON | Battery V |
 | EN wire broken | 0V (pulldown) | OFF | +12V | OFF | 0V — **SAFE** |
 | ESP-ECU crash/reset | 0V (GPIO default) | OFF | +12V | OFF | 0V — **SAFE** |
 
@@ -883,7 +908,7 @@ Recommended for engine bay environment. Exclude TO-220 sockets and connectors fr
 | SW1 | 1 | DSWB03LHGET | 3-pos DIP, Modbus address |
 | F1,F2 | 2 | SMD1812P185TF (or sized per variant) | Resettable PTC fuse, parallel pair, 1812 |
 | J1 | 1 | 2-pin 5.08mm screw | Power: ISEN− (battery, post-sense), GND |
-| J2 | 1 | 7-pin 2.54mm header | Control: EN, CH1-4, +3.3V, GND |
+| J2 | 1 | 7-pin 2.54mm header | Control: EN, CH1-4, +5V, GND |
 | J3 | 1 | 5-pin 5.08mm screw | Output: OUT1-4, GND |
 | J4 | 1 | 4-pin 2.54mm header | RS-485 bus: A, B, +12V, GND |
 | J5 | 1 | 4-pin 1.27mm header | SWD: SWDIO, SWCLK, 3.3V, GND |
