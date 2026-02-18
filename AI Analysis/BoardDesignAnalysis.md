@@ -18,6 +18,7 @@ The ESP-ECU system is not a single PCB — it is a family of boards, each optimi
 | **Driver Module (Direct Coil)** | 2 | **Aluminum core (MCPCB)** | 2oz top, Al base | High-current MOSFET, needs maximum heat spreading |
 | **VR Conditioner** | 2 | FR4 (1.0mm) | 1oz | Signal conditioning only, minimal thermal load |
 | **RS-485 Breakout** | 2 | FR4 (1.0mm) | 1oz | TPS61089 boost, SP3485, RJ45 connectors |
+| **Wideband O2 Module** | 2 | FR4 (1.6mm) | 1oz | CAN bus sensor module, op-amp Ip sense — see [WidebandO2Analysis.md](WidebandO2Analysis.md) |
 
 **Design philosophy:** Each board uses the minimum complexity and optimal substrate for its job. The ESP-ECU main board needs 6 layers for signal integrity and ground plane management. The driver modules need aluminum substrate for heat extraction. The VR conditioner is simple enough for 2-layer FR4.
 
@@ -535,6 +536,7 @@ L3 (Power plane) is split into voltage zones. Each zone is a copper pour, not in
 | FSPI CLK (GPIO 47) | 50 MHz | 50Ω microstrip | Length-match MOSI/MISO to ±100 mil of CLK |
 | HSPI CLK (GPIO 10) | 10 MHz | 50Ω microstrip | Short stubs to MCP23S17 (<20mm) |
 | RS-485 A/B | 115.2 kbaud | 100Ω differential | Tight coupling, 120Ω termination at each end |
+| CAN_H / CAN_L | 500 kbps | 100Ω differential | 5 mil trace / 5 mil gap, split 120Ω term, PESD1CAN TVS at connector — see [CANBusAnalysis.md](CANBusAnalysis.md) |
 | I2C SDA/SCL | 400 kHz | — | No impedance control needed, 4.7kΩ pullups |
 
 ### 9.2 Analog Signal Routing (L1 → L4)
